@@ -122,7 +122,7 @@ export const he: Record<string, string> = {
   'crisis.centre.title': 'המרכז אורז קרטונים',
   'crisis.centre.text': 'השותף המתון מודיע שהקואליציה ימנית מדי ומזמין אולם למסיבת עיתונאים.',
   'crisis.rebel.title': 'ח״כ מורד',
-  'crisis.rebel.text': 'ח״כ אחד מצביע עם האופוזיציה בגלל סובסידיה לקוטג׳. לאחר צהריים אחד יש לך {seats} מנדטים.',
+  'crisis.rebel.text': 'ח״כ אחד מצביע עם האופוזיציה בגלל סובסידיה לקוטג׳. לאחר צהריים אחד יש לך {seatsText}.',
   'crisis.polls.title': 'קריסה בסקרים',
   'crisis.polls.text': 'ערוץ אחד נותן לך 19 מנדטים. ערוץ אחר עדיין 40. שניהם בטוחים.',
   'crisis.bennett.title': 'בנט חוזר',
