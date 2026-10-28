@@ -24,6 +24,9 @@ export function scoreState(g: Game): number {
     if (p.threatening) sc -= 15;
   }
   if (!o.budget.passed) sc -= 5;
+  // a decent player watches the trial (indictment ends the game) and re-election odds
+  sc -= 3 * Math.max(0, o.meters.trial - 50);
+  sc -= 150 * o.electionRisk;
   return sc;
 }
 

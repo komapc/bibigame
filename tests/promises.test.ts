@@ -60,3 +60,20 @@ describe('promises and trust', () => {
     expect(g.act({ type: 'promise', partyId: 'shas', promiseId: 'constitution' }).error).toBe('err.wrongParty');
   });
 });
+
+describe('promise-or-do remedies', () => {
+  it('Promise a settlement: far right believes, centrists drop now; Build delivers', () => {
+    const g = createGame({ seed: 3 });
+    const sat = (id: string) => g.state.parties.find((p) => p.id === id)!.satisfaction;
+    const ya0 = sat('yeshatid');
+    g.state.event = { id: 'leftist', subject: 'otzma', firedAt: 0, leftDays: 20 };
+    expect(g.act({ type: 'choose', optionId: 'promsettle' }).ok).toBe(true);
+    const otzma = g.state.parties.find((p) => p.id === 'otzma')!;
+    expect(otzma.trust).toMatchObject({ state: 'believing', promiseId: 'settlement' });
+    expect(sat('yeshatid')).toBeLessThan(ya0);
+    g.state.event = { id: 'leftist', subject: 'otzma', firedAt: g.state.day, leftDays: 20 };
+    expect(g.act({ type: 'choose', optionId: 'settle' }).ok).toBe(true);
+    expect(otzma.trust.state).toBe('neutral');
+    expect(g.state.stats.promisesKept).toBeGreaterThan(0);
+  });
+});

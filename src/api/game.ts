@@ -279,6 +279,11 @@ export function preview(s: GameState, optionId: string): Preview[] {
   if (optionId === 'elections') return [{ label: t('fx.elections'), up: false }];
   const crisis = s.event ? crisisById.get(s.event.id) : undefined;
   const subject = s.event?.subject ?? null;
+  const pr = remedyById.get(optionId)?.promise;
+  if (pr) {
+    const def = PROMISES.find((x) => x.id === pr);
+    if (def) out.push({ label: t('fx.promise', { who: def.to.map((tg) => t(`tag.${tg}`)).join(', ') }), up: true });
+  }
   const effects: Effect[] = optionId === 'ignore'
     ? [crisis?.ignore ?? {}]
     : [remedyById.get(optionId)?.effect ?? {}, crisis?.extra?.[optionId] ?? {}];

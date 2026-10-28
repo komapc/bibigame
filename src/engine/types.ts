@@ -94,6 +94,9 @@ export interface RemedyDef {
   travel?: boolean;
   /** sets/extends regional tension for N days */
   tension?: number;
+  /** a PROMISE remedy: makes this promise to every coalition party it targets (they believe you
+   *  for promiseBelieveDays); the remedy's own effect is the immediate reaction of everyone else */
+  promise?: string;
 }
 
 export interface CrisisDef {
@@ -137,6 +140,8 @@ export interface PromiseDef {
   to: string[];
   /** remedy/law id that delivers it, or "ministry" (give that party a ministry) */
   deliveredBy: string;
+  /** other remedies that also count as delivering it */
+  alsoBy?: string[];
 }
 
 export interface TitleDef {
