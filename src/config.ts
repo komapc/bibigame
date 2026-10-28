@@ -80,6 +80,17 @@ export interface Config {
   satRegression: number;
   satBaseline: number;
   threatenBelow: number;
+  /** below this satisfaction a threatening partner may walk out any day (chance per day) */
+  leaveBelow: number;
+  /** partners get nervous when your approval is below this: −(line − approval) × pollPanicPerPoint sat/day */
+  pollPanicBelow: number;
+  pollPanicPerPoint: number;
+  /** repeated use of a remedy within remedyFatigueDays: its POSITIVE effects shrink by 1 / (1 + uses × remedyFatigue) */
+  remedyFatigue: number;
+  remedyFatigueDays: number;
+  /** coalition funds unavailable when budget health is below this ("the treasury is empty") */
+  fundsMinFiscal: number;
+  leaveChancePerDay: number;
   threatenResetAbove: number;
 
   // --- meters ---
@@ -174,6 +185,13 @@ export const DEFAULT_CONFIG: Config = {
   satRegression: 0.002,
   satBaseline: 50,
   threatenBelow: 25,
+  leaveBelow: 15,
+  pollPanicBelow: 32,
+  pollPanicPerPoint: 0.015,
+  remedyFatigue: 0.6,
+  remedyFatigueDays: 365,
+  fundsMinFiscal: 15,
+  leaveChancePerDay: 0.02,
   threatenResetAbove: 35,
 
   approvalRegression: 0.01,

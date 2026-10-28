@@ -86,34 +86,51 @@ export const promiseSpammer: Strategy = {
 };
 
 /** pick the event option whose immediate (or short-rollout) result scores best */
-function bestOption(g: Game, o: Observation, rolloutDays: number): string | null {
+/** clone for "what if" rollouts WITHOUT peeking at the real future: the copy gets its own RNG
+ *  stream, so bots can't foresee upcoming crises/elections (they'd be oracles otherwise) */
+function blindClone(g: Game, k = 0): Game {
+  const c = g.clone();
+  c.state.rngState = (Math.imul(c.state.rngState ^ (0x9e3779b9 + k * 0x6d2b79f5), 0x85ebca6b) ^ (c.state.day * 7919)) >>> 0;
+  return c;
+}
+
+/** mean score over `n` blind rollouts (one rollout of a random future is mostly noise) */
+function rolloutScore(g: Game, first: Action | null, days: number, n: number): number {
+  let sum = 0;
+  for (let k = 0; k < n; k++) {
+    const c = blindClone(g, k);
+    if (first && !c.act(first).ok) return -Infinity;
+    if (days) c.advanceDays(days);
+    sum += scoreState(c);
+  }
+  return sum / n;
+}
+
+function bestOption(g: Game, o: Observation, rolloutDays: number, n: number): string | null {
   if (!o.event) return null;
   let best: string | null = null;
   let bestScore = -Infinity;
   for (const opt of o.event.options) {
     if (!opt.available) continue;
-    const c = g.clone();
-    c.act({ type: 'choose', optionId: opt.id });
-    if (rolloutDays) c.advanceDays(rolloutDays);
-    const sc = scoreState(c);
+    // a handful of rollouts can't price a ~25% election-loss roll: only gamble on snap elections when the majority is already gone
+    if (rolloutDays && opt.id === 'elections' && o.seats >= o.majority) continue;
+    const a: Action = { type: 'choose', optionId: opt.id };
+    const sc = rolloutDays ? rolloutScore(g, a, rolloutDays, n) : rolloutScore(g, a, 0, 1);
     if (sc > bestScore) { bestScore = sc; best = opt.id; }
   }
   return best;
 }
 
 /** evaluate a proactive action by rollout; returns gain vs doing nothing */
-function gainOf(g: Game, a: Action, days: number, baseline: number): number {
-  const c = g.clone();
-  if (!c.act(a).ok) return -Infinity;
-  c.advanceDays(days);
-  return scoreState(c) - baseline;
+function gainOf(g: Game, a: Action, days: number, baseline: number, n = 1): number {
+  return rolloutScore(g, a, days, n) - baseline;
 }
 
 /**
  * Greedy-satisfaction: answers crises by immediate score, fixes the unhappiest
  * partner with ministries and promises, and delivers promises before they expire.
  */
-export function greedy(lookaheadDays = 0, name = 'greedy'): Strategy {
+export function greedy(lookaheadDays = 0, name = 'greedy', rollouts = 1): Strategy {
   return {
     name,
     decide(g, o) {
@@ -121,7 +138,7 @@ export function greedy(lookaheadDays = 0, name = 'greedy'): Strategy {
       const s = g.state;
       if (o.phase !== 'governing') return acts;
       if (o.event) {
-        const b = bestOption(g, o, lookaheadDays);
+        const b = bestOption(g, o, lookaheadDays, rollouts);
         if (b) acts.push({ type: 'choose', optionId: b });
       }
       const partners = o.parties.filter((p) => p.inCoalition && p.id !== s.base.pmParty)
@@ -130,12 +147,12 @@ export function greedy(lookaheadDays = 0, name = 'greedy'): Strategy {
       // deliver promises that are about to expire (if not too costly)
       const horizon = Math.max(30, lookaheadDays);
       let base: number | undefined;
-      const baseline = () => (base ??= (() => { const c = g.clone(); c.advanceDays(horizon); return scoreState(c); })());
+      const baseline = () => (base ??= rolloutScore(g, null, horizon, rollouts));
       if (o.cooldowns.law === 0) {
         for (const p of o.parties) {
           if (p.trust.state === 'believing' && p.trust.daysLeft < 30 && p.trust.promiseId) {
             const a: Action = { type: 'deliver', partyId: p.id, promiseId: p.trust.promiseId };
-            if (gainOf(g, a, horizon, baseline()) > -10) { acts.push(a); break; }
+            if (gainOf(g, a, horizon, baseline(), rollouts) > -10) { acts.push(a); break; }
           }
         }
       }
@@ -152,7 +169,7 @@ export function greedy(lookaheadDays = 0, name = 'greedy'): Strategy {
         let bestId: string | null = null;
         let bestGain = -Infinity;
         for (const id of ids) {
-          const gain = gainOf(g, { type: 'promise', partyId: worst.id, promiseId: id }, horizon, baseline());
+          const gain = gainOf(g, { type: 'promise', partyId: worst.id, promiseId: id }, horizon, baseline(), rollouts);
           if (gain > bestGain) { bestGain = gain; bestId = id; }
         }
         if (bestId && bestGain > 0) acts.push({ type: 'promise', partyId: worst.id, promiseId: bestId });
@@ -165,7 +182,7 @@ export function greedy(lookaheadDays = 0, name = 'greedy'): Strategy {
       }
       // emergency button when the coalition is about to break
       if (o.seats < o.majority + 2 && partners.some((p) => p.satisfaction < 10) && !o.war.active && o.war.cooldownDays === 0) {
-        if (gainOf(g, { type: 'startWar' }, horizon, baseline()) > 0) acts.push({ type: 'startWar' });
+        if (gainOf(g, { type: 'startWar' }, horizon, baseline(), rollouts) > 0) acts.push({ type: 'startWar' });
       }
       return acts;
     },
@@ -178,5 +195,5 @@ export const STRATEGIES: Record<string, (seed: number) => Strategy> = {
   'always-war': () => alwaysWar,
   'promise-spammer': () => promiseSpammer,
   greedy: () => greedy(0, 'greedy'),
-  lookahead: () => greedy(45, 'lookahead'),
+  lookahead: () => greedy(30, 'lookahead', 4),
 };

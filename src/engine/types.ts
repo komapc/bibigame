@@ -254,6 +254,8 @@ export interface GameState {
   lostReason: LostReason | null;
   /** game days on which elections were called (election fatigue) */
   electionDays: number[];
+  /** remedy id → game days it was used (diminishing returns) */
+  remedyUses: Record<string, number[]>;
 }
 
 export type Action =
