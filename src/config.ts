@@ -141,6 +141,9 @@ export interface Config {
   promiseBrokenPenalty: number;
   promiseDeliverBonus: number;
   believeDriftPerDay: number;
+  /** security detail move: daily mood bonus for the guarded partner, and for how long */
+  guardDriftPerDay: number;
+  guardDays: number;
   distrustDriftPerDay: number;
 
   // --- ministries / invites ---
@@ -287,6 +290,8 @@ export const DEFAULT_CONFIG: Config = {
   promiseBrokenPenalty: 20,
   promiseDeliverBonus: 10,
   believeDriftPerDay: 0.05,
+  guardDriftPerDay: 0.04,
+  guardDays: 365,
   distrustDriftPerDay: 0.06,
 
   ministryGain: 12,

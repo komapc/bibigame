@@ -51,6 +51,8 @@ export interface Party extends PartyDef {
   leaveOffset?: number;
   /** joined only for the duration of a war */
   wartime: boolean;
+  /** state-funded security detail for the leader's family: a small daily mood bonus until this day */
+  guardedUntil?: number;
   /** has publicly threatened to quit (hysteresis flag) */
   threatening: boolean;
   trust: Trust;
@@ -88,7 +90,7 @@ export interface Effect {
   /** special mechanics */
   special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'buyTime' | 'refuse' | 'passBudget' | 'defector'
     | 'poach' | 'newMinistry' | 'merger' | 'spoiler' | 'gevalt' | 'exileRival' | 'primetime' | 'postponeElections'
-    | 'plea' | 'miami' | 'handover' | 'breakRotation' | 'noConfidence' | 'oppPoach';
+    | 'plea' | 'miami' | 'handover' | 'breakRotation' | 'noConfidence' | 'oppPoach' | 'pivot' | 'securityDetail';
 }
 
 export interface RemedyDef {

@@ -9,7 +9,7 @@ import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
 import { PROMISES } from '../data/promises.ts';
 import { TITLES } from '../data/titles.ts';
-import { formatLog, partyLabel, t } from '../i18n/index.ts';
+import { formatLog, has, hasOwn, partyLabel, t } from '../i18n/index.ts';
 
 /** translated party display name */
 export function pname(s: GameState, id: string): string {
@@ -123,7 +123,7 @@ const REACT_TAGS = ['farright', 'haredi', 'centrist', 'secular', 'left', 'arab']
 
 function quipOf(o: Outcome): string {
   const p = o.cause.params ?? {};
-  const n = Number(p.quip ?? o.seq) % 3;
+  const q = Number(p.quip ?? o.seq);
   let id = '';
   if (o.kind === 'news') return t(`crisis.${p.crisis}.text`);
   if (p.fail) { const f = t(`quip.${p.remedy}.fail`); if (f !== `quip.${p.remedy}.fail`) return f; }
@@ -138,9 +138,10 @@ function quipOf(o: Outcome): string {
     id = by === 'ministry' || !by ? 'ministry' : by;
   }
   if (!id) return '';
-  const k = `quip.${id}.${n}`;
-  const q = t(k);
-  return q === k ? '' : q;
+  // as many variants as the locale has (quip.<id>.0, .1, …); English ones only if it has none
+  const countBy = (f: (k: string) => boolean) => { let n = 0; while (f(`quip.${id}.${n}`)) n++; return n; };
+  const count = countBy(hasOwn) || countBy(has);
+  return count ? t(`quip.${id}.${q % count}`) : '';
 }
 
 function reactionOf(s: GameState, o: Outcome): string {
@@ -351,7 +352,7 @@ export function preview(s: GameState, optionId: string): Preview[] {
       spoiler: ['fx.spoiler', true], gevalt: ['fx.gevalt', true], exileRival: ['fx.exileRival', true],
       primetime: ['fx.primetime', true], postponeElections: ['fx.postponeElections', true],
       plea: ['fx.ending', false], miami: ['fx.ending', false], handover: ['fx.ending', false],
-      breakRotation: ['fx.breakRotation', false], noConfidence: ['fx.noConfidence', true], oppPoach: ['fx.poach', true],
+      breakRotation: ['fx.breakRotation', false], pivot: ['fx.pivot', true], securityDetail: ['fx.securityDetail', true], noConfidence: ['fx.noConfidence', true], oppPoach: ['fx.poach', true],
     };
     if (e.special && sp[e.special]) out.push({ label: t(sp[e.special][0]), up: sp[e.special][1] });
     if (e.special === 'war') out.push({ label: t('fx.fiscal'), up: false });

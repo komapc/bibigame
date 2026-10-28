@@ -8,7 +8,7 @@ import {
   allocateMinistries, coalitionSeats, fairShare, formGovernment, hateCount, matchesTag, ministryCounts,
 } from './coalition.ts';
 import { runElection } from './elections.ts';
-import { CRISES, LAWS, START_CONDITIONS, crisisById, remedyById } from '../data/crises.ts';
+import { CRISES, DOMESTIC, LAWS, START_CONDITIONS, crisisById, remedyById } from '../data/crises.ts';
 import { promiseById } from '../data/promises.ts';
 import { NEW_MINISTRIES, moveById } from '../data/moves.ts';
 import { TITLES } from '../data/titles.ts';
@@ -100,6 +100,7 @@ export function satDrivers(
     out.push({ key: 'drift.polls', perDay: -panic * Math.min(c.pollPanicMaxPerDay, Math.max(0, c.pollPanicBelow - s.approval) * c.pollPanicPerPoint) });
   }
   if (p.trust.state === 'believing') out.push({ key: 'drift.believe', perDay: c.believeDriftPerDay });
+  if ((p.guardedUntil ?? 0) > s.day) out.push({ key: 'drift.guarded', perDay: c.guardDriftPerDay });
   if (p.trust.state === 'distrust') out.push({ key: 'drift.distrust', perDay: -c.distrustDriftPerDay });
   const reg = (c.satBaseline - p.satisfaction) * c.satRegression;
   out.push({ key: reg > 0 ? 'drift.recover' : 'drift.cool', perDay: reg });
@@ -420,6 +421,23 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
   }
   switch (e.special) {
     case 'war': startWar(s); break;
+    case 'pivot':
+      // "life itself": a domestic card on the table loses the headlines (no ignore penalty)
+      if (s.event && DOMESTIC.has(s.event.id)) {
+        log(s, 'log.pivot', { crisis: s.event.id }, 'good');
+        s.event = null;
+        s.nextEventInDays = scheduleNext(s);
+      }
+      break;
+    case 'securityDetail': {
+      const p = coalition(s).filter((x) => x.id !== s.base.pmParty).sort((a, b) => a.satisfaction - b.satisfaction)[0];
+      if (p) {
+        p.satisfaction = clamp(p.satisfaction + 8, 0, 100);
+        p.guardedUntil = s.day + c.guardDays;
+        log(s, 'log.securityDetail', { party: p.id }, 'info');
+      }
+      break;
+    }
     case 'endWar': if (s.war.active) endWar(s); break;
     case 'ministryToSubject': {
       const coal = coalition(s);
@@ -937,8 +955,8 @@ export function eventOptions(s: GameState): { id: string; dir: OptionDir; availa
 function resolveEvent(s: GameState, optionId: string, timedOut = false) {
   const ev = s.event!;
   const cause: Outcome['cause'] = optionId === 'ignore'
-    ? { key: timedOut ? 'out.timedOutIgnore' : 'out.ignored', params: { crisis: ev.id, party: ev.subject ?? '', quip: Math.floor(rngOf(s).next() * 3) } }
-    : { key: timedOut ? 'out.timedOut' : 'out.chose', params: { crisis: ev.id, remedy: optionId, party: ev.subject ?? '', quip: Math.floor(rngOf(s).next() * 3) } };
+    ? { key: timedOut ? 'out.timedOutIgnore' : 'out.ignored', params: { crisis: ev.id, party: ev.subject ?? '', quip: Math.floor(rngOf(s).next() * 60) } }
+    : { key: timedOut ? 'out.timedOut' : 'out.chose', params: { crisis: ev.id, remedy: optionId, party: ev.subject ?? '', quip: Math.floor(rngOf(s).next() * 60) } };
   withOutcome(s, timedOut ? 'timeout' : 'choice', cause, () => resolveEventInner(s, optionId));
 }
 
