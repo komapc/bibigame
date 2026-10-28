@@ -290,3 +290,31 @@ heavy repetition. PR #19 changes, in balance terms:
 
 The easier and harder changes roughly cancel: hud-aware 51% → 43%, inside the 40–50% band, with no
 further tuning. Random stays at 0% (median 1.3y). Rollout bots were not rerun.
+
+## Round 8 (2026-10-28): late game
+
+PR #22 targets the spikes and the dice of the playtest review (problems 4–5):
+
+- `premiumCostScale` 0.5: a premium delivery pays the premium (budget −8, approval −2) plus half the
+  delivered remedy's costs. The total bill is a chip on the card.
+- `collapseBelow` 20 / `collapseDays` 90 / `collapseWarnDays` 45: a poll collapse ends in elections.
+- `loseGainPerApprovalPoint` 0.005: approval above `approvalNeutral` lowers the voters' verdict (before:
+  only approval below it counted). `groundGameLose` 0.08 for the ground-game lever; the election-year
+  budget is approval +5, street +3, budget −15. Both only within `electionOddsDays` 180 of the vote.
+- A trial pause blocks positive trial effects, not only the daily drift (the drift was already paused).
+- Three opposition cards; the card-only bots now answer them (whatever lowers the rival's stability
+  without costing approval). Before, the opposition had no cards at all.
+
+| strategy (80 seeds × 20y) | term | median y (p25–p75) | lost to voters / deadlock / indicted |
+|---|---|---|---|
+| never-act | 0% | 1.6 (1.2–2.1) | 47 / 16 / 17 |
+| random | 0% | 1.3 (0.9–1.7) | 70 / 8 / 2 |
+| always-war | 0% | 1.2 (0.9–1.5) | 44 / 11 / 25 |
+| promise-spammer | 0% | 1.0 (0.7–1.2) | 61 / 10 / 9 |
+| card-only-trial-aware | 11% | 2.9 (2.5–3.5) | 60 / 19 / 1 |
+| **card-only-hud-aware** | **46%** | 3.9 (3.3–4.3) | 72 / 7 / 1 |
+
+hud-aware 43% → 46%, inside the band, with no extra tuning. Indictments almost vanish for the card
+bots (15 → 1 for hud-aware), because pausing the trial now actually stops it. Losses move to the voters.
+Trial-aware falls (20% → 11%) since its trial-only scoring no longer needs to fight the pause.
+The card bots never use moves, so the two election levers are not measured here; they can only help.

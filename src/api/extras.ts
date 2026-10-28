@@ -1,6 +1,6 @@
 // Spin-doctor advisor and the quarterly "Friday edition": pure functions of the game state.
 import type { GameState } from '../engine/types.ts';
-import { budgetDueYear, coalition, dateOf, hasTension, partyById, seatsOf } from '../engine/game.ts';
+import { budgetDueYear, coalition, dateOf, hasTension, loseChance, moveAvailable, partyById, seatsOf } from '../engine/game.ts';
 import { becauseOf } from './game.ts';
 import { partyLabel } from '../i18n/index.ts';
 
@@ -15,6 +15,10 @@ export function advice(s: GameState): Advice[] {
   if (s.phase === 'opposition') { add('opposition'); return out; }
   if (s.phase === 'campaign') { add('campaign'); return out; }
   const pname = (id: string) => partyLabel(id, partyById(s, id)?.name ?? id);
+  if ((s.lowApprovalDays ?? 0) >= 15) add('collapse', { below: c.collapseBelow, days: Math.max(0, Math.ceil(c.collapseDays - (s.lowApprovalDays ?? 0))) });
+  if (s.termEndsDay - s.day <= c.electionOddsDays && (moveAvailable(s, 'electionbudget') || moveAvailable(s, 'groundgame'))) {
+    add('levers', { days: Math.ceil(s.termEndsDay - s.day), risk: Math.round(loseChance(s) * 100) });
+  }
   if (s.day < 25 && (s.outcomeSeq ?? 0) === 0) add('tutSwipe');
   for (const p of coalition(s)) {
     if (p.id === s.base.pmParty) continue;

@@ -130,6 +130,17 @@ export const REMEDIES: RemedyDef[] = [
   { id: 'oppattack', backfires: [], effect: { rival: -8, approval: 1, street: -2 } },
   { id: 'opppoach', backfires: [], effect: { special: 'oppPoach', rival: -15, approval: -2 } },
   { id: 'noconfidence', backfires: [], effect: { special: 'noConfidence' } },
+  // opposition cards' answers (rival = the rival government's stability)
+  { id: 'oppleak', backfires: [], effect: { rival: -12, approval: 1 },
+    risk: { chance: 0.7, fail: { approval: -3, trial: 3 } } },
+  { id: 'opphighroad', backfires: [], effect: { approval: 4, street: 3 } },
+  { id: 'oppwelcome', backfires: [], effect: { rival: -14, approval: -2 } },
+  { id: 'oppdeal', backfires: [], effect: { rival: -22 }, risk: { chance: 0.5, fail: { approval: -4 } } },
+  { id: 'oppjoin', backfires: [], effect: { rival: -10, street: -8, approval: 2 } },
+  { id: 'oppcounter', backfires: [], effect: { approval: 4, street: -4, rival: -4 } },
+  // last months of a term: levers on the vote (moves.ts: electionsWithinDays)
+  { id: 'electionbudget', backfires: ['kaplan'], effect: { approval: 5, street: 3, fiscal: -15 } },
+  { id: 'groundgame', backfires: [], effect: { special: 'groundGame', fiscal: -6 } },
   { id: 'plea', backfires: [], effect: { special: 'plea' } },
   { id: 'exilemiami', backfires: [], effect: { special: 'miami' } },
   // law-only moves
@@ -301,6 +312,13 @@ export const CRISES: CrisisDef[] = [
     onFire: { fiscal: 8, approval: 2 } },
   { id: 'hummus', weight: 0.2, goodNews: true, remedies: [], ignore: {},
     onFire: { approval: 3, street: 4 } },
+  // --- opposition only: the comeback is played, not rolled
+  { id: 'oppscandal', weight: 1, requires: { opposition: true }, onFire: { rival: -2 },
+    remedies: ['oppleak', 'opphighroad'], ignore: { approval: -2 } },
+  { id: 'oppdefector', weight: 0.8, requires: { opposition: true },
+    remedies: ['oppwelcome', 'oppdeal'], ignore: { rival: 3 } },
+  { id: 'oppprotest', weight: 0.9, requires: { opposition: true },
+    remedies: ['oppjoin', 'oppcounter'], ignore: { approval: -2 } },
   // --- wildcards: nobody's fault, no card (badNews = shown as bad news)
   { id: 'junket', weight: 0.6, goodNews: true, badNews: true, requires: { recess: true }, remedies: [], ignore: {},
     onFire: { approval: -2, street: -2 } },

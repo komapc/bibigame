@@ -104,3 +104,11 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - The Daily Coalition screen drops its Moves button (the bottom bar already has it).
 - The floating approval delta rises inside its own box and is cleared on animation end; it no longer lingers over the mute button.
 - README describes the new UI.
+
+## #22 Late game: fewer spikes, less dice
+- "Deliver now (at a premium)" shows its whole bill on the card, and the delivered remedy costs half (the premium is the bill).
+- Approval under 20 for 90 days: the partners bolt and force elections; a warning (log + advisor tip) comes at 45 days.
+- Election odds: in the last 180 days of a term (and in the campaign) the voters' verdict is shown with its factors. High approval now lowers it too. Two levers in the last months: an election-year budget and a ground game.
+- A paused trial is frozen: no drift and no new charges until the pause ends; the pause is shown.
+- Opposition cards (scandal in the government, a wavering MK, a protest) chip at the rival government; no early elections from the opposition.
+- Balance round 8.

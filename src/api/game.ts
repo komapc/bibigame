@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, approvalTarget, budgetDueYear, recessWindow, trumpFace, unavailableReason, loseChance, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
+  act, approvalTarget, budgetDueYear, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
@@ -41,6 +41,14 @@ export interface Observation {
   electionRisk: number;
   /** campaign tricks already applied (merger / spoiler / gevalt) — already in electionRisk and the poll */
   campaignTricks: string[];
+  /** what makes up electionRisk, one line per factor (delta in risk points, + = worse) */
+  electionFactors: { id: string; label: string; delta: number }[];
+  /** the vote is close (campaign, or scheduled elections within config.electionOddsDays): show the odds */
+  electionSoon: boolean;
+  /** days left on a trial pause (0 = the trial runs) */
+  trialPausedDays: number;
+  /** days approval has been under config.collapseBelow (partners bolt at config.collapseDays) */
+  collapse: { days: number; limit: number; below: number } | null;
   /** where approval is drifting (below config.pollPanicBelow partners panic) */
   approvalTarget: number;
   /** config.pollPanicBelow */
@@ -242,6 +250,11 @@ export function observe(s: GameState, logTail = 12): Observation {
     lostReason: s.lostReason ?? null,
     electionRisk: Math.round(loseChance(s) * 100) / 100,
     campaignTricks: Object.entries(s.campaignFx ?? {}).filter(([, on]) => on).map(([k]) => k),
+    electionFactors: loseFactors(s).map((x) => ({ id: x.id, label: t(`odds.${x.id}`), delta: Math.round(x.delta * 100) })),
+    electionSoon: s.phase === 'campaign' || (s.phase === 'governing' && s.termEndsDay - s.day <= s.config.electionOddsDays),
+    trialPausedDays: Math.max(0, Math.ceil(s.trialPausedUntil - s.day)),
+    collapse: s.phase === 'governing' && (s.lowApprovalDays ?? 0) > 0
+      ? { days: Math.floor(s.lowApprovalDays ?? 0), limit: s.config.collapseDays, below: s.config.collapseBelow } : null,
     approvalTarget: r1(approvalTarget(s)),
     panicBelow: s.config.pollPanicBelow,
     phase: s.phase,
@@ -361,12 +374,12 @@ export function preview(s: GameState, optionId: string): Preview[] {
   const effects: Effect[] = optionId === 'ignore'
     ? [crisis?.ignore ?? {}]
     : [remedyById.get(optionId)?.effect ?? {}, crisis?.extra?.[optionId] ?? {}];
-  // delivering on an angry card also costs whatever the delivered law/remedy costs: show it
+  // delivering on an angry card also costs whatever the delivered law/remedy costs: show the bill up front
   if (optionId === 'deliverpremium' && subject) {
-    const pid = s.parties.find((x) => x.id === subject)?.trust.promiseId;
-    const by = PROMISES.find((x) => x.id === pid)?.deliveredBy;
-    const r = by && by !== 'ministry' ? remedyById.get(by) : undefined;
-    if (r) effects.push({ ...r.effect, special: undefined });
+    const r = deliveredRemedy(s, subject);
+    if (r) effects.push({ ...scaleCosts(r.effect, s.config.premiumCostScale), special: undefined });
+    const bill = premiumBill(s, subject);
+    if (bill) out.unshift({ label: t('fx.bill', { bill }), up: false });
   }
   for (const e of effects) {
     for (const k of ['approval', 'street', 'us', 'fiscal'] as const) if (e[k]) out.push({ label: t(`fx.${k}`), up: e[k]! > 0 });
@@ -386,12 +399,33 @@ export function preview(s: GameState, optionId: string): Preview[] {
       primetime: ['fx.primetime', true], postponeElections: ['fx.postponeElections', true],
       plea: ['fx.ending', false], miami: ['fx.ending', false], handover: ['fx.ending', false],
       breakRotation: ['fx.breakRotation', false], pivot: ['fx.pivot', true], securityDetail: ['fx.securityDetail', true], noConfidence: ['fx.noConfidence', true], oppPoach: ['fx.poach', true],
+      groundGame: ['fx.groundGame', true],
     };
     if (e.special && sp[e.special]) out.push({ label: t(sp[e.special][0]), up: sp[e.special][1] });
     if (e.special === 'war') out.push({ label: t('fx.fiscal'), up: false });
   }
   const seen = new Set<string>();
   return out.filter((x) => { const k = x.label + x.up; if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
+/** the remedy a premium delivery runs for this subject's promise (none for a ministry promise) */
+function deliveredRemedy(s: GameState, subject: string) {
+  const pid = s.parties.find((x) => x.id === subject)?.trust.promiseId;
+  const by = PROMISES.find((x) => x.id === pid)?.deliveredBy;
+  return by && by !== 'ministry' ? remedyById.get(by) : undefined;
+}
+
+/** "Budget −12 · Approval −3": what "deliver now (at a premium)" costs in total (premium + rushed delivery) */
+export function premiumBill(s: GameState, subject: string): string {
+  const prem = remedyById.get('deliverpremium')!.effect;
+  const r = deliveredRemedy(s, subject);
+  const d = r ? scaleCosts(r.effect, s.config.premiumCostScale) : {};
+  const parts: string[] = [];
+  for (const k of ['fiscal', 'approval', 'street', 'us'] as const) {
+    const n = Math.round((prem[k] ?? 0) + (d[k] ?? 0));
+    if (n) parts.push(`${t(`fx.${k}`)} ${n > 0 ? '+' : '−'}${Math.abs(n)}`);
+  }
+  return parts.join(' · ');
 }
 
 const DAY = 86_400_000;

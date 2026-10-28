@@ -88,7 +88,7 @@ export interface Effect {
   /** opposition only: the rival government's stability */
   rival?: number;
   /** special mechanics */
-  special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'buyTime' | 'refuse' | 'passBudget' | 'defector'
+  special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'buyTime' | 'refuse' | 'passBudget' | 'defector' | 'groundGame'
     | 'poach' | 'newMinistry' | 'merger' | 'spoiler' | 'gevalt' | 'exileRival' | 'primetime' | 'postponeElections'
     | 'plea' | 'miami' | 'handover' | 'breakRotation' | 'noConfidence' | 'oppPoach' | 'pivot' | 'securityDetail';
 }
@@ -149,6 +149,8 @@ export interface CrisisDef {
     subjectMoodBelow?: number;
     /** only during the Knesset summer recess */
     recess?: boolean;
+    /** an opposition-only card (fires only while you are in the opposition; never otherwise) */
+    opposition?: boolean;
   };
   /** never fired by the random roll (scheduled by the engine) */
   scheduled?: boolean;
@@ -331,6 +333,11 @@ export interface GameState {
   rival: { stability: number; until: number } | null;
   /** the current campaign came from the opposition */
   fromOpposition: boolean;
+  /** pre-election levers used while governing (kept through the campaign, cleared by the vote) */
+  termFx?: { groundGame?: boolean };
+  /** days in a row with approval under config.collapseBelow (governing); warned once */
+  lowApprovalDays?: number;
+  lowApprovalWarned?: boolean;
   /** campaign tricks in effect for the next election roll */
   campaignFx: { merger: boolean; spoiler: boolean; gevalt: boolean };
   /** move id → game day it is usable again */
