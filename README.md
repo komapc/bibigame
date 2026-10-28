@@ -71,6 +71,17 @@ tests/                   vitest
   shown as a risk % during the campaign), then noise around base seats, 4-seat threshold, largest
   remainder, automatic formation. Game over reasons: `voters`, `deadlock` (failed formation),
   `indicted` (trial meter reaches `indictAt`); poll panic accelerates partner drain at low approval.
+- **Moves** (`src/data/moves.ts`, the 🎲 Moves panel): drawer actions that reuse the remedy with the
+  same id (effects, fatigue, quips). Governing: poach an MK, new ministry, exile a rival to the UN,
+  20:00 statement, Trump-for-Nobel (once), cottage-cheese VAT, Wing of Zion (once), postpone elections
+  (only at war, elections < 1 year away). Campaign (once per election): far-right merger, fund a spoiler
+  (may be exposed → new case), "Gevalt!". Laws: Norwegian law, close Army Radio. Promise a **rotation**
+  for a big trust boost: when the date comes, hand over (ending) or break it (lasting distrust).
+- **Opposition**: losing an election (voters or deadlock) sends you to the opposition: the rival
+  government has a stability meter (attack it, poach MKs, no-confidence vote); when it falls you get
+  another election. Losing `maxElectionLosses` (2) elections ends the game.
+- **Endings**: besides losing — *moved to Miami*, *plea bargain* (moral turpitude; needs a trial ≥ 40)
+  and *rotation handover*, each with its own title.
 - **Win**: 4 years total as PM (config `restartTermOnElection`, `stopAtTerm`). Titles beyond that.
 - **Languages**: en / ru / he (RTL) — `src/i18n/`; picker in the header, `?lang=he`, auto-detect from
   the browser. Text mode `--lang ru`, HTTP `lang` field / `?lang=`. Command keywords stay English.
@@ -126,6 +137,7 @@ ministry <party> <ministry>  e.g. ministry shas finance
 invite <party>
 law <law>                    exempt | reform | constitution | settlelaw
 war
+move <id>                    a drawer move, e.g. move primetime (list under MOVES:)
 wait [N|Nd|Nm]               let time pass; stops early when a crisis fires (default: up to 30d)
 look | help
 ```

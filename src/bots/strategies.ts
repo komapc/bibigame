@@ -196,7 +196,8 @@ export function greedy(lookaheadDays = 0, name = 'greedy', rollouts = 1): Strate
         if (cand) acts.push({ type: 'invite', partyId: cand.id });
       }
       // drawer moves: the one with the best rollout gain, if clearly positive (never the exits)
-      if (!o.event) {
+      // (once a month: rollouts per move are the slowest part of the bot)
+      if (!o.event && Math.floor(s.day) % 30 < 5) {
         let bestMove: string | null = null;
         let bestMoveGain = 8;
         for (const m of o.moves) {
