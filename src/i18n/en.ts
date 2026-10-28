@@ -951,4 +951,18 @@ export const en: Record<string, string> = {
   'consent.text': 'We use Google Analytics (cookies) to see which cards people play. No personal data.',
   'consent.allow': 'Allow',
   'consent.decline': 'Decline',
+  // --- first screen (intro) + simplified layout
+  'intro.you': 'You are Bibi. Keep your coalition at 61+ of the 120 Knesset seats.',
+  'intro.cards': 'Crises arrive as cards. Swipe ← → ↑ to pick a fix, ↓ to call early elections, or tap Ignore.',
+  'intro.price': 'Every fix angers someone. The chips on each option show who.',
+  'intro.promises': 'Promises buy time, but they come due. Deliver, or they get furious.',
+  'intro.goal': 'Survive as long as you can and collect titles.',
+  'intro.start': 'Start',
+  'intro.resume': 'Back to the game',
+  'intro.lang': 'Language',
+  'intro.satire': 'Satire. Party names are placeholders; nobody is quoted.',
+  'ui.help': 'How to play',
+  'ui.resultSeats': 'Seats {n}',
+  'ui.tabLog': 'Log',
+  'ui.editionToast': 'The Friday edition is out: see the Log',
 };

@@ -7,7 +7,7 @@ import { LANGS, getLocale, isLang, isRtl, loadLocale, partyChip, setLocale, t, t
 import { hemicycleSvg } from './hemicycle.ts';
 import { initSwipe } from './swipe.ts';
 import { buzz, play, setSound, soundOn } from './fx.ts';
-import { initConsent, track } from './analytics.ts';
+import { consentPending, initConsent, mountConsent, track } from './analytics.ts';
 import { advice, editionSnap, fridayEdition, type EditionSnap } from '../api/extras.ts';
 import { dailySeed, isDateKey, shareText, todayKey, whatsappUrl } from '../api/share.ts';
 
@@ -50,54 +50,64 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const pct = (v: number) => `${Math.max(0, Math.min(100, v)).toFixed(1)}%`;
 const ARROW: Record<string, string> = { left: '←', right: '→', up: '↑', down: '↓' };
 
+// Layout (phone first): top bar (seats big + approval, timeline) → one result line → the card.
+// Everything else lives in ONE bottom sheet behind three tabs. Layers: at most one of
+// intro / sheet / game-over at a time (see openLayer), plus at most one small toast.
+const TABS: [string, string, string][] = [['moves', '🎲', 'ui.movesPanel'], ['parties', '🤝', 'ui.parties'], ['log', '📜', 'ui.tabLog']];
 app.innerHTML = `
 <header class="top">
   <div class="row1">
     <div class="who"><b>${t('ui.player')}</b> <span id="title" class="badge"></span></div>
-    <div class="langs" role="group" aria-label="Language">${LANGS.map((l) => `<button data-lang="${l.code}" aria-pressed="${l.code === getLocale()}" lang="${l.code}">${l.label}</button>`).join('')}</div>
     <div id="date" class="date"></div>
+    <button class="icon help" data-act="intro" aria-label="${t('ui.help')}">?</button>
     <button id="sound" class="icon" data-act="sound" aria-label="${t('ui.sound')}"></button>
     <button id="pause" class="icon" aria-label="${t('ui.pause')}">⏸</button>
   </div>
-  <button id="timeline" class="timeline" aria-expanded="false" aria-label="${t('ui.timeline')}">
-    <div class="tl-track" id="tltrack"></div>
-    <div class="tl-caption" id="tlcap"></div>
-  </button>
-  <div id="history" class="history" hidden></div>
   <div class="support">
     <div class="bigseats" id="bigseats" aria-live="polite"><b id="seatnum">0</b><span class="of">/ 61</span><span id="margin" class="margin"></span><span id="seattrend" class="trend"></span></div>
     <div class="appr"><span>${t('ui.approval')}</span><b id="apprnum">0%</b><small id="apprtgt" class="trend"></small><div class="mbar"><div id="apprbar"></div></div></div>
   </div>
-  <div id="danger" class="dangerm" hidden></div>
   <div class="seatbar" id="seatbar"></div>
-  <div id="seattxt" class="seattxt"></div>
   <div id="pchips" class="pchips" role="list"></div>
+  <div id="seattxt" class="seattxt"></div>
+  <button id="timeline" class="timeline" data-act="open" data-sec="log" aria-label="${t('ui.timeline')}">
+    <div class="tl-track" id="tltrack"></div>
+    <div class="tl-caption" id="tlcap"></div>
+  </button>
 </header>
 <main class="main">
+  <div id="result" class="resultline" role="status" aria-live="polite"></div>
   <section class="stage" id="stage"></section>
+  <p id="advline" class="advline"></p>
   <aside id="drawer" class="drawer" aria-label="${t('ui.moves')}">
-    <button class="drawer-close" data-act="drawer">▾ ${t('ui.closeSheet')}</button>
-    <button id="war" class="war" data-act="war"></button>
-    <details class="panel hud"><summary>${t('ui.overview')}</summary>
-      <div id="hemi"></div>
-      <div id="slider" class="slider"></div>
-      <div id="meters" class="meters"></div>
-      <div id="chips" class="chips"></div>
-    </details>
-    <details class="panel" open><summary>${t('ui.parties')}</summary><div id="parties" class="parties"></div></details>
-    <details class="panel"><summary>${t('ui.ministries')}</summary><div id="ministries" class="ministries"></div></details>
-    <details class="panel"><summary>${t('ui.laws')}</summary><div id="laws" class="laws"></div></details>
-    <details class="panel"><summary>${t('ui.movesPanel')}</summary><div id="moves" class="laws moves"></div></details>
-    <details class="panel"><summary>${t('ui.log')}</summary><ol id="log" class="log"></ol></details>
-    <p class="bothint">${t('ui.botHint')}</p>
+    <div class="tabs" role="tablist">${TABS.map(([id, ic, k]) => `<button role="tab" data-act="tab" data-tab="${id}" aria-selected="false">${ic} ${t(k)}</button>`).join('')}<button class="icon drawer-close" data-act="close" aria-label="${t('ui.closeSheet')}">✕</button></div>
+    <div class="tabpane" data-pane="moves">
+      <button id="war" class="war" data-act="war"></button>
+      <section class="panel"><h3>${t('ui.movesPanel')}</h3><div id="moves" class="laws moves"></div></section>
+      <section class="panel"><h3>${t('ui.laws')}</h3><div id="laws" class="laws"></div></section>
+      <section class="panel"><h3>${t('ui.ministries')}</h3><div id="ministries" class="ministries"></div></section>
+    </div>
+    <div class="tabpane" data-pane="parties">
+      <div id="parties" class="parties"></div>
+      <section class="panel hud"><h3>${t('ui.overview')}</h3>
+        <div id="hemi"></div>
+        <div id="slider" class="slider"></div>
+        <div id="meters" class="meters"></div>
+        <div id="chips" class="chips"></div>
+      </section>
+    </div>
+    <div class="tabpane" data-pane="log">
+      <section class="panel"><h3>${t('ui.timeline')}</h3><ul id="upcoming" class="tl-up"></ul></section>
+      <div id="editions"></div>
+      <section class="panel"><h3>${t('ui.log')}</h3><ol id="log" class="log"></ol></section>
+      <p class="bothint">${t('ui.botHint')}</p>
+    </div>
   </aside>
 </main>
-<nav class="bottombar"><button id="movesbtn" data-act="drawer" class="moves">☰ ${t('ui.moves')} <span id="movesdot" class="dot" hidden></span></button></nav>
-<div id="toast" class="toast" hidden></div>
-<div id="advisor" class="advisor" hidden role="status"></div>
-<div id="friday" class="friday" hidden></div>
-<div id="result" class="result" hidden role="status" aria-live="polite"></div>
+<nav class="bottombar">${TABS.map(([id, ic, k]) => `<button data-act="open" data-sec="${id}">${ic} ${t(k)}${id === 'parties' ? ' <span id="movesdot" class="dot" hidden></span>' : ''}</button>`).join('')}</nav>
+<div id="toast" class="toast" hidden role="status"></div>
 <div id="over" class="over" hidden></div>
+<div id="intro" class="intro" hidden role="dialog" aria-modal="true" aria-labelledby="introtitle"></div>
 `;
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -123,12 +133,21 @@ function renderTop(o: Observation) {
     [...coal, ...opp].map((p) => `<span class="seg ${p.inCoalition ? '' : 'opp'} ${p.mayLeave ? 'ghost' : ''}" style="flex:${p.seats};background:${p.color}" title="${esc(p.name)} ${p.seats}"></span>`).join('')
     + `<span class="maj" style="left:${(61 / 120) * 100}%"></span>`);
   renderSupport(o, coal);
-  $('seattxt').innerHTML = o.opposition
-    ? `<b class="bad">${esc(t('ui.rival', { n: o.opposition.stability }))}</b> · ${esc(t('ui.lastChance'))}`
+  // one status line under the seat bar: phase, who may leave, or the one meter in danger
+  const m = o.meters;
+  const dangers: [string, number, boolean][] = [
+    ['ui.trial', m.trial, m.trial > 70], ['ui.street', m.street, m.street < 30], ['ui.us', m.us, m.us < 30], ['ui.fiscal', m.fiscal, m.fiscal < 25],
+  ];
+  const dg = dangers.find((x) => x[2]);
+  const parts = o.opposition
+    ? [`<b class="bad">${esc(t('ui.rival', { n: o.opposition.stability }))}</b>`, esc(t('ui.lastChance'))]
     : o.phase === 'campaign'
-    ? `<b class="bad">${esc(t('ui.campaign', { days: o.phaseLeftDays }))}</b>${o.electionLosses ? ` · ${esc(t('ui.lastChance'))}` : ''}`
-    : `${o.defectors ? `${o.defectors} rogue MKs` : ''}`
-      + coal.filter((p) => p.mayLeave).map((p) => ` · <span class="danger">⚠ ${esc(t('ui.without', { party: p.short || p.name, seats: p.seatsWithout }))}</span>`).join('');
+    ? [`<b class="bad">${esc(t('ui.campaign', { days: o.phaseLeftDays }))}</b>`, o.electionLosses ? esc(t('ui.lastChance')) : '']
+    : [
+      ...coal.filter((p) => p.mayLeave).map((p) => `<span class="danger">⚠ ${esc(t('ui.without', { party: p.short || p.name, seats: p.seatsWithout }))}</span>`),
+      dg ? `<span class="bad">⚠ ${esc(t(dg[0]))} <b>${Math.round(dg[1])}</b></span>` : '',
+    ];
+  $('seattxt').innerHTML = parts.filter(Boolean).join(' · ');
 }
 
 // ------------------------------------------------------------------ big support indicator
@@ -177,15 +196,6 @@ function renderSupport(o: Observation, coal: Observation['parties']) {
   $('apprtgt').textContent = arrow ? `${arrow}${tgt}%` : '';
   $('apprtgt').className = `trend ${o.approvalTarget < o.panicBelow ? 'bad' : ''}`;
   $('apprtgt').title = t('ui.approvalTarget', { n: tgt, panic: o.panicBelow });
-  // one extra meter, only when it's in danger
-  const m = o.meters;
-  const dangers: [string, number, boolean][] = [
-    ['ui.trial', m.trial, m.trial > 70], ['ui.street', m.street, m.street < 30], ['ui.us', m.us, m.us < 30], ['ui.fiscal', m.fiscal, m.fiscal < 25],
-  ];
-  const dg = dangers.find((x) => x[2]);
-  const dEl = $('danger');
-  dEl.hidden = !dg;
-  if (dg) dEl.innerHTML = `⚠ ${t(dg[0])} <b>${Math.round(dg[1])}</b>`;
   // compact coalition chips; tap → full party sheet
   region('pchips', coal.map((p) => [p.id, p.seats, p.satisfaction < 25 ? 'r' : p.satisfaction < 45 ? 'a' : 'g', p.mayLeave, p.trust.state === 'angry' || p.trust.waiting].join(':')).join('|'), () =>
     [...coal].sort((x, y) => y.seats - x.seats).map((p) => {
@@ -218,14 +228,8 @@ function renderTimeline(o: Observation) {
   if (next) parts.push(t('tl.next', { label: next.label, days: next.day - tl.nowDay }));
   if (tl.nextTitle) parts.push(`👑 ${t('tl.nextTitle', { title: tl.nextTitle.name, days: tl.nextTitle.inDays })}`);
   $('tlcap').textContent = parts.join(' · ');
-  const hist = $('history');
-  if (!hist.hidden) {
-    region('history', String(game.state.log.length) + tl.upcoming.length, () => {
-      const full = game.observe(300);
-      return `<h3>${t('ui.timeline')}</h3><ul class="tl-up">${tl.upcoming.map((m) => `<li>${ICON[m.kind] ?? '•'} ${m.date} — ${esc(m.label)} (${m.day - tl.nowDay}d)</li>`).join('')}</ul>
-        <ol class="log">${[...full.log].reverse().map((e) => `<li class="${e.kind}"><time>d${e.day}</time> ${esc(e.text)}</li>`).join('')}</ol>`;
-    });
-  }
+  if (sheetTab === 'log') region('upcoming', tl.upcoming.map((m) => m.kind + m.day).join() + Math.floor(tl.nowDay), () =>
+    tl.upcoming.map((m) => `<li>${ICON[m.kind] ?? '•'} ${m.date} — ${esc(m.label)} (${m.day - tl.nowDay}d)</li>`).join(''));
 }
 
 // ------------------------------------------------------------------ HUD
@@ -298,7 +302,6 @@ function renderStage(o: Observation) {
     const urgent = ev.id === 'angry';
     const ign = ev.options.find((x) => x.dir === 'ignore');
     const ignFx = ign ? ign.preview.filter((p) => !p.up).map((p) => p.label).slice(0, 3).join(', ') : '';
-    const tutorial = o.outcomeSeq === 0 ? `<p class="tutorial">${t('ui.tutorial')}</p>` : '';
     return `<div id="card" class="swipecard ${enter} ${urgent ? 'urgent' : ''}" tabindex="0" aria-label="${esc(ev.title)}">
       ${hint('up')}
       <div class="cbody">
@@ -306,14 +309,12 @@ function renderStage(o: Observation) {
         <h2>${esc(ev.title)}${ev.subject ? ` <small>· ${esc(partyName(o, ev.subject))}</small>` : ''}</h2>
         <p>${esc(ev.text)}</p>
         ${arrivalHtml(ev.arrival)}
-        ${tutorial}
         <div id="swipelabel" class="swipelabel" hidden></div>
       </div>
       <div class="lr">${hint('left')}${hint('right')}</div>
       ${hint('down')}
     </div>
-    ${ign ? `<button class="ignorebtn" data-dir="ignore"><b>${t('ui.ignore')}</b> <small>${esc(t('ui.ignoreFx', { fx: ignFx || t('out.escalates') }))}</small> <kbd>0</kbd></button>` : ''}
-    <p class="swipehint">${t('ui.swipeHint')}</p>`;
+    ${ign ? `<button class="ignorebtn" data-dir="ignore"><b>${t('ui.ignore')}</b> <small>${esc(t('ui.ignoreFx', { fx: ignFx || t('out.escalates') }))}</small> <kbd>0</kbd></button>` : ''}`;
   });
   if (ev) {
     const ring = document.getElementById('ring');
@@ -371,11 +372,14 @@ function newsHtml(o: Observation, enter: string): string {
   </div>`;
 }
 
-// ------------------------------------------------------------------ result flash (cause → result)
+// ------------------------------------------------------------------ result line (cause → result)
+// ONE short line in a fixed slot between the top bar and the card: "Shas −8 · Approval +2 · Seats 63".
+// It never covers anything and never blocks the clock; several outcomes at once are queued and
+// each stays at least MIN_SHOW ms. The line stays (dimmed) until the next result replaces it.
 let seenSeq = 0;
 const flashQueue: OutcomeView[] = [];
 let flashUntil = 0;
-const flashing = () => flashUntil > 0;
+const MIN_SHOW = 1600, MIN_SHOW_BIG = 3000;
 
 function pumpOutcomes(o: Observation) {
   if (o.outcomeSeq > seenSeq) {
@@ -384,40 +388,45 @@ function pumpOutcomes(o: Observation) {
   }
   const now = performance.now();
   if (flashUntil && now < flashUntil) return;
-  if (flashUntil) hideFlash();
   const r = flashQueue.shift();
-  if (r) showFlash(r);
+  if (r) showResult(r, o);
+  else if (flashUntil && now > flashUntil + 5000) { $('result').classList.add('stale'); flashUntil = 0; }
 }
 
-function showFlash(r: OutcomeView) {
+/** "−8" with a real minus, bidi-isolated so it reads the same in RTL */
+const signed = (n: number) => ltr(n > 0 ? `+${n}` : `−${-n}`);
+
+function showResult(r: OutcomeView, o: Observation) {
   const el = $('result');
-  const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
-  /** good = colour/emoji direction; shown = the number printed (trial: up is bad) */
-  const chip = (label: string, good: number, extra = '', shown = good) => `<span class="fxchip ${good > 0 ? 'up' : 'down'} ${extra}">${esc(label)} <b><bdi dir="ltr">${sign(shown)}</bdi></b> ${good > 0 ? '😊' : '😠'}</span>`;
-  const sat = r.sat.slice(0, 7).map((x) => chip(x.name, x.delta, x.inCoalition ? '' : 'opp')).join('');
-  const meters = r.meters.map((x) => chip(x.label, x.meter === 'trial' ? -x.delta : x.delta, '', x.delta)).join('');
-  const seats = r.seats.from !== r.seats.to ? `<p class="seats ${r.seats.to < r.seats.from ? 'bad' : 'good'}">${esc(t('out.seats', r.seats))}</p>` : '';
-  const lj = [r.left.length ? t('out.leftList', { parties: r.left.join(', ') }) : '', r.joined.length ? t('out.joinedList', { parties: r.joined.join(', ') }) : ''].filter(Boolean).map((x) => `<p class="lj">${esc(x)}</p>`).join('');
-  const risks = r.risks.length ? `<p class="risk">⚠ ${t('out.risk')}: ${esc(r.risks.join(' · '))}</p>` : '';
-  const nothing = !sat && !meters && !seats && !lj ? `<p class="sub">${t('out.nothing')}</p>` : '';
-  el.className = `result ${r.big ? 'big' : ''} ${r.kind}`;
-  const quip = r.quip ? `<p class="quip">${esc(r.quip)}</p>` : '';
-  const react = r.reaction ? `<p class="react">${esc(r.reaction)}</p>` : '';
-  el.innerHTML = `<h3>${esc(r.cause)}</h3>${quip}${seats}${lj}<div class="fxrow">${sat}${meters}</div>${react}${risks}${nothing}<small class="sub">${t('ui.resultTap')}</small>`;
-  el.hidden = false;
-  flashUntil = performance.now() + (r.big ? 5000 : 2800);
+  const short = (id: string, name: string) => { const p = o.parties.find((x) => x.id === id); return p ? partyChip(id, p.short || p.name) : name; };
+  const part = (good: boolean, html: string) => `<span class="${good ? 'up' : 'down'}">${html}</span>`;
+  const sat = [...r.sat].sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 3)
+    .map((x) => part(x.delta > 0, `${esc(short(x.party, x.name))} <b>${signed(x.delta)}</b>`));
+  const meters = [...r.meters].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 2)
+    .map((x) => part(x.meter === 'trial' ? x.delta < 0 : x.delta > 0, `${esc(x.label)} <b>${signed(x.delta)}</b>`));
+  const lj = [
+    r.left.length ? part(false, esc(t('out.leftList', { parties: r.left.join(', ') }))) : '',
+    r.joined.length ? part(true, esc(t('out.joinedList', { parties: r.joined.join(', ') }))) : '',
+  ].filter(Boolean);
+  const seats = r.seats.from !== r.seats.to ? [part(r.seats.to > r.seats.from, `<b>${esc(t('ui.resultSeats', { n: r.seats.to }))}</b>`)] : [];
+  const fx = [...lj, ...sat, ...meters, ...seats];
+  el.className = `resultline ${r.big ? 'big' : ''} k-${r.kind}`;
+  el.innerHTML = `<small class="cause">${esc(r.cause)}</small><span class="fxline">${fx.length ? fx.join('<i> · </i>') : esc(t('out.nothing'))}</span>`;
+  el.title = [r.quip, r.reaction].filter(Boolean).join(' — ');
+  if (!reduceMotion) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+  flashUntil = performance.now() + (r.big ? MIN_SHOW_BIG : MIN_SHOW);
   if (r.left.length) buzz([60, 30, 60]);
   else if (r.seats.to < r.seats.from || r.cause.startsWith(t('out.badNews', { crisis: '' }).trim())) buzz([30, 40, 30]);
-  // floating deltas on the HUD meters + pulse on party cards
-  const idx: Record<string, number> = { approval: 0, street: 1, us: 2, fiscal: 3, trial: 4 };
-  for (const m of r.meters) floatOn(document.getElementById(`mv${idx[m.meter]}`), m.delta, m.meter === 'trial');
+  // a floating delta on the big approval number + pulse on party cards (if the sheet is open)
+  const ap = r.meters.find((m) => m.meter === 'approval');
+  if (ap) floatOn($('apprnum'), ap.delta);
   for (const x of r.sat) {
     const card = app.querySelector<HTMLElement>(`[data-sat="${x.party}"]`)?.closest<HTMLElement>('.party');
     if (card) { card.classList.remove('pulse-up', 'pulse-down'); void card.offsetWidth; card.classList.add(x.delta > 0 ? 'pulse-up' : 'pulse-down'); }
   }
 }
 
-function hideFlash() { $('result').hidden = true; flashUntil = 0; }
+function clearResult() { const el = $('result'); el.innerHTML = ''; el.className = 'resultline'; el.title = ''; flashUntil = 0; }
 
 function floatOn(el: HTMLElement | null, d: number, inverse = false) {
   if (!el || reduceMotion) return;
@@ -541,34 +550,129 @@ function renderLog() {
     [...o.log].reverse().map((e) => `<li class="${e.kind}"><time>d${e.day}</time> ${esc(e.text)}</li>`).join(''));
 }
 
-// ------------------------------------------------------------------ overlays
-function toast(msg: string) {
-  const el = $('toast');
-  el.textContent = msg;
-  el.hidden = false;
-  clearTimeout((el as unknown as { _t: number })._t);
-  (el as unknown as { _t: number })._t = window.setTimeout(() => { el.hidden = true; }, 3500);
+// ------------------------------------------------------------------ layers: ONE modal at a time
+// intro (first screen / "?"), sheet (moves · parties · log), over (game over). Opening one closes
+// the other, except that game over is never replaced by the sheet and waits while the intro is up.
+type Layer = 'intro' | 'sheet' | 'over';
+let layer: Layer | null = null;
+let overWaiting = false;
+let sheetTab = 'parties';
+
+function showLayer(l: Layer | null) {
+  layer = l;
+  $('intro').hidden = l !== 'intro';
+  $('drawer').classList.toggle('open', l === 'sheet');
+  $('over').hidden = l !== 'over';
+  document.body.dataset.layer = l ?? '';
+}
+function openLayer(l: Layer) {
+  if (layer === l) return;
+  if (layer === 'over' && l === 'sheet') return;
+  if (layer === 'intro' && l === 'over') { overWaiting = true; return; }
+  showLayer(l);
+}
+function closeLayer() {
+  showLayer(null);
+  if (overWaiting) { overWaiting = false; showLayer('over'); }
 }
 
-function renderOver(o: Observation) {
-  const el = $('over');
-  if (o.status === 'playing') { el.hidden = true; return; }
-  if (!el.hidden) return;
+function setTab(tab: string) {
+  sheetTab = tab;
+  $('drawer').dataset.tab = tab;
+  for (const b of app.querySelectorAll<HTMLElement>('.tabs [data-tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+  keys.upcoming = '';
+}
+const SEC_TAB: Record<string, string> = { moves: 'moves', laws: 'moves', ministries: 'moves', parties: 'parties', log: 'log' };
+const desktop = () => window.matchMedia('(min-width: 900px)').matches;
+function openSection(sec: string) {
+  if (layer === 'over' || layer === 'intro') return;
+  setTab(SEC_TAB[sec] ?? 'parties');
+  if (!desktop()) openLayer('sheet');
+  render();
+  if (sec === SEC_TAB[sec] && !desktop()) { $('drawer').scrollTop = 0; return; }
+  const target = $(sec).closest<HTMLElement>('.panel') ?? $(sec);
+  target.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
+}
+
+// ------------------------------------------------------------------ toast: one small line, queued
+const toastQ: string[] = [];
+let toastUntil = 0;
+function toast(msg: string) {
+  if (!toastQ.includes(msg) && $('toast').textContent !== msg) toastQ.push(msg);
+  pumpToast();
+}
+function pumpToast() {
+  const el = $('toast');
+  const now = performance.now();
+  if (toastUntil && now < toastUntil) return;
+  if (layer === 'intro') { el.hidden = true; toastUntil = 0; return; }
+  const m = toastQ.shift();
+  if (!m) { if (toastUntil) { el.hidden = true; el.textContent = ''; toastUntil = 0; } return; }
+  el.textContent = m;
   el.hidden = false;
+  toastUntil = now + 3200;
+}
+
+// ------------------------------------------------------------------ intro (first screen)
+const INTRO_KEY = 'bibigame.intro';
+const INTRO_AGAIN = 'bibigame.introAgain';
+const store = {
+  get: (k: string, s: Storage | null = null) => { try { return (s ?? localStorage).getItem(k); } catch { return null; } },
+  set: (k: string, v: string, s: Storage | null = null) => { try { (s ?? localStorage).setItem(k, v); } catch { /* private mode */ } },
+  del: (k: string, s: Storage | null = null) => { try { (s ?? localStorage).removeItem(k); } catch { /* private mode */ } },
+};
+const session = (() => { try { return sessionStorage; } catch { return null; } })();
+const INTRO_LINES: [string, string][] = [
+  ['👔', 'intro.you'], ['🃏', 'intro.cards'], ['😠', 'intro.price'], ['🤝', 'intro.promises'], ['👑', 'intro.goal'],
+];
+
+function openIntro() {
+  const fresh = game.state.outcomeSeq === 0 && !game.state.event && game.state.day < 1;
+  $('intro').innerHTML = `<div class="introcard">
+    <div class="langs" role="group" aria-label="${t('intro.lang')}">${LANGS.map((l) => `<button data-lang="${l.code}" aria-pressed="${l.code === getLocale()}" lang="${l.code}">${l.label}</button>`).join('')}</div>
+    <h1 id="introtitle">${t('ui.title')}</h1>
+    <div class="hero" dir="ltr"><b>61</b><span>/ 120</span></div>
+    <ul class="introlines">${INTRO_LINES.map(([ic, k]) => `<li><span class="ic" aria-hidden="true">${ic}</span><span>${t(k)}</span></li>`).join('')}</ul>
+    <button class="primary big" data-act="start">${t(fresh ? 'intro.start' : 'intro.resume')}</button>
+    <p class="satire">${t('intro.satire')}</p>
+  </div>
+  <div id="consentslot" class="consentslot" hidden></div>`;
+  mountConsent($('consentslot'));
+  openLayer('intro');
+  (app.querySelector('[data-act=start]') as HTMLElement | null)?.focus();
+}
+
+function startFromIntro() {
+  store.set(INTRO_KEY, '1');
+  store.del(INTRO_AGAIN, session);
+  closeLayer();
+  last = performance.now();
+}
+
+// ------------------------------------------------------------------ game over
+function renderOver(o: Observation) {
+  if (o.status === 'playing') { if (layer === 'over') closeLayer(); overWaiting = false; keys.over = ''; return; }
+  if (keys.over) return;
+  keys.over = '1';
   const why = o.status === 'won' ? 'won' : o.lostReason ?? 'deadlock';
-  el.innerHTML = `<div class="overcard"><h2>${t('ui.gameOver')}: ${esc(t(`over.${why}.title`))}</h2>
+  $('over').innerHTML = `<div class="overcard" role="dialog" aria-modal="true"><h2>${t('ui.gameOver')}: ${esc(t(`over.${why}.title`))}</h2>
     <p>${esc(t(`over.${why}.text`))}</p>
-    <p>${esc(t('over.stats', { years: (o.pmDays / 365.25).toFixed(1), elections: o.elections }))}</p>
+    <p class="overstats"><b>${esc(t('over.stats', { years: (o.pmDays / 365.25).toFixed(1), elections: o.elections }))}</b></p>
     ${daily ? `<p class="dailybadge">${esc(t('share.dailyBadge', { date: daily }))}</p>` : ''}
+    <button data-act="restart" class="primary big">${t('ui.restart')}</button>
     <div class="sharebar">
       <a class="share wa" href="${esc(whatsappUrl(myShareText()))}" target="_blank" rel="noopener" data-share="whatsapp">💬 ${t('share.whatsapp')}</a>
       ${typeof navigator.share === 'function' ? `<button class="share" data-share="native">📤 ${t('share.share')}</button>` : ''}
       <button class="share" data-share="copy">📋 ${t('share.copy')}</button>
     </div>
-    <h3>${t('ui.titles')}</h3>
-    <ul class="board">${titleBoard(game.state.titles).map((x) => `<li class="${x.earned ? 'earned' : 'locked'}"><b>${esc(x.name)}</b><small>${esc(x.gloss)}</small></li>`).join('')}</ul>
-    <button data-act="restart" class="primary">${t('ui.restart')}</button>
-    ${daily === todayKey() ? '' : `<button data-act="daily">${t('share.dailyPlay')}</button>`}</div>`;
+    ${daily === todayKey() ? '' : `<button data-act="daily" class="wide">${t('share.dailyPlay')}</button>`}
+    <details class="titles"><summary>${t('ui.titles')} (${o.titles.length})</summary>
+    <ul class="board">${titleBoard(game.state.titles).map((x) => `<li class="${x.earned ? 'earned' : 'locked'}"><b>${esc(x.name)}</b><small>${esc(x.gloss)}</small></li>`).join('')}</ul></details></div>`;
+  // in-game notices are moot now; only share feedback toasts from here on
+  toastQ.length = 0;
+  toastUntil = 0;
+  $('toast').hidden = true;
+  openLayer('over');
 }
 
 function shareUrl(): string {
@@ -609,7 +713,7 @@ function render() {
   renderLog();
   if (o.titles.length > lastTitles) {
     const nt = o.titles[o.titles.length - 1];
-    toast(`👑 ${t('ui.newTitle', { title: nt.name })} — ${nt.gloss}`);
+    toast(`👑 ${t('ui.newTitle', { title: nt.name })}`);
     play('applause');
     track('title_earned', { title_id: game.state.titles[game.state.titles.length - 1] });
   }
@@ -620,75 +724,65 @@ function render() {
   pumpOutcomes(o);
   renderOver(o);
   renderExtras(o);
+  pumpToast();
 }
 
-// ------------------------------------------------------------------ advisor, Friday edition, sound
+// ------------------------------------------------------------------ inline hint, Friday edition (in the log), sound
 let cardKey = '';
-let cardsSeen = 0;
 let overTracked = false;
 const advShown: Record<string, number> = {};
-let advUntil = 0;
 let edition: EditionSnap | null = null;
 let nextEdition = 90;
-const fridayOpen = () => !$('friday').hidden;
+const editions: string[] = [];
 
 function renderExtras(o: Observation) {
   const s = game.state;
   $('sound').textContent = soundOn() ? '🔊' : '🔇';
-  // a new card: count it, sounds, analytics
+  // a new card: sounds, analytics, a fresh inline hint (no popups; tutorial hints live in the intro)
   const k = s.event ? `${s.event.id}@${s.event.firedAt}` : '';
   if (k && k !== cardKey) {
-    cardsSeen++;
     track('card_shown', { crisis_id: s.event!.id });
     if (s.event!.id === 'iran' || s.event!.id === 'houthis') play('siren');
     else if (s.event!.id === 'kaplan') play('drum');
-    if (cardsSeen === 1 || cardsSeen % 3 === 0) showAdvice();
+    showHint();
   }
   cardKey = k;
-  if (advUntil && performance.now() > advUntil) hideAdvice();
   if (o.status !== 'playing' && !overTracked) {
     overTracked = true;
     track('game_over', { reason: o.lostReason ?? o.status, days: Math.floor(o.pmDays), titles_count: o.titles.length });
   }
-  // quarterly Friday edition (clock paused while it is open)
+  // quarterly Friday edition: filed in the Log tab, announced by a small toast — never a popup
   edition ??= editionSnap(s);
-  if (s.day >= nextEdition && !s.event && !flashing() && s.phase === 'governing' && o.status === 'playing' && !fridayOpen()) {
-    showFriday(fridayEdition(s, edition));
+  if (s.day >= nextEdition && s.phase === 'governing' && o.status === 'playing') {
+    fileEdition(fridayEdition(s, edition), o.date);
     edition = editionSnap(s);
     nextEdition = s.day + 90;
   }
 }
 
-function showAdvice() {
+function showHint() {
   const s = game.state;
-  const a = advice(s).find((x) => advShown[x.id] === undefined || s.day - advShown[x.id] > 150);
-  if (!a) return;
+  const a = advice(s).find((x) => !x.id.startsWith('tut') && (advShown[x.id] === undefined || s.day - advShown[x.id] > 150));
+  const el = $('advline');
+  if (!a) { el.textContent = ''; return; }
   advShown[a.id] = s.day;
-  const el = $('advisor');
-  el.innerHTML = `<b>🧑‍💼 ${t('adv.who')}</b> <span>${esc(t(a.key, a.params))}</span><button class="icon" data-act="advisor" aria-label="${t('ui.close')}">✕</button>`;
-  el.hidden = false;
-  advUntil = performance.now() + 9000;
+  el.innerHTML = `<span aria-hidden="true">🧑‍💼</span> ${esc(t(a.key, a.params))}`;
 }
-function hideAdvice() { $('advisor').hidden = true; advUntil = 0; }
 
 const METER_LABEL: Record<string, string> = { seats: 'ui.seats', approval: 'ui.approval', street: 'ui.street', trial: 'ui.trial', us: 'ui.us' };
-function showFriday(ed: ReturnType<typeof fridayEdition>) {
-  const el = $('friday');
-  const sign = (n: number) => ltr(n > 0 ? `+${n}` : `${n}`);
+function fileEdition(ed: ReturnType<typeof fridayEdition>, date: string) {
   const items = ed.items.length
     ? ed.items.map((x) => {
       const good = x.meter === 'trial' ? x.delta < 0 : x.delta > 0;
-      return `<li class="${good ? 'good' : 'bad'}"><b>${esc(t(METER_LABEL[x.meter]))} ${sign(x.delta)}</b>${x.because ? ` — ${esc(x.because)}` : ''}</li>`;
+      return `<li class="${good ? 'good' : 'bad'}"><b>${esc(t(METER_LABEL[x.meter]))} ${signed(x.delta)}</b>${x.because ? ` — ${esc(x.because)}` : ''}</li>`;
     }).join('')
     : `<li>${esc(t('friday.quiet'))}</li>`;
-  el.innerHTML = `<div class="paper" role="dialog" aria-label="${esc(t('friday.masthead'))}">
-    <div class="mast">${esc(t('friday.masthead'))}<small>${esc(o0Date())}</small></div>
-    <h3>${esc(t(`friday.joke.${ed.joke}`))}</h3>
-    <ul>${items}</ul>
-    <button class="primary" data-act="friday">${t('friday.close')}</button></div>`;
-  el.hidden = false;
+  editions.unshift(`<details class="paper"${editions.length ? '' : ' open'}><summary><span class="mast">📰 ${esc(t('friday.masthead'))}</span> <small>${esc(date)}</small></summary>
+    <h4>${esc(t(`friday.joke.${ed.joke}`))}</h4><ul>${items}</ul></details>`);
+  editions.length = Math.min(editions.length, 4);
+  $('editions').innerHTML = editions.join('');
+  toast(`📰 ${t('ui.editionToast')}`);
 }
-const o0Date = () => game.observe(0).date;
 
 function doAct(a: Action) {
   const r = game.act(a);
@@ -704,28 +798,21 @@ function restart(day: string | null = null) {
   seenSeq = 0;
   shownSeats = shownAppr = seatsAtCard = lastCardAt = -1;
   flashQueue.length = 0;
-  hideFlash();
-  $('over').hidden = true;
-  cardKey = ''; cardsSeen = 0; overTracked = false; edition = null; nextEdition = 90;
+  clearResult();
+  toastQ.length = 0;
+  cardKey = ''; overTracked = false; edition = null; nextEdition = 90;
+  editions.length = 0;
+  $('editions').innerHTML = '';
+  $('advline').textContent = '';
   for (const k of Object.keys(advShown)) delete advShown[k];
-  hideAdvice();
-  $('friday').hidden = true;
+  overWaiting = false;
+  closeLayer();
   track('game_start', { lang: getLocale(), seed_type: daily ? 'daily' : 'random' });
   if (daily) toast(t('share.dailyBadge', { date: daily }));
   render();
 }
 
 // ------------------------------------------------------------------ input
-$('result').addEventListener('click', () => hideFlash());
-
-function openSection(sec: string) {
-  const dr = $('drawer');
-  dr.classList.add('open');
-  const det = $(sec).closest('details');
-  if (det) det.open = true;
-  $(sec).scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' });
-}
-
 app.addEventListener('click', (e) => {
   if ((e.target as HTMLElement).closest('a[data-share]')) track('share', { method: 'whatsapp', seed_type: daily ? 'daily' : 'random' });
   const b = (e.target as HTMLElement).closest('button');
@@ -734,8 +821,13 @@ app.addEventListener('click', (e) => {
   if (d.dir === 'ignore') choose('ignore');
   else if (d.dir) { if (!swipe.consumedClick()) swipe.flyThenChoose(d.dir); }
   else if (d.act === 'open' && d.sec) openSection(d.sec);
+  else if (d.act === 'tab' && d.tab) { setTab(d.tab); render(); }
+  else if (d.act === 'close') closeLayer();
+  else if (d.act === 'intro') openIntro();
+  else if (d.act === 'start') startFromIntro();
   else if (d.lang) {
     const u = new URL(location.href);
+    if (layer === 'intro') store.set(INTRO_AGAIN, '1', session);
     try { localStorage.setItem(LANG_KEY, d.lang); u.searchParams.delete('lang'); } catch { u.searchParams.set('lang', d.lang); }
     location.href = u.toString();
   }
@@ -744,23 +836,23 @@ app.addEventListener('click', (e) => {
   else if (d.act === 'daily') restart(todayKey());
   else if (d.share) doShare(d.share);
   else if (d.act === 'sound') { setSound(!soundOn()); if (soundOn()) play('cash'); render(); }
-  else if (d.act === 'advisor') hideAdvice();
-  else if (d.act === 'friday') $('friday').hidden = true;
-  else if (d.act === 'drawer') $('drawer').classList.toggle('open');
   else if (d.law) doAct({ type: 'passLaw', lawId: d.law });
   else if (d.move) {
     const m = game.observe(0).moves.find((x) => x.id === d.move);
     if (m?.ending && !window.confirm(`${m.label}\n\n${m.desc}`)) return;
     doAct({ type: 'move', moveId: d.move });
+    // a move played from the sheet: close it so the result line (and any card) is visible
+    if (layer === 'sheet') closeLayer();
   }
   else if (d.invite) doAct({ type: 'invite', partyId: d.invite });
   else if (d.deliver && d.pid) doAct({ type: 'deliver', partyId: d.deliver, promiseId: d.pid });
-  else if (b.id === 'timeline') {
-    const h = $('history');
-    h.hidden = !h.hidden;
-    b.setAttribute('aria-expanded', String(!h.hidden));
-    keys.history = '';
-  }
+});
+
+// tap on the dimmed backdrop above the sheet closes it
+document.addEventListener('pointerdown', (e) => {
+  if (layer !== 'sheet') return;
+  const el = e.target as HTMLElement;
+  if (!el.closest('#drawer') && !el.closest('.bottombar') && !el.closest('#toast')) { e.preventDefault(); closeLayer(); }
 });
 
 app.addEventListener('change', (e) => {
@@ -776,12 +868,12 @@ app.addEventListener('change', (e) => {
 window.addEventListener('keydown', (e) => {
   const tag = (e.target as HTMLElement).tagName;
   if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA') return;
+  if (e.key === 'Escape') { if (layer === 'sheet' || layer === 'intro') { if (layer === 'intro') startFromIntro(); else closeLayer(); } return; }
+  if (layer) return; // cards only take keys when no layer is open
   const dir = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as Record<string, string>)[e.key];
   if (dir && game.state.event) { e.preventDefault(); swipe.flyThenChoose(dir); }
   else if ((e.key === '0' || e.key === ' ') && game.state.event && game.observe(0).event?.options.some((x) => x.dir === 'ignore')) { e.preventDefault(); choose('ignore'); }
   else if (e.key === ' ' && tag !== 'BUTTON') { e.preventDefault(); $('pause').click(); }
-  else if (e.key === 'Enter' && flashing()) hideFlash();
-  else if (e.key === 'Escape') $('drawer').classList.remove('open');
 });
 
 $('pause').addEventListener('click', () => {
@@ -793,17 +885,19 @@ $('pause').addEventListener('click', () => {
 function frame(now: number) {
   const dt = Math.min(250, now - last);
   last = now;
-  if (!paused && !document.hidden && !game.over) {
+  if (!paused && !document.hidden && !game.over && layer !== 'intro') {
     const c = game.state.config;
-    const scale = flashing() || fridayOpen() ? 0 : game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : c.uiIdleClockScale;
+    const scale = game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : c.uiIdleClockScale;
     if (scale > 0) game.advance(dt * scale * (game.state.recess && !game.state.event ? c.recessClockMult : 1));
   }
   render();
   requestAnimationFrame(frame);
 }
+setTab(sheetTab);
+initConsent();
+if (!store.get(INTRO_KEY) || store.get(INTRO_AGAIN, session) || consentPending()) openIntro();
 render();
 requestAnimationFrame(frame);
-initConsent();
 track('game_start', { lang: getLocale(), seed_type: seedType });
 if (daily) toast(t('share.dailyBadge', { date: daily }));
 document.addEventListener('visibilitychange', () => {
@@ -819,4 +913,5 @@ window.bibigame = {
   act: (a: Action) => game.act(a),
   pause: (v = true) => { paused = v; },
   restart,
+  intro: openIntro,
 };
