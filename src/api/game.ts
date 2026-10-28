@@ -1,14 +1,20 @@
 // Public programmatic API — used by the browser UI, the HTTP server, the text
 // CLI and bots. Headless, deterministic for a given seed + action sequence.
 import knesset from '../data/knesset.json' with { type: 'json' };
-import type { Action, ActionResult, Config, Effect, GameState, KnessetData } from '../engine/types.ts';
+import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, budgetDueYear, hasTension, createState, dateOf, eventOptions, seatsOf, step,
+  act, budgetDueYear, loseChance, hasTension, createState, dateOf, eventOptions, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
 import { PROMISES } from '../data/promises.ts';
 import { TITLES } from '../data/titles.ts';
-import { formatLog, t } from '../i18n/index.ts';
+import { formatLog, partyLabel, t } from '../i18n/index.ts';
+
+/** translated party display name */
+export function pname(s: GameState, id: string): string {
+  const p = s.parties.find((x) => x.id === id);
+  return p ? partyLabel(p.id, p.name) : id;
+}
 import { matchesTag } from '../engine/coalition.ts';
 
 export const DEFAULT_KNESSET = knesset as KnessetData;
@@ -27,6 +33,9 @@ export interface Observation {
   termProgress: number;
   termReached: boolean;
   status: GameState['status'];
+  lostReason: GameState['lostReason'];
+  /** chance the voters throw you out if elections were held now */
+  electionRisk: number;
   phase: GameState['phase'];
   phaseLeftDays: number;
   seats: number;
@@ -42,7 +51,18 @@ export interface Observation {
     willSitWithBibi: boolean; tags: string[]; ministries: string[];
     /** waiting = believe window ends within config.promiseWarnDays (angry reminder coming) */
     trust: { state: string; promiseId: string | null; daysLeft: number; waiting: boolean };
+    /** passive drift per game month and its main reason ("doing nothing" has consequences) */
+    trend: { perMonth: number; reason: string };
+    /** most recent visible change with its cause (last ~4 months) */
+    lastChange: { delta: number; because: string; day: number } | null;
+    /** coalition partner below the threaten line: may walk out */
+    mayLeave: boolean;
+    /** coalition seats if this partner left */
+    seatsWithout: number;
   }[];
+  /** recent cause → result records, newest last; watch outcomeSeq for new ones */
+  outcomes: OutcomeView[];
+  outcomeSeq: number;
   ministries: { id: string; name: string; holder: string | null }[];
   event: null | {
     id: string; title: string; text: string; subject: string | null; daysLeft: number;
@@ -67,6 +87,88 @@ export interface Observation {
 
 export interface Preview { label: string; up: boolean }
 
+export interface OutcomeView {
+  seq: number; day: number; kind: Outcome['kind'];
+  /** "Kaplan protests: you chose “Blame the deep state”" */
+  cause: string;
+  sat: { party: string; name: string; delta: number; inCoalition: boolean }[];
+  meters: { meter: string; label: string; delta: number }[];
+  seats: { from: number; to: number };
+  left: string[]; joined: string[];
+  /** crisis titles that became more likely */
+  risks: string[];
+  /** coalition changed / elections: show as a big card */
+  big: boolean;
+  /** one-line text version (text mode, logs) */
+  summary: string;
+  /** satirical one-liner about what just happened */
+  quip: string;
+  /** a generic in-character reaction from the most affected party */
+  reaction: string;
+}
+
+const REACT_TAGS = ['farright', 'haredi', 'centrist', 'secular', 'left', 'arab'];
+
+function quipOf(o: Outcome): string {
+  const p = o.cause.params ?? {};
+  const n = Number(p.quip ?? o.seq) % 3;
+  let id = '';
+  if (o.kind === 'news') return t(`crisis.${p.crisis}.text`);
+  if (o.cause.key === 'out.ignored' || o.cause.key === 'out.timedOutIgnore') id = 'ignore';
+  else if (p.remedy) id = String(p.remedy);
+  else if (o.cause.key === 'out.law') id = String(p.law);
+  else if (o.cause.key === 'out.war') id = 'war';
+  else if (o.cause.key === 'out.ministry') id = 'ministry';
+  else if (o.cause.key === 'out.deliver') id = 'deliverpremium';
+  if (!id) return '';
+  const k = `quip.${id}.${n}`;
+  const q = t(k);
+  return q === k ? '' : q;
+}
+
+function reactionOf(s: GameState, o: Outcome): string {
+  if (o.kind === 'elections' || o.kind === 'newGov' || o.kind === 'news') return '';
+  const top = [...o.sat].filter((x) => Math.abs(x.delta) >= 3).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
+  if (!top) return '';
+  const p = s.parties.find((x) => x.id === top.party);
+  if (!p) return '';
+  const tag = p.id === s.base.pmParty ? 'pm' : REACT_TAGS.find((tg) => p.tags.includes(tg));
+  return tag ? t(`react.${tag}.${top.delta > 0 ? 'up' : 'down'}`) : '';
+}
+
+const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+
+export function formatOutcome(s: GameState, o: Outcome): OutcomeView {
+  const nameOf = (id: string) => pname(s, id);
+  const cause = formatLog({ t: o.day, key: o.cause.key, params: o.cause.params }, nameOf);
+  const sat = o.sat.map((x) => ({ ...x, name: nameOf(x.party) }));
+  const meters = o.meters.map((x) => ({ ...x, label: t(`fx.${x.meter}`) }));
+  const risks = o.risks.map((id) => t(`crisis.${id}.title`));
+  const left = o.left.map(nameOf), joined = o.joined.map(nameOf);
+  const parts: string[] = [];
+  if (o.seats.from !== o.seats.to) parts.push(t('out.seats', o.seats));
+  if (left.length) parts.push(t('out.leftList', { parties: left.join(', ') }));
+  if (joined.length) parts.push(t('out.joinedList', { parties: joined.join(', ') }));
+  if (o.cause.key === 'out.invite' && !joined.length) parts.push(t('out.refused', { party: nameOf(String(o.cause.params?.party)) }));
+  const fx = [...sat.slice(0, 6).map((x) => `${x.name} ${sign(x.delta)}`), ...meters.map((x) => `${x.label} ${sign(x.delta)}`)];
+  if (fx.length) parts.push(fx.join(', '));
+  if (risks.length) parts.push(`${t('out.risk')}: ${risks.join(', ')}`);
+  if (!parts.length) parts.push(t('out.nothing'));
+  return {
+    seq: o.seq, day: o.day, kind: o.kind, cause, sat, meters, seats: o.seats, left, joined, risks,
+    big: left.length > 0 || joined.length > 0 || o.kind === 'elections' || o.kind === 'newGov',
+    summary: `${cause} → ${parts.join('; ')}`,
+    quip: quipOf(o),
+    reaction: reactionOf(s, o),
+  };
+}
+
+/** short "because" text for a party's satisfaction change in an outcome */
+function becauseOf(s: GameState, o: Outcome): string {
+  const nameOf = (id: string) => pname(s, id);
+  return formatLog({ t: o.day, key: o.cause.key, params: o.cause.params }, nameOf);
+}
+
 export interface TimelineMark { day: number; date: string; kind: string; label: string }
 export interface Timeline {
   startDay: number;
@@ -81,7 +183,7 @@ export interface Timeline {
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
 export function observe(s: GameState, logTail = 12): Observation {
-  const nameOf = (id: string) => s.parties.find((p) => p.id === id)?.name ?? id;
+  const nameOf = (id: string) => pname(s, id);
   return {
     day: Math.floor(s.day),
     date: dateOf(s).toISOString().slice(0, 10),
@@ -90,6 +192,8 @@ export function observe(s: GameState, logTail = 12): Observation {
     termProgress: Math.min(1, s.pmDays / s.config.termDays),
     termReached: s.termReached,
     status: s.status,
+    lostReason: s.lostReason ?? null,
+    electionRisk: Math.round(loseChance(s) * 100) / 100,
     phase: s.phase,
     phaseLeftDays: Math.ceil(s.phaseLeftDays),
     seats: seatsOf(s),
@@ -100,7 +204,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     openCases: s.openCases.length,
     budget: { dueYear: budgetDueYear(s), passed: s.budgetPassedYear >= budgetDueYear(s) },
     parties: s.parties.map((p) => ({
-      id: p.id, name: p.name, short: p.short, color: p.color, seats: p.seats, position: p.position,
+      id: p.id, name: partyLabel(p.id, p.name), short: partyLabel(`${p.id}.short`, p.short), color: p.color, seats: p.seats, position: p.position,
       tolerance: p.tolerance, satisfaction: r1(p.satisfaction), inCoalition: p.inCoalition, wartime: p.wartime,
       threatening: p.threatening, willSitWithBibi: p.willSitWithBibi, tags: p.tags,
       ministries: s.ministries.filter((m) => m.holder === p.id).map((m) => m.id),
@@ -108,7 +212,10 @@ export function observe(s: GameState, logTail = 12): Observation {
         state: p.trust.state, promiseId: p.trust.promiseId, daysLeft: Math.max(0, Math.ceil(p.trust.until - s.day)),
         waiting: p.trust.state === 'believing' && p.trust.until - s.day <= s.config.promiseWarnDays,
       },
+      ...partyExtras(s, p.id),
     })),
+    outcomes: (s.outcomes ?? []).slice(-5).map((o) => formatOutcome(s, o)),
+    outcomeSeq: s.outcomeSeq ?? 0,
     ministries: s.ministries.map((m) => ({ id: m.id, name: t(`ministry.${m.id}`), holder: m.holder })),
     event: s.event && {
       id: s.event.id,
@@ -137,10 +244,32 @@ export function observe(s: GameState, logTail = 12): Observation {
   };
 }
 
+function partyExtras(s: GameState, id: string) {
+  const p = s.parties.find((x) => x.id === id)!;
+  const drivers = satDrivers(s, p);
+  const perMonth = Math.round(drivers.reduce((n, x) => n + x.perDay, 0) * 30 * 10) / 10;
+  const main = drivers.filter((x) => Math.abs(x.perDay) > 0.005).sort((a, b) => Math.abs(b.perDay) - Math.abs(a.perDay))
+    .find((x) => Math.sign(x.perDay) === Math.sign(perMonth));
+  let lastChange: { delta: number; because: string; day: number } | null = null;
+  for (let i = (s.outcomes?.length ?? 0) - 1; i >= 0; i--) {
+    const o = s.outcomes[i];
+    if (s.day - o.day > 120) break;
+    const d = o.sat.find((x) => x.party === id);
+    if (d) { lastChange = { delta: d.delta, because: becauseOf(s, o), day: o.day }; break; }
+  }
+  const seats = seatsOf(s);
+  return {
+    trend: { perMonth, reason: main ? t(main.key) : '' },
+    lastChange,
+    mayLeave: p.inCoalition && p.id !== s.base.pmParty && p.satisfaction < s.config.threatenBelow,
+    seatsWithout: p.inCoalition ? seats - p.seats : seats,
+  };
+}
+
 const tagLabel = (s: GameState, target: string, subject: string | null): string => {
-  if (target === 'subject') return s.parties.find((p) => p.id === subject)?.name ?? t('tag.coalition');
+  if (target === 'subject') return subject ? pname(s, subject) : t('tag.coalition');
   const p = s.parties.find((x) => x.id === target);
-  if (p) return p.name;
+  if (p) return pname(s, p.id);
   return t(`tag.${target}`);
 };
 
@@ -182,7 +311,7 @@ function dateStr(s: GameState, day: number) {
 
 export function timeline(s: GameState): Timeline {
   const mark = (day: number, kind: string, label: string): TimelineMark => ({ day: Math.floor(day), date: dateStr(s, day), kind, label });
-  const nameOf = (id: string) => s.parties.find((p) => p.id === id)?.name ?? id;
+  const nameOf = (id: string) => pname(s, id);
   const past: TimelineMark[] = [];
   for (const e of s.log) {
     if (e.key === 'log.crisis') past.push(mark(e.t, 'crisis', t(`crisis.${e.params?.crisis}.title`)));

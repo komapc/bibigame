@@ -5,12 +5,18 @@ import { randomUUID } from 'node:crypto';
 import { createGame, type Game } from '../src/api/game.ts';
 import { renderText, runText, titleBoard } from '../src/api/text.ts';
 import type { Action } from '../src/engine/types.ts';
+import { isLang, loadLocale, setLocale, type Lang } from '../src/i18n/index.ts';
+
+// all locales are loaded up front; each request then renders synchronously in its language
+await Promise.all((['ru', 'he'] as Lang[]).map(loadLocale));
+const gameLang = new Map<string, Lang>();
 
 const games = new Map<string, Game>();
 const MAX_GAMES = 1000;
 
 const ROUTES = {
-  'POST /games': 'create a game: {"seed"?: number, "config"?: {...}} -> {id, state}',
+  'POST /games': 'create a game: {"seed"?: number, "config"?: {...}, "lang"?: "en"|"ru"|"he"} -> {id, state}',
+  '?lang=en|ru|he': 'on any route: language of the returned strings (default: the game\'s lang, else en). Command keywords stay English.',
   'GET /games/:id/state': 'observation (JSON)',
   'POST /games/:id/action': '{"type":"choose","optionId":"settle"} | giveMinistry | startWar | passLaw | invite | promise | deliver | noop -> {result, state}',
   'POST /games/:id/advance': '{"days": 10} or {"ms": 1000} -> state',
@@ -50,16 +56,21 @@ export function makeServer() {
       if (req.method === 'OPTIONS') return send(res, 204, '');
       const url = new URL(req.url ?? '/', 'http://x');
       const parts = url.pathname.split('/').filter(Boolean);
+      const raw = req.method === 'POST' ? await readBody(req) : '';
+      // ---- no awaits below this line: the locale is process-global but rendering is synchronous
+      const q = url.searchParams.get('lang');
+      setLocale(isLang(q) ? q : gameLang.get(parts[1] ?? '') ?? 'en');
       if (parts.length === 0) return send(res, 200, { name: 'bibigame bot API', routes: ROUTES });
       if (parts[0] !== 'games') return send(res, 404, { error: 'not found' });
 
       if (parts.length === 1 && req.method === 'POST') {
-        const body = parseJson(await readBody(req));
+        const body = parseJson(raw);
         if (games.size >= MAX_GAMES) games.delete(games.keys().next().value!);
         const id = randomUUID().slice(0, 8);
         const seed = typeof body.seed === 'number' ? body.seed : Math.floor(Math.random() * 1e9);
         const game = createGame({ seed, config: (body.config as object) ?? {} });
         games.set(id, game);
+        if (isLang(body.lang)) { gameLang.set(id, body.lang); if (!isLang(q)) setLocale(body.lang); }
         return send(res, 201, { id, seed, state: game.observe() });
       }
       if (parts.length === 1 && req.method === 'GET') return send(res, 200, { games: [...games.keys()] });
@@ -71,19 +82,18 @@ export function makeServer() {
       if (sub === 'state' && req.method === 'GET') return send(res, 200, game.observe(Number(url.searchParams.get('log') ?? 12)));
       if (sub === 'titles' && req.method === 'GET') return send(res, 200, titleBoard(game.state.titles));
       if (sub === 'action' && req.method === 'POST') {
-        const action = parseJson(await readBody(req)) as unknown as Action;
+        const action = parseJson(raw) as unknown as Action;
         const result = game.act(action);
         return send(res, result.ok ? 200 : 400, { result, state: game.observe() });
       }
       if (sub === 'advance' && req.method === 'POST') {
-        const body = parseJson(await readBody(req));
+        const body = parseJson(raw);
         const days = typeof body.days === 'number' ? body.days : typeof body.ms === 'number' ? body.ms / game.state.config.msPerDay : 1;
         return send(res, 200, game.advanceDays(Math.min(days, 3650)));
       }
       if (sub === 'text') {
         if (req.method === 'GET') return send(res, 200, renderText(game.observe()), 'text/plain');
         if (req.method === 'POST') {
-          const raw = await readBody(req);
           let cmd = raw;
           if ((req.headers['content-type'] ?? '').includes('json')) cmd = String(parseJson(raw).command ?? '');
           const { reply, ok } = runText(game, cmd.split('\n')[0]);
