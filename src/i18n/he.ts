@@ -2,7 +2,7 @@
 // Satire: no quotes attributed to real individuals.
 // Conventions: gershayim ״ / geresh ׳ (U+05F4 / U+05F3) for abbreviations, ASCII " for quotations.
 // {party} is a Hebrew party name that may start with ה — never glue ב/ל/מ/ש to it; parties take plural verbs.
-// No → arrows between values: in RTL they read backwards, so use ← or words (מ־… ל־…).
+// No → arrows between values: in RTL they read backwards, so use words (מ־… ל־…, מידי… לידי…).
 
 export const he: Record<string, string> = {
   // --- UI
@@ -58,7 +58,7 @@ export const he: Record<string, string> = {
   'ui.newTitle': 'תואר חדש: {title}',
   'ui.noTitle': 'טירון',
   'ui.seatsShort': '{n} מנדטים',
-  'ui.min': 'מינ׳',
+  'ui.min': 'דק׳',
   'ui.closeSheet': 'סגירה',
   'ui.yourMove': 'המהלכים שלך',
   'ui.tension': 'מתיחות אזורית',
@@ -102,7 +102,7 @@ export const he: Record<string, string> = {
   'crisis.inquiry.title': 'דורשים ועדת חקירה ממלכתית',
   'crisis.inquiry.text': 'כולם רוצים ועדת חקירה ממלכתית. אתה היית מעדיף ועדה מסוג אחר.',
   'crisis.court.title': 'בג״ץ מכה שנית',
-  'crisis.court.text': 'החוק האהוב עליך נפסל בעילת חוסר סבירות קיצונית.',
+  'crisis.court.text': 'החוק האהוב עליך נפסל בעילת חוסר סבירות קיצוני.',
   'crisis.trump.title': 'טראמפ מתקרר',
   'crisis.trump.text': 'השם שלך הפסיק להופיע בפוסטים של שלוש בלילה. איכשהו זה יותר גרוע.',
   'crisis.iran.title': 'איראן יורה',
@@ -171,7 +171,7 @@ export const he: Record<string, string> = {
   'remedy.postpone.desc': 'התנגשות ביומן: אתה מנהל מדינה. השופט מסכים. בינתיים.',
   'remedy.pardon': 'לבקש חנינה מהרצוג',
   'remedy.pardon.desc': 'בלי הודאה באשמה, רק מכתב מנומס מאוד.',
-  'remedy.govcommission': 'ועדת חקירה ממשלתית',
+  'remedy.govcommission': 'ועדת בדיקה ממשלתית',
   'remedy.govcommission.desc': 'חקירה, אבל את החברים אתה בוחר.',
   'remedy.dc': 'לטוס לוושינגטון',
   'remedy.dc.desc': 'לחיצת יד חמה, הצהרה משותפת וכמה ויתורים קטנים באותיות הקטנות.',
@@ -269,7 +269,7 @@ export const he: Record<string, string> = {
   'log.ignored': 'התעלמת מ"{crisis}". זה מסלים.',
   'log.left': '{party} פורשים מהקואליציה!',
   'log.threat': '{party} מאיימים לפרוש.',
-  'log.ministry': '{ministry}: {from} ← {to}',
+  'log.ministry': '{ministry}: מידי {from} לידי {to}',
   'log.fired': '{party} מאבדים תיק: {ministry}. אתה שומר אותו לעצמך.',
   'log.war': 'מלחמה! העם מתאחד (בינתיים).',
   'log.warEnd': 'המלחמה דועכת.',
@@ -421,7 +421,7 @@ export const he: Record<string, string> = {
   'quip.pardon.0': 'בקשת החנינה מגיעה במעטפה גדולה מאוד.',
   'quip.pardon.1': 'בבית הנשיא קוראים אותה פעמיים ומזמינים קפה.',
   'quip.pardon.2': 'קפלן עובר ממחאה לפסטיבל.',
-  'quip.govcommission.0': 'הוקמה ועדה ממשלתית. המסקנה הראשונה שלה: צריך עוד זמן.',
+  'quip.govcommission.0': 'הוקמה ועדת בדיקה ממשלתית. המסקנה הראשונה שלה: צריך עוד זמן.',
   'quip.govcommission.1': 'חברים לפי בחירה, מנדט לפי בחירה, מסקנות לפי בחירה.',
   'quip.govcommission.2': 'החקירה האמיתית נדחית ל"אחרי המלחמה". כל מלחמה.',
   'quip.dc.0': 'תמונה מחייכת בחדר הסגלגל. הימין הקיצוני עושה כאילו הוא לא מסתכל.',
@@ -548,7 +548,7 @@ export const he: Record<string, string> = {
   'quip.promconstitution.1': 'הוקמה ועדה. הוקמה ועדה להקמת ועדה.',
   'quip.promconstitution.2': 'המפלגות החילוניות ממסגרות את ההבטחה ותולות אותה במשרד.',
   'remedy.promceasefire': 'להבטיח הפסקת אש',
-  'remedy.promceasefire.desc': 'המרכז ווושינגטון נרגעים קצת. הימין הקיצוני לא.',
+  'remedy.promceasefire.desc': 'המרכז וגם וושינגטון נרגעים קצת. הימין הקיצוני לא.',
   'quip.promceasefire.0': '"בימים הקרובים", אומר גורם. "אילו ימים?", שואל גורם אחר.',
   'quip.promceasefire.1': 'וושינגטון רושמת בעיפרון צילום משותף.',
   'quip.promceasefire.2': 'הימין הקיצוני מעדכן את תבנית האולטימטום.',
