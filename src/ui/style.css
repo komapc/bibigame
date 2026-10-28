@@ -286,3 +286,9 @@ details[open] > summary::before { transform: rotate(90deg); }
 .consent { position: fixed; inset-inline: 12px; bottom: 12px; max-width: 560px; margin: 0 auto; z-index: 70; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   padding: 12px 14px; border-radius: 12px; background: #1d1630; border: 1px solid #4a3a70; color: var(--ink); font-size: 14px; }
 .consent span { flex: 1 1 220px; }
+
+/* ---------- share (game over) */
+.sharebar { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 10px 0 4px; }
+.share { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: #1d3550; color: inherit; text-decoration: none; font-weight: 600; padding: 8px 12px; }
+.share.wa { background: #1f7a3f; border-color: #25d366; }
+.dailybadge { color: var(--gold); font-weight: 600; }

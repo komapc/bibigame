@@ -9,6 +9,7 @@ import { initSwipe } from './swipe.ts';
 import { buzz, play, setSound, soundOn } from './fx.ts';
 import { initConsent, track } from './analytics.ts';
 import { advice, editionSnap, fridayEdition, type EditionSnap } from '../api/extras.ts';
+import { dailySeed, isDateKey, shareText, todayKey, whatsappUrl } from '../api/share.ts';
 
 // ---- language: saved choice → browser language → English
 const LANG_KEY = 'bibigame.lang';
@@ -30,7 +31,13 @@ function detectLang(): Lang {
 }
 
 const app = document.getElementById('app')!;
-let game: Game = createGame({ seed: Math.floor(Math.random() * 1e9) });
+// ?daily (today) or ?daily=YYYY-MM-DD → the same seed for everyone that day; ?seed=N → that seed
+const query = new URLSearchParams(location.search);
+let daily: string | null = query.has('daily') ? (isDateKey(query.get('daily')) ? query.get('daily')! : todayKey()) : null;
+const urlSeed = Number(query.get('seed'));
+const seedType = daily ? 'daily' : query.has('seed') && Number.isFinite(urlSeed) ? 'fixed' : 'random';
+const randomSeed = () => Math.floor(Math.random() * 1e9);
+let game: Game = createGame({ seed: daily ? dailySeed(daily) : seedType === 'fixed' ? urlSeed : randomSeed() });
 let paused = false;
 let last = performance.now();
 let lastTitles = 0;
@@ -533,10 +540,41 @@ function renderOver(o: Observation) {
   const why = o.status === 'won' ? 'won' : o.lostReason ?? 'deadlock';
   el.innerHTML = `<div class="overcard"><h2>${t('ui.gameOver')}: ${esc(t(`over.${why}.title`))}</h2>
     <p>${esc(t(`over.${why}.text`))}</p>
-    <p>${(o.pmDays / 365.25).toFixed(1)} years as PM · ${o.elections} elections</p>
+    <p>${esc(t('over.stats', { years: (o.pmDays / 365.25).toFixed(1), elections: o.elections }))}</p>
+    ${daily ? `<p class="dailybadge">${esc(t('share.dailyBadge', { date: daily }))}</p>` : ''}
+    <div class="sharebar">
+      <a class="share wa" href="${esc(whatsappUrl(myShareText()))}" target="_blank" rel="noopener" data-share="whatsapp">💬 ${t('share.whatsapp')}</a>
+      ${typeof navigator.share === 'function' ? `<button class="share" data-share="native">📤 ${t('share.share')}</button>` : ''}
+      <button class="share" data-share="copy">📋 ${t('share.copy')}</button>
+    </div>
     <h3>${t('ui.titles')}</h3>
     <ul class="board">${titleBoard(game.state.titles).map((x) => `<li class="${x.earned ? 'earned' : 'locked'}"><b>${esc(x.name)}</b><small>${esc(x.gloss)}</small></li>`).join('')}</ul>
-    <button data-act="restart" class="primary">${t('ui.restart')}</button></div>`;
+    <button data-act="restart" class="primary">${t('ui.restart')}</button>
+    ${daily === todayKey() ? '' : `<button data-act="daily">${t('share.dailyPlay')}</button>`}</div>`;
+}
+
+function shareUrl(): string {
+  const u = new URL(location.origin + location.pathname);
+  if (daily) u.searchParams.set('daily', daily);
+  return u.toString();
+}
+const myShareText = () => shareText(game.state, shareUrl(), daily);
+
+async function doShare(method: string) {
+  track('share', { method, seed_type: daily ? 'daily' : 'random' });
+  const text = myShareText();
+  if (method === 'native') {
+    try { await navigator.share({ text }); } catch { /* cancelled */ }
+  } else if (method === 'copy') {
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.append(ta); ta.select();
+      try { document.execCommand('copy'); } catch { /* nothing more to try */ }
+      ta.remove();
+    }
+    toast(t('share.copied'));
+  }
 }
 
 function render() {
@@ -638,8 +676,9 @@ function doAct(a: Action) {
   render();
 }
 
-function restart() {
-  game = createGame({ seed: Math.floor(Math.random() * 1e9) });
+function restart(day: string | null = null) {
+  daily = day;
+  game = createGame({ seed: daily ? dailySeed(daily) : randomSeed() });
   for (const k of Object.keys(keys)) delete keys[k];
   lastTitles = 0;
   seenSeq = 0;
@@ -651,7 +690,8 @@ function restart() {
   for (const k of Object.keys(advShown)) delete advShown[k];
   hideAdvice();
   $('friday').hidden = true;
-  track('game_start', { lang: getLocale(), seed_type: 'random' });
+  track('game_start', { lang: getLocale(), seed_type: daily ? 'daily' : 'random' });
+  if (daily) toast(t('share.dailyBadge', { date: daily }));
   render();
 }
 
@@ -667,6 +707,7 @@ function openSection(sec: string) {
 }
 
 app.addEventListener('click', (e) => {
+  if ((e.target as HTMLElement).closest('a[data-share]')) track('share', { method: 'whatsapp', seed_type: daily ? 'daily' : 'random' });
   const b = (e.target as HTMLElement).closest('button');
   if (!b || b.disabled) return;
   const d = b.dataset;
@@ -680,6 +721,8 @@ app.addEventListener('click', (e) => {
   }
   else if (d.act === 'war') doAct({ type: 'startWar' });
   else if (d.act === 'restart') restart();
+  else if (d.act === 'daily') restart(todayKey());
+  else if (d.share) doShare(d.share);
   else if (d.act === 'sound') { setSound(!soundOn()); if (soundOn()) play('cash'); render(); }
   else if (d.act === 'advisor') hideAdvice();
   else if (d.act === 'friday') $('friday').hidden = true;
@@ -741,7 +784,8 @@ function frame(now: number) {
 render();
 requestAnimationFrame(frame);
 initConsent();
-track('game_start', { lang: getLocale(), seed_type: new URLSearchParams(location.search).has('seed') ? 'fixed' : 'random' });
+track('game_start', { lang: getLocale(), seed_type: seedType });
+if (daily) toast(t('share.dailyBadge', { date: daily }));
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && game.state.event && !game.over) track('quit_on_card', { crisis_id: game.state.event.id });
 });
