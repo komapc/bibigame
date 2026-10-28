@@ -293,7 +293,7 @@ further tuning. Random stays at 0% (median 1.3y). Rollout bots were not rerun.
 
 ## Round 8 (2026-10-28): late game
 
-PR #22 targets the spikes and the dice of the playtest review (problems 4–5):
+PR #23 targets the spikes and the dice of the playtest review (problems 4–5):
 
 - `premiumCostScale` 0.5: a premium delivery pays the premium (budget −8, approval −2) plus half the
   delivered remedy's costs. The total bill is a chip on the card.
