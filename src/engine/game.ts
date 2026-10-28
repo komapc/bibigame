@@ -91,6 +91,7 @@ export function satDrivers(
     const fair = (ctx.counts[p.id] ?? 0) - fairShare(p, s.parties, s.ministries.length);
     out.push({ key: fair > 0 ? 'drift.ministriesPlus' : 'drift.ministriesMinus', perDay: fair * c.ministryFairness });
     out.push({ key: 'drift.hate', perDay: -hateCount(p, ctx.coal) * c.hatePenalty });
+    out.push({ key: 'drift.polls', perDay: -Math.max(0, c.pollPanicBelow - s.approval) * c.pollPanicPerPoint });
   }
   if (p.trust.state === 'believing') out.push({ key: 'drift.believe', perDay: c.believeDriftPerDay });
   if (p.trust.state === 'distrust') out.push({ key: 'drift.distrust', perDay: -c.distrustDriftPerDay });
@@ -162,6 +163,7 @@ export function createState(base: KnessetData, seed: number, config: Partial<Con
     outcomeSeq: 0,
     lostReason: null,
     electionDays: [],
+    remedyUses: {},
   };
   s.nextEventInDays = scheduleNext(s);
   log(s, 'log.start', { seats: seatsOf(s) }, 'info');
@@ -240,6 +242,7 @@ export function remedyAvailable(s: GameState, id: string): boolean {
     const p = s.event?.subject ? partyById(s, s.event.subject) : undefined;
     return !!p && !p.trust.extended;
   }
+  if (id === 'funds' && s.fiscal < s.config.fundsMinFiscal) return false;
   if (id === 'fire') return coalition(s).some((p) => p.tags.includes('farright') && ministryCounts(s.ministries)[p.id]);
   return true;
 }
@@ -347,6 +350,15 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
   }
 }
 
+/** scale the positive parts of an effect (negatives stay full) */
+function dampen(e: Effect, k: number): Effect {
+  const out: Effect = { ...e };
+  for (const key of ['approval', 'street', 'us', 'fiscal'] as const) if ((e[key] ?? 0) > 0) out[key] = e[key]! * k;
+  if ((e.trial ?? 0) < 0) out.trial = e.trial! * k;
+  if (e.sat) out.sat = e.sat.map((x) => (x.delta > 0 ? { ...x, delta: x.delta * k } : x));
+  return out;
+}
+
 /** apply a remedy/law move: effect + backfire pressure + promise delivery */
 function applyMove(s: GameState, moveId: string, subject: string | null, extra?: Effect) {
   const r = remedyById.get(moveId);
@@ -354,7 +366,12 @@ function applyMove(s: GameState, moveId: string, subject: string | null, extra?:
   if (r.once && !s.usedOnce.includes(moveId)) s.usedOnce.push(moveId);
   if (r.tension) s.tensionUntil = Math.max(s.tensionUntil, s.day + r.tension);
   if (r.promise) makePromise(s, r.promise);
-  applyEffect(s, r.effect, subject);
+  // diminishing returns: the public (and partners) have seen this trick recently
+  const uses = ((s.remedyUses ??= {})[moveId] ??= []).filter((d) => s.day - d <= s.config.remedyFatigueDays);
+  const k = 1 / (1 + uses.length * s.config.remedyFatigue);
+  uses.push(s.day);
+  s.remedyUses[moveId] = uses;
+  applyEffect(s, k < 1 ? dampen(r.effect, k) : r.effect, subject);
   if (extra) applyEffect(s, extra, subject);
   for (const b of r.backfires) s.pressure[b] = (s.pressure[b] ?? 0) + s.config.backfirePressure;
   deliverPromises(s, moveId, subject);
@@ -608,12 +625,13 @@ function resolveEventInner(s: GameState, optionId: string) {
 
 // ---------------------------------------------------------------- tick
 
-function checkCoalition(s: GameState) {
+function checkCoalition(s: GameState, dt = 0) {
   if (s.phase !== 'governing' || s.status !== 'playing') return;
   const c = s.config;
   for (const p of coalition(s)) {
     if (p.id === s.base.pmParty) continue;
     if (p.satisfaction <= 0) { leave(s, p); continue; }
+    if (dt && p.satisfaction < c.leaveBelow && rngOf(s).next() < c.leaveChancePerDay * dt) { leave(s, p); continue; }
     if (!p.threatening && p.satisfaction < c.threatenBelow) {
       p.threatening = true;
       log(s, 'log.threat', { party: p.id }, 'bad');
@@ -660,7 +678,7 @@ function tickDay(s: GameState, dt: number) {
     return;
   }
 
-  checkCoalition(s);
+  checkCoalition(s, dt);
   if (s.phase !== 'governing') return;
   // cooldowns & war
   s.cooldowns.ministry = Math.max(0, s.cooldowns.ministry - dt);

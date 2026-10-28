@@ -341,6 +341,7 @@ export const en: Record<string, string> = {
   'drift.appetite': 'they always want more',
   'drift.ministriesPlus': 'happy with their ministries',
   'drift.ministriesMinus': 'too few ministries',
+  'drift.polls': 'your polls are sinking — they smell defeat',
   'drift.hate': 'sitting with parties they hate',
   'drift.believe': 'they believe your promise',
   'drift.distrust': 'promise broken — they distrust you',

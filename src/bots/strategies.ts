@@ -86,13 +86,21 @@ export const promiseSpammer: Strategy = {
 };
 
 /** pick the event option whose immediate (or short-rollout) result scores best */
+/** clone for "what if" rollouts WITHOUT peeking at the real future: the copy gets its own RNG
+ *  stream, so bots can't foresee upcoming crises/elections (they'd be oracles otherwise) */
+function blindClone(g: Game): Game {
+  const c = g.clone();
+  c.state.rngState = (Math.imul(c.state.rngState ^ 0x9e3779b9, 0x85ebca6b) ^ (c.state.day * 7919)) >>> 0;
+  return c;
+}
+
 function bestOption(g: Game, o: Observation, rolloutDays: number): string | null {
   if (!o.event) return null;
   let best: string | null = null;
   let bestScore = -Infinity;
   for (const opt of o.event.options) {
     if (!opt.available) continue;
-    const c = g.clone();
+    const c = blindClone(g);
     c.act({ type: 'choose', optionId: opt.id });
     if (rolloutDays) c.advanceDays(rolloutDays);
     const sc = scoreState(c);
@@ -103,7 +111,7 @@ function bestOption(g: Game, o: Observation, rolloutDays: number): string | null
 
 /** evaluate a proactive action by rollout; returns gain vs doing nothing */
 function gainOf(g: Game, a: Action, days: number, baseline: number): number {
-  const c = g.clone();
+  const c = blindClone(g);
   if (!c.act(a).ok) return -Infinity;
   c.advanceDays(days);
   return scoreState(c) - baseline;
@@ -130,7 +138,7 @@ export function greedy(lookaheadDays = 0, name = 'greedy'): Strategy {
       // deliver promises that are about to expire (if not too costly)
       const horizon = Math.max(30, lookaheadDays);
       let base: number | undefined;
-      const baseline = () => (base ??= (() => { const c = g.clone(); c.advanceDays(horizon); return scoreState(c); })());
+      const baseline = () => (base ??= (() => { const c = blindClone(g); c.advanceDays(horizon); return scoreState(c); })());
       if (o.cooldowns.law === 0) {
         for (const p of o.parties) {
           if (p.trust.state === 'believing' && p.trust.daysLeft < 30 && p.trust.promiseId) {
