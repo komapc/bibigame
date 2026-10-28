@@ -1,7 +1,7 @@
 // Core engine: state creation, time stepping, actions. Pure TS — no DOM,
 // no Math.random, no Date.now. All randomness flows through state.rngState.
 import type {
-  Action, ActionResult, Config, CrisisDef, Effect, GameState, KnessetData, LogEntry, Party,
+  Action, ActionResult, Config, CrisisDef, Effect, GameState, KnessetData, LogEntry, Outcome, Party,
 } from './types.ts';
 import { makeRng, pickWeighted, type Rng } from './rng.ts';
 import {
@@ -28,6 +28,74 @@ function rngOf(s: GameState): Rng {
 function log(s: GameState, key: string, params?: LogEntry['params'], kind: LogEntry['kind'] = 'info') {
   s.log.push({ t: s.day, key, params, kind });
   if (s.log.length > 300) s.log.splice(0, s.log.length - 300);
+}
+
+// ---------------------------------------------------------------- outcomes (cause → result)
+
+const METERS = ['approval', 'street', 'us', 'fiscal', 'trial'] as const;
+interface Snap { sat: Record<string, number>; m: Record<string, number>; seats: number; coal: string[]; pressure: Record<string, number> }
+/** >0 while a decision is being applied; nested coalition changes then fold into that outcome */
+let wrapDepth = 0;
+
+function snap(s: GameState): Snap {
+  return {
+    sat: Object.fromEntries(s.parties.map((p) => [p.id, p.satisfaction])),
+    m: Object.fromEntries(METERS.map((k) => [k, s[k]])),
+    seats: seatsOf(s),
+    coal: coalition(s).map((p) => p.id),
+    pressure: { ...s.pressure },
+  };
+}
+
+function record(s: GameState, kind: Outcome['kind'], cause: Outcome['cause'], b: Snap) {
+  s.outcomes ??= [];
+  s.outcomeSeq ??= 0;
+  const coalNow = coalition(s).map((p) => p.id);
+  const o: Outcome = {
+    seq: ++s.outcomeSeq,
+    day: Math.floor(s.day),
+    kind,
+    cause,
+    sat: s.parties.filter((p) => p.seats > 0)
+      .map((p) => ({ party: p.id, delta: Math.round(p.satisfaction - b.sat[p.id]), inCoalition: p.inCoalition }))
+      .filter((x) => x.delta !== 0)
+      .sort((x, y) => Number(y.inCoalition) - Number(x.inCoalition) || Math.abs(y.delta) - Math.abs(x.delta)),
+    meters: METERS.map((k) => ({ meter: k, delta: Math.round(s[k] - b.m[k]) })).filter((x) => x.delta !== 0),
+    seats: { from: b.seats, to: seatsOf(s) },
+    left: b.coal.filter((id) => !coalNow.includes(id)),
+    joined: coalNow.filter((id) => !b.coal.includes(id)),
+    risks: Object.keys(s.pressure).filter((k) => s.pressure[k] - (b.pressure[k] ?? 0) > 0.01),
+  };
+  s.outcomes.push(o);
+  if (s.outcomes.length > 40) s.outcomes.splice(0, s.outcomes.length - 40);
+}
+
+function withOutcome<T>(s: GameState, kind: Outcome['kind'], cause: Outcome['cause'], fn: () => T): T {
+  const b = snap(s);
+  wrapDepth++;
+  try { return fn(); } finally { wrapDepth--; record(s, kind, cause, b); }
+}
+
+/** why a party's satisfaction drifts each day (sum = actual daily drift) */
+export function satDrivers(s: GameState, p: Party): { key: string; perDay: number }[] {
+  const c = s.config;
+  const out: { key: string; perDay: number }[] = [];
+  if (s.phase !== 'governing') return out;
+  if (p.inCoalition && p.id !== s.base.pmParty) {
+    const coal = coalition(s);
+    const over = Math.max(0, Math.abs(s.govPosition - p.position) - p.tolerance);
+    if (over > 0) out.push({ key: s.govPosition > p.position ? 'drift.tooRight' : 'drift.tooLeft', perDay: -over * c.driftPenalty });
+    out.push({ key: 'drift.appetite', perDay: -c.appetitePerDay });
+    const fair = (ministryCounts(s.ministries)[p.id] ?? 0) - fairShare(p, s.parties, s.ministries.length);
+    if (Math.abs(fair) > 0.5) out.push({ key: fair > 0 ? 'drift.ministriesPlus' : 'drift.ministriesMinus', perDay: fair * c.ministryFairness });
+    const h = hateCount(p, coal);
+    if (h) out.push({ key: 'drift.hate', perDay: -h * c.hatePenalty });
+  }
+  if (p.trust.state === 'believing') out.push({ key: 'drift.believe', perDay: c.believeDriftPerDay });
+  if (p.trust.state === 'distrust') out.push({ key: 'drift.distrust', perDay: -c.distrustDriftPerDay });
+  const reg = (c.satBaseline - p.satisfaction) * c.satRegression;
+  if (Math.abs(reg) > 0.005) out.push({ key: reg > 0 ? 'drift.recover' : 'drift.cool', perDay: reg });
+  return out;
 }
 
 // ---------------------------------------------------------------- creation
@@ -84,6 +152,8 @@ export function createState(base: KnessetData, seed: number, config: Partial<Con
     },
     titles: [],
     log: [],
+    outcomes: [],
+    outcomeSeq: 0,
   };
   s.nextEventInDays = scheduleNext(s);
   log(s, 'log.start', { seats: seatsOf(s) }, 'info');
@@ -329,11 +399,13 @@ function endWar(s: GameState) {
 
 function leave(s: GameState, p: Party, key = 'log.left') {
   if (!p.inCoalition || p.id === s.base.pmParty) return;
+  const b = wrapDepth ? null : snap(s);
   p.inCoalition = false;
   p.wartime = false;
   p.threatening = false;
   for (const m of s.ministries) if (m.holder === p.id) m.holder = s.base.pmParty;
   log(s, key, { party: p.id }, 'bad');
+  if (b) record(s, 'leave', { key: key === 'log.wartimeLeave' ? 'out.wartimeLeave' : 'out.left', params: { party: p.id } }, b);
 }
 
 // ---------------------------------------------------------------- elections
@@ -344,6 +416,7 @@ function pmBonus(s: GameState) {
 
 function callElections(s: GameState, reason: string) {
   if (s.phase === 'campaign' || s.status !== 'playing') return;
+  const b = wrapDepth ? null : snap(s);
   if (s.war.active) endWar(s);
   s.phase = 'campaign';
   s.phaseLeftDays = s.config.campaignDays;
@@ -352,9 +425,19 @@ function callElections(s: GameState, reason: string) {
   const base = s.base.parties.find((p) => p.id === s.base.pmParty)!;
   s.campaignPollSeats = Math.round(base.seats + pmBonus(s));
   log(s, 'log.elections', { reason, n: s.elections, poll: s.campaignPollSeats }, 'bad');
+  if (b) record(s, 'elections', { key: `out.elections.${reason}`, params: { poll: s.campaignPollSeats } }, b);
 }
 
 function resolveElection(s: GameState) {
+  const b = snap(s);
+  wrapDepth++;
+  try { resolveElectionInner(s); } finally { wrapDepth--; }
+  if (s.status === 'lost') record(s, 'newGov', { key: 'out.noGovLost' }, b);
+  else if (s.phase === 'governing') record(s, 'newGov', { key: 'out.newGov', params: { seats: seatsOf(s), pm: pmParty(s).seats } }, b);
+  else record(s, 'elections', { key: 'out.elections.deadlock', params: { poll: s.campaignPollSeats } }, b);
+}
+
+function resolveElectionInner(s: GameState) {
   const c = s.config;
   const seats = runElection(s.base.parties, {
     totalSeats: c.totalSeats, threshold: c.threshold, noise: c.electionNoise, noiseMin: c.electionNoiseMin,
@@ -436,15 +519,29 @@ export type Dir = 'left' | 'right' | 'up' | 'down';
 export const DIRS: Dir[] = ['left', 'right', 'up', 'down'];
 
 /** the current crisis card: ≤3 remedies on left/right/up, elections on down */
-export function eventOptions(s: GameState): { id: string; dir: Dir; available: boolean }[] {
+export type OptionDir = Dir | 'ignore';
+
+/** the current crisis card: ≤3 remedies on left/right/up, elections on down, plus a separate
+ *  "ignore it" tap (dir 'ignore', key 0) on every non-urgent card */
+export function eventOptions(s: GameState): { id: string; dir: OptionDir; available: boolean }[] {
   if (!s.event) return [];
   const c = crisisById.get(s.event.id)!;
-  const opts = c.remedies.slice(0, 3).map((id, i) => ({ id, dir: DIRS[i], available: id === 'ignore' || remedyAvailable(s, id) }));
+  const opts: { id: string; dir: OptionDir; available: boolean }[] =
+    c.remedies.slice(0, 3).map((id, i) => ({ id, dir: DIRS[i], available: remedyAvailable(s, id) }));
   opts.push({ id: 'elections', dir: 'down', available: true });
+  if (!c.urgent) opts.push({ id: 'ignore', dir: 'ignore', available: true });
   return opts;
 }
 
-function resolveEvent(s: GameState, optionId: string) {
+function resolveEvent(s: GameState, optionId: string, timedOut = false) {
+  const ev = s.event!;
+  const cause: Outcome['cause'] = optionId === 'ignore'
+    ? { key: timedOut ? 'out.timedOutIgnore' : 'out.ignored', params: { crisis: ev.id, party: ev.subject ?? '' } }
+    : { key: timedOut ? 'out.timedOut' : 'out.chose', params: { crisis: ev.id, remedy: optionId, party: ev.subject ?? '' } };
+  withOutcome(s, timedOut ? 'timeout' : 'choice', cause, () => resolveEventInner(s, optionId));
+}
+
+function resolveEventInner(s: GameState, optionId: string) {
   const ev = s.event!;
   const c = crisisById.get(ev.id)!;
   s.event = null;
@@ -522,19 +619,8 @@ function tickDay(s: GameState, dt: number) {
 
   // party satisfaction
   const coal = coalition(s);
-  const counts = ministryCounts(s.ministries);
   for (const p of s.parties) {
-    let d = 0;
-    if (p.inCoalition && p.id !== s.base.pmParty) {
-      const over = Math.max(0, Math.abs(s.govPosition - p.position) - p.tolerance);
-      d -= over * c.driftPenalty;
-      d -= c.appetitePerDay;
-      d += ((counts[p.id] ?? 0) - fairShare(p, s.parties, s.ministries.length)) * c.ministryFairness;
-      d -= hateCount(p, coal) * c.hatePenalty;
-    }
-    if (p.trust.state === 'believing') d += c.believeDriftPerDay;
-    if (p.trust.state === 'distrust') d -= c.distrustDriftPerDay;
-    d += (c.satBaseline - p.satisfaction) * c.satRegression;
+    const d = satDrivers(s, p).reduce((n, x) => n + x.perDay, 0);
     p.satisfaction = clamp(p.satisfaction + d * dt, 0, 100);
   }
 
@@ -565,7 +651,7 @@ function tickDay(s: GameState, dt: number) {
   // events
   if (s.event) {
     s.event.leftDays -= dt;
-    if (s.event.leftDays <= 0) resolveEvent(s, crisisById.get(s.event.id)?.defaultOption ?? 'ignore');
+    if (s.event.leftDays <= 0) resolveEvent(s, crisisById.get(s.event.id)?.defaultOption ?? 'ignore', true);
   } else if (s.queue.length) {
     const q = s.queue.shift()!;
     const p = q.subject ? partyById(s, q.subject) : undefined;
@@ -615,6 +701,30 @@ export function step(s: GameState, days: number) {
 // ---------------------------------------------------------------- actions
 
 export function act(s: GameState, a: Action): ActionResult {
+  s.outcomes ??= [];
+  s.outcomeSeq ??= 0;
+  if (a.type === 'choose' || a.type === 'noop') return actInner(s, a);
+  const b = snap(s);
+  wrapDepth++;
+  let r: ActionResult;
+  try { r = actInner(s, a); } finally { wrapDepth--; }
+  if (r.ok) record(s, 'action', actionCause(a), b);
+  return r;
+}
+
+function actionCause(a: Action): Outcome['cause'] {
+  switch (a.type) {
+    case 'giveMinistry': return { key: 'out.ministry', params: { ministry: a.ministryId, party: a.partyId } };
+    case 'startWar': return { key: 'out.war' };
+    case 'passLaw': return { key: 'out.law', params: { law: a.lawId } };
+    case 'invite': return { key: 'out.invite', params: { party: a.partyId } };
+    case 'promise': return { key: 'out.promise', params: { party: a.partyId, promise: a.promiseId } };
+    case 'deliver': return { key: 'out.deliver', params: { party: a.partyId, promise: a.promiseId } };
+    default: return { key: 'out.action' };
+  }
+}
+
+function actInner(s: GameState, a: Action): ActionResult {
   if (s.status !== 'playing') return { ok: false, error: 'err.over' };
   if (a.type === 'noop') return { ok: true };
   if (s.phase !== 'governing') return { ok: false, error: 'err.campaign' };
@@ -623,12 +733,12 @@ export function act(s: GameState, a: Action): ActionResult {
     case 'choose': {
       if (!s.event) return { ok: false, error: 'err.noEvent' };
       const def = crisisById.get(s.event.id)?.defaultOption;
+      // on urgent cards (no ignore) "ignore" means the card's default (e.g. refuse)
       if (a.optionId === 'ignore' && def) { resolveEvent(s, def); return { ok: true }; }
-      const opt = a.optionId === 'ignore' ? { available: true }
-        : eventOptions(s).find((o) => o.id === a.optionId || o.dir === a.optionId);
+      const opt = eventOptions(s).find((o) => o.id === a.optionId || o.dir === a.optionId);
       if (!opt) return { ok: false, error: 'err.badOption' };
       if (!opt.available) return { ok: false, error: 'err.unavailable' };
-      resolveEvent(s, a.optionId === 'ignore' ? 'ignore' : eventOptions(s).find((o) => o.id === a.optionId || o.dir === a.optionId)!.id);
+      resolveEvent(s, opt.id);
       return { ok: true };
     }
     case 'giveMinistry': {

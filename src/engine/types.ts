@@ -238,6 +238,9 @@ export interface GameState {
   stats: Stats;
   titles: string[];
   log: LogEntry[];
+  /** visible cause → result records (choices, timeouts, actions, coalition changes); last 40 */
+  outcomes: Outcome[];
+  outcomeSeq: number;
 }
 
 export type Action =
@@ -255,4 +258,24 @@ export interface ActionResult {
   ok: boolean;
   /** i18n key explaining a rejection */
   error?: string;
+}
+
+/** What a single decision (or a coalition change) did, so the UI/text mode can show cause → result. */
+export interface Outcome {
+  seq: number;
+  day: number;
+  /** choice = picked a card option; timeout = card expired; action = drawer move;
+   *  leave/join = coalition change outside a decision; elections/newGov = phase changes */
+  kind: 'choice' | 'timeout' | 'action' | 'leave' | 'join' | 'elections' | 'newGov';
+  /** i18n key + params describing the cause ("You built a settlement") */
+  cause: { key: string; params?: Record<string, string | number> };
+  /** satisfaction deltas per party (rounded, |Δ| ≥ 1) */
+  sat: { party: string; delta: number; inCoalition: boolean }[];
+  /** meter deltas (approval, street, us, fiscal, trial) */
+  meters: { meter: string; delta: number }[];
+  seats: { from: number; to: number };
+  left: string[];
+  joined: string[];
+  /** crises that became more likely (backfire / escalation) */
+  risks: string[];
 }

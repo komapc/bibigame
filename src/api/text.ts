@@ -3,7 +3,7 @@
 import type { Action } from '../engine/types.ts';
 import { TITLES } from '../data/titles.ts';
 import { t } from '../i18n/index.ts';
-import { type Game, type Observation, promisesFor } from './game.ts';
+import { type Game, type Observation, formatOutcome, promisesFor } from './game.ts';
 
 export type Command =
   | { kind: 'action'; action: Action }
@@ -14,7 +14,8 @@ export type Command =
 
 export const HELP = `Commands (one per line):
   left | right | up | down     swipe the crisis card (also 1-4, or ← → ↑ ↓); down = call early elections
-  choose <option>              choose an option by id (e.g. choose settle); "choose ignore" lets it escalate
+  ignore | 0                   ignore the crisis (it escalates; not on urgent cards — there it means refuse)
+  choose <option>              choose an option by id (e.g. choose settle)
   promise <party> <promise>    make a promise (e.g. promise liberman constitution)
   deliver <party> <promise>    actually do it (uses the law cooldown)
   ministry <party> from <party>   give one of <from>'s ministries to <party>
@@ -26,6 +27,8 @@ export const HELP = `Commands (one per line):
   look                         print the state again
   help                         this text
 Parties can be named by id, short code, name or leader alias.`;
+
+const g_timeoutNote = (o: Observation) => `${o.event!.daysLeft}d to respond on wait; timeout = ${o.event!.id === 'angry' ? 'refuse' : 'ignore (escalates)'}`;
 
 function bar(v: number, width = 10): string {
   const n = Math.round((Math.max(0, Math.min(100, v)) / 100) * width);
@@ -42,12 +45,14 @@ export function renderText(o: Observation): string {
   L.push(`Approval ${m.approval} | street calm ${m.street} | US ${m.us} | budget health ${m.fiscal} | trial ${m.trial} | open cases ${o.openCases}`);
   L.push(`Budget ${o.budget.dueYear}: ${o.budget.passed ? 'passed' : 'NOT passed (due 31 March)'}`);
   L.push(`War: ${o.war.active ? `ACTIVE ${o.war.daysLeft}d left` : o.war.cooldownDays ? `cooldown ${o.war.cooldownDays}d` : 'ready'} | cooldowns: ministry ${o.cooldowns.ministry}d, law ${o.cooldowns.law}d, invite ${o.cooldowns.invite}d`);
-  L.push('PARTIES (id seats pos sat trust ministries):');
+  L.push('PARTIES (id seats pos sat trust ministries trend):');
   const parties = [...o.parties].filter((p) => p.seats > 0).sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || b.seats - a.seats);
   for (const p of parties) {
     const trust = p.trust.state === 'neutral' ? '-' : `${p.trust.waiting ? 'WAITING' : p.trust.state}:${p.trust.promiseId}${p.trust.state === 'angry' ? '' : `:${p.trust.daysLeft}d`}`;
     const flags = [p.wartime && 'WARTIME', p.threatening && 'THREATENING', !p.inCoalition && !p.willSitWithBibi && 'boycotts-you'].filter(Boolean).join(' ');
-    L.push(`  ${p.inCoalition ? 'C' : 'o'} ${p.id.padEnd(9)} ${String(p.seats).padStart(2)}  ${String(p.position).padStart(3)}  ${bar(p.satisfaction)} ${String(Math.round(p.satisfaction)).padStart(3)}  ${trust}  [${p.ministries.join(',')}] ${flags}`);
+    const tr = p.inCoalition && Math.abs(p.trend.perMonth) >= 0.5 ? ` ${p.trend.perMonth > 0 ? '↑+' : '↓'}${p.trend.perMonth}/mo (${p.trend.reason})` : '';
+    const danger = p.mayLeave ? ` MAY LEAVE (without them: ${p.seatsWithout})` : '';
+    L.push(`  ${p.inCoalition ? 'C' : 'o'} ${p.id.padEnd(9)} ${String(p.seats).padStart(2)}  ${String(p.position).padStart(3)}  ${bar(p.satisfaction)} ${String(Math.round(p.satisfaction)).padStart(3)}  ${trust}  [${p.ministries.join(',')}] ${flags}${tr}${danger}`);
   }
   const tl = o.timeline;
   const span = Math.max(tl.goalDay, tl.nowDay + 30) - tl.startDay || 1;
@@ -59,8 +64,8 @@ export function renderText(o: Observation): string {
   L.push(`TIMELINE: start [${strip.join('')}] goal ${tl.goalDay > tl.nowDay ? `in ${tl.goalDay - tl.nowDay}d` : 'reached'}${tl.nextTitle ? ` | next title: ${tl.nextTitle.name} in ${tl.nextTitle.inDays}d` : ''}`);
   if (tl.upcoming.length) L.push(`UPCOMING: ${tl.upcoming.slice(0, 6).map((m) => `${m.date} ${m.label} (${m.day - tl.nowDay}d)`).join('; ')}`);
   if (o.event) {
-    L.push(`CRISIS: ${o.event.title} — ${o.event.text}${o.event.subject ? ` (subject: ${o.event.subject})` : ''} [${o.event.daysLeft}d to respond; timeout = ${o.event.id === 'angry' ? 'refuse' : 'ignore, escalates'}]`);
-    const n: Record<string, number> = { left: 1, right: 2, up: 3, down: 4 };
+    L.push(`CRISIS: ${o.event.title} — ${o.event.text}${o.event.subject ? ` (subject: ${o.event.subject})` : ''} [${g_timeoutNote(o)}]`);
+    const n: Record<string, number> = { left: 1, right: 2, up: 3, down: 4, ignore: 0 };
     for (const op of o.event.options) {
       const fx = op.preview.map((p) => `${p.label}${p.up ? '+' : '-'}`).join(', ');
       L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.available ? '' : ' [unavailable]'}${fx ? ` -> ${fx}` : ''}`);
@@ -93,9 +98,10 @@ export function parseCommand(g: Game, line: string): Command {
   const [cmd, ...rest] = words;
   const c = cmd.toLowerCase();
   const o = g.observe(0);
-  const dirOf: Record<string, string> = { '1': 'left', '2': 'right', '3': 'up', '4': 'down', '←': 'left', '→': 'right', '↑': 'up', '↓': 'down', left: 'left', right: 'right', up: 'up', down: 'down' };
+  const dirOf: Record<string, string> = { '0': 'ignore', ignore: 'ignore', '1': 'left', '2': 'right', '3': 'up', '4': 'down', '←': 'left', '→': 'right', '↑': 'up', '↓': 'down', left: 'left', right: 'right', up: 'up', down: 'down' };
   if (dirOf[c]) {
     const opt = o.event?.options.find((x) => x.dir === dirOf[c]);
+    if (!opt && dirOf[c] === 'ignore' && o.event) return { kind: 'action', action: { type: 'choose', optionId: 'ignore' } };
     if (!opt) return { kind: 'error', message: o.event ? 'No option on that side.' : 'No crisis right now.' };
     return { kind: 'action', action: { type: 'choose', optionId: opt.id } };
   }
@@ -146,6 +152,8 @@ export function parseCommand(g: Game, line: string): Command {
 /** Run one text command; returns the response text (result line + state). */
 export function runText(g: Game, line: string): { reply: string; ok: boolean } {
   const cmd = parseCommand(g, line);
+  const seq0 = g.state.outcomeSeq ?? 0;
+  const sat0 = Object.fromEntries(g.state.parties.map((p) => [p.id, p.satisfaction]));
   let head = '';
   let ok = true;
   switch (cmd.kind) {
@@ -169,7 +177,21 @@ export function runText(g: Game, line: string): { reply: string; ok: boolean } {
       break;
     }
   }
-  return { reply: (head ? head + '\n' : '') + renderText(g.observe()), ok };
+  const o = g.observe();
+  const res = (g.state.outcomes ?? []).filter((x) => x.seq > seq0).map((x) => formatOutcome(g.state, x));
+  const lines: string[] = [];
+  if (res.length) {
+    lines.push('RESULT:');
+    for (const r of res) lines.push(`  ${r.big ? '!! ' : ''}${r.summary}`);
+  }
+  if (cmd.kind === 'wait') {
+    // passive drift: what time alone did, with the main reason
+    const drift = o.parties.filter((p) => p.inCoalition && p.seats > 0)
+      .map((p) => ({ p, d: Math.round(p.satisfaction - sat0[p.id]) })).filter((x) => x.d !== 0);
+    if (drift.length) lines.push(`DRIFT: ${drift.map(({ p, d }) => `${p.id} ${d > 0 ? '+' : ''}${d} (${p.trend.reason})`).join('; ')}`);
+  }
+  if (head) lines.unshift(head);
+  return { reply: (lines.length ? lines.join('\n') + '\n' : '') + renderText(o), ok };
 }
 
 /** titles earned + locked, for end screens */
