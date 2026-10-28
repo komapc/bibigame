@@ -263,3 +263,30 @@ Rollout bots (upper bound only, not tuned for; 40 seeds × 20y):
 (Run time ≈ 20 min for both; lookahead ≈ 16 s per game. Greedy fell from 98% in Round 3: risky
 remedies and outcome noise hurt a bot that trusts its one-step score; it now often ignores the trial
 meter until indictment.)
+
+## Round 7 (2026-10-28): playtest fixes
+
+A fresh playtest (6/10) found an invisible slide under the panic line, a few always-right picks and
+heavy repetition. PR #19 changes, in balance terms:
+
+- Easier: `fatiguePerYear` 1.5 → 1.0 (the late-game approval target no longer sinks under
+  `pollPanicBelow` 32 by itself); `crisisRepeatDecay` 0.75 (each repeat of a card makes it 25% less
+  likely); "You're a leftist!" needs the far right below 60 mood; own-party "hand out a ministry"
+  now gives +`pmPostBoost` 8 instead of nothing.
+- Harder: Beepers once per game (like Fordow); `remedyFatigue` 0.6 → 1.0 (third use of a remedy
+  keeps 33% of its effect instead of 45%); the DC trip is a travel move, so it is blocked by an ICC
+  warrant; two mild recess bad-news cards (junket, beach selfie).
+- New card-specific answers: own poll (polls collapse, risky), reservists bill and meeting the pilots
+  (reservists' letter), sanction the ICC (ICC warrant).
+
+| strategy (80 seeds × 20y) | term | median y (p25–p75) | lost to voters / deadlock / indicted |
+|---|---|---|---|
+| never-act | 0% | 1.6 (1.2–2.2) | 56 / 11 / 13 |
+| random | 0% | 1.3 (0.8–1.8) | 64 / 12 / 4 |
+| always-war | 0% | 1.2 (1.0–1.5) | 42 / 14 / 24 |
+| promise-spammer | 0% | 1.0 (0.7–1.3) | 65 / 9 / 6 |
+| card-only-trial-aware | 20% | 3.1 (2.7–3.9) | 57 / 16 / 7 |
+| **card-only-hud-aware** | **43%** | 3.8 (3.2–4.3) | 64 / 6 / 10 |
+
+The easier and harder changes roughly cancel: hud-aware 51% → 43%, inside the 40–50% band, with no
+further tuning. Random stays at 0% (median 1.3y). Rollout bots were not rerun.

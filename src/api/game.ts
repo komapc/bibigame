@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, budgetDueYear, recessWindow, trumpFace, unavailableReason, loseChance, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
+  act, approvalTarget, budgetDueYear, recessWindow, trumpFace, unavailableReason, loseChance, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
@@ -39,6 +39,12 @@ export interface Observation {
   lostReason: GameState['lostReason'];
   /** chance the voters throw you out if elections were held now */
   electionRisk: number;
+  /** campaign tricks already applied (merger / spoiler / gevalt) — already in electionRisk and the poll */
+  campaignTricks: string[];
+  /** where approval is drifting (below config.pollPanicBelow partners panic) */
+  approvalTarget: number;
+  /** config.pollPanicBelow */
+  panicBelow: number;
   phase: GameState['phase'];
   phaseLeftDays: number;
   seats: number;
@@ -73,6 +79,8 @@ export interface Observation {
   ministries: { id: string; name: string; holder: string | null }[];
   event: null | {
     id: string; title: string; text: string; subject: string | null; daysLeft: number;
+    /** what the crisis already did when it arrived (onFire), or null */
+    arrival: OutcomeView | null;
     /** left / right / up = remedies, down = early elections; timeout = ignore */
     options: { id: string; dir: string; odds: number | null; label: string; desc: string; available: boolean; preview: Preview[]; why: string }[];
   };
@@ -127,7 +135,7 @@ function quipOf(o: Outcome): string {
   const p = o.cause.params ?? {};
   const q = Number(p.quip ?? o.seq);
   let id = '';
-  if (o.kind === 'news') return t(`crisis.${p.crisis}.text`);
+  if (o.kind === 'news' || o.kind === 'arrival') return o.kind === 'news' ? t(`crisis.${p.crisis}.text`) : '';
   if (p.fail) { const f = t(`quip.${p.remedy}.fail`); if (f !== `quip.${p.remedy}.fail`) return f; }
   if (o.cause.key === 'out.ignored' || o.cause.key === 'out.timedOutIgnore') id = 'ignore';
   else if (p.remedy) id = String(p.remedy);
@@ -147,7 +155,7 @@ function quipOf(o: Outcome): string {
 }
 
 function reactionOf(s: GameState, o: Outcome): string {
-  if (o.kind === 'elections' || o.kind === 'newGov' || o.kind === 'news') return '';
+  if (o.kind === 'elections' || o.kind === 'newGov' || o.kind === 'news' || o.kind === 'arrival') return '';
   const top = [...o.sat].filter((x) => Math.abs(x.delta) >= 3).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
   if (!top) return '';
   const p = s.parties.find((x) => x.id === top.party);
@@ -202,6 +210,24 @@ export interface Timeline {
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
+/** card text; repeat cards cycle through crisis.<id>.text, .text.1, .text.2 … (as many as the locale has) */
+export function crisisText(s: GameState, id: string): string {
+  const own = (k: string) => hasOwn(k); // only variants the active locale has (no mixed languages)
+  let n = 1;
+  while (own(`crisis.${id}.text.${n}`)) n++;
+  const k = ((s.firedCount?.[id] ?? 1) - 1) % n;
+  const params = { seats: Math.max(0, seatsOf(s) - 1) };
+  return t(k ? `crisis.${id}.text.${k}` : `crisis.${id}.text`, params);
+}
+
+/** what the current card did on arrival (its onFire effect), as a recorded outcome */
+function arrivalOf(s: GameState): OutcomeView | null {
+  const ev = s.event;
+  if (!ev) return null;
+  const o = [...(s.outcomes ?? [])].reverse().find((x) => x.kind === 'arrival' && x.cause.params?.crisis === ev.id && x.day === ev.firedAt);
+  return o ? formatOutcome(s, o) : null;
+}
+
 export function observe(s: GameState, logTail = 12): Observation {
   const nameOf = (id: string) => pname(s, id);
   return {
@@ -215,6 +241,9 @@ export function observe(s: GameState, logTail = 12): Observation {
     status: s.status,
     lostReason: s.lostReason ?? null,
     electionRisk: Math.round(loseChance(s) * 100) / 100,
+    campaignTricks: Object.entries(s.campaignFx ?? {}).filter(([, on]) => on).map(([k]) => k),
+    approvalTarget: r1(approvalTarget(s)),
+    panicBelow: s.config.pollPanicBelow,
     phase: s.phase,
     phaseLeftDays: Math.ceil(s.phaseLeftDays),
     seats: seatsOf(s),
@@ -241,7 +270,8 @@ export function observe(s: GameState, logTail = 12): Observation {
     event: s.event && {
       id: s.event.id,
       title: t(`crisis.${s.event.id}.title`),
-      text: t(`crisis.${s.event.id}.text`),
+      text: crisisText(s, s.event.id),
+      arrival: arrivalOf(s),
       subject: s.event.subject,
       daysLeft: Math.max(0, Math.ceil(s.event.leftDays)),
       options: eventOptions(s).map((o) => ({

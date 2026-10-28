@@ -145,6 +145,10 @@ export interface CrisisDef {
     notPassed?: string;
     /** only during a war or within config.recentWarDays after one */
     recentWar?: boolean;
+    /** only if some coalition party with the card's subjectTag is below this mood */
+    subjectMoodBelow?: number;
+    /** only during the Knesset summer recess */
+    recess?: boolean;
   };
   /** never fired by the random roll (scheduled by the engine) */
   scheduled?: boolean;
@@ -301,6 +305,10 @@ export interface GameState {
   lawsPassed: string[];
   /** crisis id → game day it last fired (per-card cooldown) */
   lastFired: Record<string, number>;
+  /** how many times each card/news fired this game (repeat decay, text variants) */
+  firedCount?: Record<string, number>;
+  /** the approval target is under config.pollPanicBelow (logged when it crosses) */
+  targetBelowPanic?: boolean;
   /** game day the last war ended */
   lastWarEnd: number;
   elections: number;
@@ -362,7 +370,7 @@ export interface Outcome {
   day: number;
   /** choice = picked a card option; timeout = card expired; action = drawer move;
    *  leave/join = coalition change outside a decision; elections/newGov = phase changes */
-  kind: 'choice' | 'timeout' | 'action' | 'leave' | 'join' | 'elections' | 'newGov' | 'news';
+  kind: 'choice' | 'timeout' | 'action' | 'leave' | 'join' | 'elections' | 'newGov' | 'news' | 'arrival';
   /** i18n key + params describing the cause ("You built a settlement") */
   cause: { key: string; params?: Record<string, string | number> };
   /** satisfaction deltas per party (rounded, |Δ| ≥ 1) */

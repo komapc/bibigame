@@ -296,3 +296,9 @@ details[open] > summary::before { transform: rotate(90deg); }
 /* ---------- Knesset summer recess */
 .tl-m.recess { filter: saturate(1.4); }
 body.recess .tl-fill { background: linear-gradient(90deg, var(--accent), var(--warn)); }
+
+/* ---------- what a card already did on arrival */
+.arrival { font-size: 12px; margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.arrival small { color: var(--mute); }
+.arrival .up { color: var(--good); } .arrival .down { color: var(--bad); }
+#apprtgt { margin-inline-start: 4px; font-size: 11px; }

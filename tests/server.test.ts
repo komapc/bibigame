@@ -21,7 +21,7 @@ describe('HTTP bot API', () => {
     expect(act.status).toBe(200);
     const bad = await fetch(`${base}/games/${id}/action`, { method: 'POST', body: JSON.stringify({ type: 'promise', partyId: 'shas', promiseId: 'exemption' }) });
     expect(bad.status).toBe(400);
-    const txt = await (await fetch(`${base}/games/${id}/text`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'wait 10d' })).text();
+    const txt = await (await fetch(`${base}/games/${id}/text`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'wait! 10d' })).text();
     expect(txt).toMatch(/Waited \d+d/);
     expect(txt).toContain('Coalition:');
     const titles = await (await fetch(`${base}/games/${id}/titles`)).json();
