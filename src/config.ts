@@ -15,9 +15,21 @@ export interface Config {
 
   eventIntervalDays: number;
   eventJitterDays: number;
+  /** game days a crisis card waits before its default fires (bots, text mode, UI).
+   *  Keep ≈ uiAnswerMs × uiCardClockScale / msPerDay so the UI and engine agree. */
   eventTimeoutDays: number;
-  /** timer for urgent cards (angry reminders) */
+  /** timer for urgent cards (angry reminders); keep ≈ uiUrgentAnswerMs × uiCardClockScale / msPerDay */
   urgentTimeoutDays: number;
+  /** UI: real-time budget to answer a normal card (ms) */
+  uiAnswerMs: number;
+  /** UI: real-time budget to answer an urgent card (ms) */
+  uiUrgentAnswerMs: number;
+  /** UI: game clock speed multiplier while a card awaits an answer (reading shouldn't burn months) */
+  uiCardClockScale: number;
+  /** UI: if true the clock STOPS while a decision card is open (no countdown); overrides uiCardClockScale */
+  pauseOnDecision: boolean;
+  /** UI: clock speed multiplier when no card is pending (fast-forward between events) */
+  uiIdleClockScale: number;
   /** party card shows "waiting…" this many days before a promise window ends */
   promiseWarnDays: number;
   /** "buy time" extends the believe window by this much (once per promise) */
@@ -105,8 +117,13 @@ export const DEFAULT_CONFIG: Config = {
 
   eventIntervalDays: 20,
   eventJitterDays: 8,
-  eventTimeoutDays: 45,
-  urgentTimeoutDays: 20,
+  eventTimeoutDays: 23, // = 15 s × 0.25 / 165 ms (was 45 ≈ 7 s of wall time — too short to read)
+  urgentTimeoutDays: 12, // = 8 s × 0.25 / 165 ms
+  uiAnswerMs: 15000,
+  uiUrgentAnswerMs: 8000,
+  uiCardClockScale: 0.25,
+  pauseOnDecision: true,
+  uiIdleClockScale: 2.5,
   promiseWarnDays: 14,
   buyTimeDays: 30,
 

@@ -185,6 +185,7 @@ function renderStage(o: Observation) {
   if (ev) {
     const ring = document.getElementById('ring');
     const total = ev.id === 'angry' ? game.state.config.urgentTimeoutDays : game.state.config.eventTimeoutDays;
+    if (ring) ring.parentElement!.style.display = game.state.config.pauseOnDecision ? 'none' : '';
     if (ring) ring.style.strokeDashoffset = String(100.5 * (1 - ev.daysLeft / total));
   }
 }
@@ -389,7 +390,11 @@ $('pause').addEventListener('click', () => {
 function frame(now: number) {
   const dt = Math.min(250, now - last);
   last = now;
-  if (!paused && !document.hidden && !game.over) game.advance(dt);
+  if (!paused && !document.hidden && !game.over) {
+    const c = game.state.config;
+    const scale = game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : c.uiIdleClockScale;
+    if (scale > 0) game.advance(dt * scale);
+  }
   render();
   requestAnimationFrame(frame);
 }
