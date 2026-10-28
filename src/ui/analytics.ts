@@ -27,23 +27,38 @@ export function track(event: string, params: Record<string, string | number> = {
   window.gtag?.('event', event, params);
 }
 
-/** show the consent banner if needed (call once after the app has rendered) */
-export function initConsent() {
-  if (!GA_MEASUREMENT_ID) return;
+/** true while the visitor has not answered the consent question yet */
+export function consentPending(): boolean {
+  if (!GA_MEASUREMENT_ID) return false;
   const c = get();
-  if (c === 'yes') { load(); return; }
-  if (c === 'no') return;
+  return c !== 'yes' && c !== 'no';
+}
+
+/** load GA if it was already allowed (call once at startup) */
+export function initConsent() {
+  if (GA_MEASUREMENT_ID && get() === 'yes') load();
+}
+
+/**
+ * Render the slim consent bar into `host` (the intro screen's bottom slot) — never a floating
+ * overlay over the game. `onDone` runs after an answer.
+ */
+export function mountConsent(host: HTMLElement, onDone: () => void = () => {}) {
+  host.innerHTML = '';
+  host.hidden = !consentPending();
+  if (host.hidden) return;
   const d = document.createElement('div');
-  d.id = 'consent';
   d.className = 'consent';
-  d.setAttribute('role', 'dialog');
-  d.innerHTML = `<span>${t('consent.text')}</span><button class="primary" data-c="yes">${t('consent.allow')}</button><button data-c="no">${t('consent.decline')}</button>`;
+  d.innerHTML = `<span>${t('consent.text')}</span><button class="c-yes" data-c="yes">${t('consent.allow')}</button><button data-c="no">${t('consent.decline')}</button>`;
   d.addEventListener('click', (e) => {
     const v = (e.target as HTMLElement).dataset.c;
     if (!v) return;
+    e.stopPropagation();
     set(v);
-    d.remove();
+    host.innerHTML = '';
+    host.hidden = true;
     if (v === 'yes') load();
+    onDone();
   });
-  document.body.appendChild(d);
+  host.appendChild(d);
 }
