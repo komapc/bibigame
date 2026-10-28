@@ -181,7 +181,7 @@ export function formatOutcome(s: GameState, o: Outcome): OutcomeView {
 }
 
 /** short "because" text for a party's satisfaction change in an outcome */
-function becauseOf(s: GameState, o: Outcome): string {
+export function becauseOf(s: GameState, o: Outcome): string {
   const nameOf = (id: string) => pname(s, id);
   return formatLog({ t: o.day, key: o.cause.key, params: o.cause.params }, nameOf);
 }
