@@ -7,12 +7,19 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "server": "node server/server.ts",
+    "text": "node src/cli/text.ts",
+    "bot:http": "node bots/http-random-bot.ts",
+    "balance": "node scripts/balance.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }

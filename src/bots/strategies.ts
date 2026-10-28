@@ -36,6 +36,7 @@ export function randomBot(seed = 1): Strategy {
     name: 'random',
     decide(_g, o) {
       const acts: Action[] = [];
+      if (o.phase !== 'governing') return acts;
       if (o.event && rng.next() < 0.3) {
         const opts = o.event.options.filter((x) => x.available);
         acts.push({ type: 'choose', optionId: pick(opts).id });
