@@ -8,7 +8,7 @@ import {
   allocateMinistries, coalitionSeats, fairShare, formGovernment, hateCount, matchesTag, ministryCounts,
 } from './coalition.ts';
 import { runElection } from './elections.ts';
-import { CRISES, LAWS, START_CONDITIONS, crisisById, remedyById } from '../data/crises.ts';
+import { CRISES, DOMESTIC, LAWS, START_CONDITIONS, crisisById, remedyById } from '../data/crises.ts';
 import { promiseById } from '../data/promises.ts';
 import { NEW_MINISTRIES, moveById } from '../data/moves.ts';
 import { TITLES } from '../data/titles.ts';
@@ -100,6 +100,7 @@ export function satDrivers(
     out.push({ key: 'drift.polls', perDay: -panic * Math.min(c.pollPanicMaxPerDay, Math.max(0, c.pollPanicBelow - s.approval) * c.pollPanicPerPoint) });
   }
   if (p.trust.state === 'believing') out.push({ key: 'drift.believe', perDay: c.believeDriftPerDay });
+  if ((p.guardedUntil ?? 0) > s.day) out.push({ key: 'drift.guarded', perDay: c.guardDriftPerDay });
   if (p.trust.state === 'distrust') out.push({ key: 'drift.distrust', perDay: -c.distrustDriftPerDay });
   const reg = (c.satBaseline - p.satisfaction) * c.satRegression;
   out.push({ key: reg > 0 ? 'drift.recover' : 'drift.cool', perDay: reg });
@@ -209,6 +210,7 @@ function randomizeStart(s: GameState) {
     applyEffect(s, sc.effect, null);
     log(s, `log.start.${sc.id}`, {}, 'event');
   }
+  for (const p of s.parties) if (p.id !== s.base.pmParty) p.leaveOffset = spread(c.leaveFuzz);
 }
 
 /** ±outcomeNoise on the numbers of an effect (same choice, not always the same result) */
@@ -424,7 +426,7 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
   if (e.position) s.govPosition = clamp(s.govPosition + e.position, -10, 10);
   if (e.approval) s.approval = clamp(s.approval + e.approval, 0, 100);
   const street0 = s.street, trial0 = s.trial;
-  if (e.street && !(s.war.active && e.street < 0)) s.street = clamp(s.street + e.street, 0, 100);
+  if (e.street && !(s.war.active && e.street < 0 && !e.streetInWar)) s.street = clamp(s.street + e.street, 0, 100);
   if (e.us) s.us = clamp(s.us + e.us, 0, 100);
   if (e.fiscal) s.fiscal = clamp(s.fiscal + e.fiscal, 0, 100);
   if (e.trial) s.trial = clamp(s.trial + e.trial, 0, 100);
@@ -439,6 +441,23 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
   }
   switch (e.special) {
     case 'war': startWar(s); break;
+    case 'pivot':
+      // "life itself": a domestic card on the table loses the headlines (no ignore penalty)
+      if (s.event && DOMESTIC.has(s.event.id)) {
+        log(s, 'log.pivot', { crisis: s.event.id }, 'good');
+        s.event = null;
+        s.nextEventInDays = scheduleNext(s);
+      }
+      break;
+    case 'securityDetail': {
+      const p = coalition(s).filter((x) => x.id !== s.base.pmParty).sort((a, b) => a.satisfaction - b.satisfaction)[0];
+      if (p) {
+        p.satisfaction = clamp(p.satisfaction + 8, 0, 100);
+        p.guardedUntil = s.day + c.guardDays;
+        log(s, 'log.securityDetail', { party: p.id }, 'info');
+      }
+      break;
+    }
     case 'endWar': if (s.war.active) endWar(s); break;
     case 'ministryToSubject': {
       const coal = coalition(s);
@@ -540,8 +559,16 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
       break;
     }
     case 'postponeElections':
+    {
       s.termEndsDay = Math.max(s.termEndsDay, s.day) + c.postponeDays;
-      log(s, 'log.postponed', {}, 'bad');
+      // once per term (moves.ts), but a habit gets noticed: each repeat in a game costs more
+      const n = s.postponements = (s.postponements ?? 0) + 1;
+      if (n > 1) {
+        s.approval = clamp(s.approval - c.postponeRepeatApproval * (n - 1), 0, 100);
+        s.street = clamp(s.street - c.postponeRepeatStreet * (n - 1), 0, 100);
+        log(s, 'log.postponedAgain', { n }, 'bad');
+      } else log(s, 'log.postponed', {}, 'bad');
+    }
       break;
     case 'merger': s.campaignFx.merger = true; log(s, 'log.merger', {}, 'info'); break;
     case 'gevalt': s.campaignFx.gevalt = true; log(s, 'log.gevalt', {}, 'info'); break;
@@ -948,8 +975,8 @@ export function eventOptions(s: GameState): { id: string; dir: OptionDir; availa
 function resolveEvent(s: GameState, optionId: string, timedOut = false) {
   const ev = s.event!;
   const cause: Outcome['cause'] = optionId === 'ignore'
-    ? { key: timedOut ? 'out.timedOutIgnore' : 'out.ignored', params: { crisis: ev.id, party: ev.subject ?? '', quip: Math.floor(rngOf(s).next() * 3) } }
-    : { key: timedOut ? 'out.timedOut' : 'out.chose', params: { crisis: ev.id, remedy: optionId, party: ev.subject ?? '', quip: Math.floor(rngOf(s).next() * 3) } };
+    ? { key: timedOut ? 'out.timedOutIgnore' : 'out.ignored', params: { crisis: ev.id, party: ev.subject ?? '', quip: Math.floor(rngOf(s).next() * 60) } }
+    : { key: timedOut ? 'out.timedOut' : 'out.chose', params: { crisis: ev.id, remedy: optionId, party: ev.subject ?? '', quip: Math.floor(rngOf(s).next() * 60) } };
   withOutcome(s, timedOut ? 'timeout' : 'choice', cause, () => resolveEventInner(s, optionId));
 }
 
@@ -978,7 +1005,7 @@ function checkCoalition(s: GameState, dt = 0) {
   for (const p of coalition(s)) {
     if (p.id === s.base.pmParty) continue;
     if (p.satisfaction <= 0) { leave(s, p); continue; }
-    if (dt && p.satisfaction < c.leaveBelow && rngOf(s).next() < c.leaveChancePerDay * (p.trait === 'loyal' ? 0.5 : 1) * dt) { leave(s, p); continue; }
+    if (dt && p.satisfaction < c.leaveBelow + (p.leaveOffset ?? 0) && rngOf(s).next() < c.leaveChancePerDay * (p.trait === 'loyal' ? 0.5 : 1) * dt) { leave(s, p); continue; }
     if (!p.threatening && p.satisfaction < c.threatenBelow) {
       p.threatening = true;
       log(s, 'log.threat', { party: p.id }, 'bad');

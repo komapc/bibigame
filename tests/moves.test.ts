@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createGame } from '../src/api/game.ts';
 import { moveAvailable } from '../src/engine/game.ts';
+import { remedyById } from '../src/data/crises.ts';
 
 const quiet = { eventIntervalDays: 1e9, eventJitterDays: 0, clusterChance: 0, startDate: '2026-05-01' };
 
@@ -91,7 +92,10 @@ describe('moves', () => {
   it('poach moves a seat from the opposition to Likud', () => {
     const g = createGame({ seed: 1, config: quiet });
     const seats = g.observe().seats;
-    expect(g.act({ type: 'move', moveId: 'poach' }).ok).toBe(true);
+    const risk = remedyById.get('poach')!.risk!;
+    const chance = risk.chance;
+    risk.chance = 1; // the success path; risky-remedy failures are covered in random.test.ts
+    try { expect(g.act({ type: 'move', moveId: 'poach' }).ok).toBe(true); } finally { risk.chance = chance; }
     expect(g.observe().seats).toBe(seats + 1);
     expect(g.state.parties.reduce((n, p) => n + p.seats, 0)).toBe(120);
   });

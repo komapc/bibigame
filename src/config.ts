@@ -117,6 +117,8 @@ export interface Config {
   /** coalition funds unavailable when budget health is below this ("the treasury is empty") */
   fundsMinFiscal: number;
   leaveChancePerDay: number;
+  /** randomStart: each party's leave line moves by up to ± this many points per game */
+  leaveFuzz: number;
   threatenResetAbove: number;
 
   // --- meters ---
@@ -144,6 +146,9 @@ export interface Config {
   promiseBrokenPenalty: number;
   promiseDeliverBonus: number;
   believeDriftPerDay: number;
+  /** security detail move: daily mood bonus for the guarded partner, and for how long */
+  guardDriftPerDay: number;
+  guardDays: number;
   distrustDriftPerDay: number;
 
   // --- ministries / invites ---
@@ -190,6 +195,9 @@ export interface Config {
   spoilerExposeChance: number;
   /** emergency law: scheduled elections move this far */
   postponeDays: number;
+  /** extra approval / street cost for every postponement after the first one in a game */
+  postponeRepeatApproval: number;
+  postponeRepeatStreet: number;
   /** prime-time statement: approval swing range [min, max] */
   primetimeMin: number;
   primetimeMax: number;
@@ -268,6 +276,7 @@ export const DEFAULT_CONFIG: Config = {
   remedyFatigueDays: 365,
   fundsMinFiscal: 15,
   leaveChancePerDay: 0.02,
+  leaveFuzz: 3,
   threatenResetAbove: 35,
 
   approvalRegression: 0.01,
@@ -289,6 +298,8 @@ export const DEFAULT_CONFIG: Config = {
   promiseBrokenPenalty: 20,
   promiseDeliverBonus: 10,
   believeDriftPerDay: 0.05,
+  guardDriftPerDay: 0.04,
+  guardDays: 365,
   distrustDriftPerDay: 0.06,
 
   ministryGain: 12,
@@ -321,6 +332,8 @@ export const DEFAULT_CONFIG: Config = {
   spoilerLose: 0.04,
   spoilerExposeChance: 0.3,
   postponeDays: 365,
+  postponeRepeatApproval: 6,
+  postponeRepeatStreet: 15,
   primetimeMin: -4,
   primetimeMax: 7,
 };

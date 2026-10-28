@@ -47,8 +47,12 @@ export type Trait = 'patient' | 'hothead' | 'greedy' | 'loyal' | 'opportunist';
 export interface Party extends PartyDef {
   /** party leader's trait this game (random per game; undefined = none) */
   trait?: Trait;
+  /** per-game fuzz on config.leaveBelow (randomStart), so hovering just above the line isn't safe */
+  leaveOffset?: number;
   /** joined only for the duration of a war */
   wartime: boolean;
+  /** state-funded security detail for the leader's family: a small daily mood bonus until this day */
+  guardedUntil?: number;
   /** has publicly threatened to quit (hysteresis flag) */
   threatening: boolean;
   trust: Trust;
@@ -68,6 +72,8 @@ export interface Effect {
   approval?: number;
   /** street calm (low = protests) */
   street?: number;
+  /** street hit lands even during a war (normally the war mutes protests) */
+  streetInWar?: boolean;
   /** US support */
   us?: number;
   /** fiscal health */
@@ -84,7 +90,7 @@ export interface Effect {
   /** special mechanics */
   special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'buyTime' | 'refuse' | 'passBudget' | 'defector'
     | 'poach' | 'newMinistry' | 'merger' | 'spoiler' | 'gevalt' | 'exileRival' | 'primetime' | 'postponeElections'
-    | 'plea' | 'miami' | 'handover' | 'breakRotation' | 'noConfidence' | 'oppPoach';
+    | 'plea' | 'miami' | 'handover' | 'breakRotation' | 'noConfidence' | 'oppPoach' | 'pivot' | 'securityDetail';
 }
 
 export interface RemedyDef {
@@ -323,6 +329,8 @@ export interface GameState {
   moveReadyAt: Record<string, number>;
   /** once-per-term moves already used this term */
   usedThisTerm: string[];
+  /** emergency postponements of elections this game (each one after the first costs more) */
+  postponements?: number;
   /** random starting conditions this game */
   startConditions: string[];
   /** Trump's mood, −2 (furious) .. +2 (adoring); a random walk with 3 a.m. swings */

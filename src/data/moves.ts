@@ -11,6 +11,9 @@ export const MOVES: MoveDef[] = [
   { id: 'cottage', phases: ['governing'], cooldownDays: 365 },
   { id: 'nobel', phases: ['governing', 'opposition'] },
   { id: 'wingofzion', phases: ['governing'] },
+  { id: 'blameag', phases: ['governing', 'opposition'], cooldownDays: 120 },
+  { id: 'lifeitself', phases: ['governing', 'campaign'], cooldownDays: 180 },
+  { id: 'securitydetail', phases: ['governing'], cooldownDays: 365 },
   { id: 'postponeelections', phases: ['governing'], oncePerTerm: true, requires: { war: true, electionsWithinDays: 365 } },
   { id: 'primetime', phases: ['governing', 'campaign', 'opposition'], cooldownDays: 60 },
   // campaign (once per election)
