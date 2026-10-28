@@ -347,6 +347,7 @@ export const he: Record<string, string> = {
   'drift.distrust': 'הפרת הבטחה — לא מאמינים לך',
   'drift.recover': 'נרגעים, מצב הרוח משתפר',
   'drift.cool': 'ירח הדבש נגמר',
+  'drift.polls': 'הסקרים שלך צוללים — הם מריחים הפסד',
   'ui.trendMonth': '{delta} לחודש: {reason}',
   'ui.mayLeave': 'עלולים לפרוש',
   'ui.without': 'בלי {party}: {seats}',

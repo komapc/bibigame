@@ -346,6 +346,7 @@ export const ru: Record<string, string> = {
   'drift.distrust': 'обещание нарушено — не верят',
   'drift.recover': 'остывают, настроение выправляется',
   'drift.cool': 'медовый месяц заканчивается',
+  'drift.polls': 'твои опросы тонут — они чуют поражение',
   'ui.trendMonth': '{delta}/мес.: {reason}',
   'ui.mayLeave': 'может уйти',
   'ui.without': 'уйдёт {party}: {seats}',
