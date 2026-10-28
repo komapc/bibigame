@@ -7,7 +7,7 @@
 //   far right → sat farright, centre → sat centrist, Haredim → sat haredi, base → approval (+pm sat),
 //   street → street calm, US/Trump → us, budget/shekel/markets → fiscal, reservists → street + approval.
 // Satire: descriptions, never fabricated direct quotes of real people.
-import type { CrisisDef, RemedyDef } from '../engine/types.ts';
+import type { CrisisDef, Effect, RemedyDef } from '../engine/types.ts';
 
 export const REMEDIES: RemedyDef[] = [
   { id: 'settle', backfires: ['centre', 'deal'],
@@ -16,9 +16,11 @@ export const REMEDIES: RemedyDef[] = [
     effect: { position: 1, us: -10, street: -8, approval: -2, fiscal: -10,
       sat: [{ target: 'farright', delta: 25 }, { target: 'centrist', delta: -10 }] } },
   { id: 'beepers', backfires: ['iran', 'icc'], context: 'tension',
-    effect: { approval: 8, us: 2, sat: [{ target: 'pm', delta: 5 }, { target: 'farright', delta: 5 }] } },
+    effect: { approval: 8, us: 2, sat: [{ target: 'pm', delta: 5 }, { target: 'farright', delta: 5 }] },
+    risk: { chance: 0.8, fail: { approval: -2, us: -8, sat: [{ target: 'farright', delta: 3 }] } } },
   { id: 'fordow', backfires: ['iran', 'houthis'], context: 'tension', once: true,
-    effect: { us: 25, approval: 6, fiscal: -10, sat: [{ target: 'all', delta: 3 }] } },
+    effect: { us: 25, approval: 6, fiscal: -10, sat: [{ target: 'all', delta: 3 }] },
+    risk: { chance: 0.75, fail: { us: 5, approval: -3, fiscal: -14 } } },
   { id: 'war', backfires: ['deal', 'budget', 'houthis'], context: 'tension',
     effect: { special: 'war' } },
   { id: 'exempt', law: true, permanent: true, backfires: ['reserve', 'kaplan'],
@@ -41,15 +43,18 @@ export const REMEDIES: RemedyDef[] = [
   { id: 'ch14', backfires: ['court'],
     effect: { approval: 2, us: -2, sat: [{ target: 'pm', delta: 2 }, { target: 'centrist', delta: -4 }] } },
   { id: 'attackad', backfires: ['bennett'],
-    effect: { approval: 3, street: -3, sat: [{ target: 'opposition', delta: -6 }] } },
+    effect: { approval: 3, street: -3, sat: [{ target: 'opposition', delta: -6 }] },
+    risk: { chance: 0.7, fail: { approval: -3, street: -3, sat: [{ target: 'opposition', delta: -2 }] } } },
   { id: 'postpone', backfires: ['kaplan'],
     effect: { pauseTrialDays: 120, street: -10, approval: -2 } },
   { id: 'pardon', backfires: ['kaplan', 'centre'],
-    effect: { pauseTrialDays: 365, trial: -15, street: -20, approval: -2, sat: [{ target: 'centrist', delta: -10 }] } },
+    effect: { pauseTrialDays: 365, trial: -15, street: -20, approval: -2, sat: [{ target: 'centrist', delta: -10 }] },
+    risk: { chance: 0.75, fail: { street: -12, approval: -3, sat: [{ target: 'centrist', delta: -6 }] } } },
   { id: 'govcommission', backfires: ['kaplan', 'court'],
     effect: { approval: 2, street: -6, sat: [{ target: 'pm', delta: 3 }, { target: 'centrist', delta: -10 }] } },
   { id: 'dc', backfires: ['leftist'],
-    effect: { us: 20, approval: 1, sat: [{ target: 'farright', delta: -8 }] } },
+    effect: { us: 20, approval: 1, sat: [{ target: 'farright', delta: -8 }] },
+    risk: { chance: 0.75, fail: { us: 4, approval: -3, sat: [{ target: 'farright', delta: -4 }] } } },
   { id: 'congress', backfires: ['deal'], travel: true,
     effect: { us: 18, approval: 3, fiscal: -3, sat: [{ target: 'farright', delta: -3 }] } },
   { id: 'cartoonbomb', backfires: ['iran'],
@@ -87,7 +92,8 @@ export const REMEDIES: RemedyDef[] = [
   { id: 'breakrotation', backfires: ['rebel'], effect: { special: 'breakRotation', approval: -2 } },
   // drawer moves (src/data/moves.ts) — some also appear on cards
   { id: 'poach', backfires: ['rebel'],
-    effect: { special: 'poach', approval: -3, sat: [{ target: 'pm', delta: -6 }, { target: 'centrist', delta: -3 }] } },
+    effect: { special: 'poach', approval: -3, sat: [{ target: 'pm', delta: -6 }, { target: 'centrist', delta: -3 }] },
+    risk: { chance: 0.7, fail: { approval: -4, sat: [{ target: 'opposition', delta: -5 }] } } },
   { id: 'newministry', backfires: ['moodys'],
     effect: { special: 'newMinistry', fiscal: -6, street: -4, approval: -2 } },
   { id: 'un', backfires: ['bennett'],
@@ -250,6 +256,37 @@ export const CRISES: CrisisDef[] = [
     onFire: { fiscal: 8, approval: 2 } },
   { id: 'hummus', weight: 0.2, goodNews: true, remedies: [], ignore: {},
     onFire: { approval: 3, street: 4 } },
+  // --- wildcards: nobody's fault, no card (badNews = shown as bad news)
+  { id: 'mkresigns', weight: 0.12, goodNews: true, badNews: true, remedies: [], ignore: {},
+    onFire: { special: 'defector', approval: -1 } },
+  { id: 'courtpres', weight: 0.15, goodNews: true, remedies: [], ignore: {},
+    onFire: { sat: [{ target: 'farright', delta: 6 }, { target: 'haredi', delta: 3 }] } },
+  { id: 'agresigns', weight: 0.15, goodNews: true, remedies: [], ignore: {},
+    onFire: { pauseTrialDays: 60, trial: -3 } },
+  { id: 'maccabi', weight: 0.2, goodNews: true, remedies: [], ignore: {},
+    onFire: { approval: 3, street: 2 } },
+  { id: 'blackout', weight: 0.15, goodNews: true, badNews: true, remedies: [], ignore: {},
+    onFire: { street: -6, approval: -3 } },
+  { id: 'whatsapp', weight: 0.15, goodNews: true, badNews: true, remedies: [], ignore: {},
+    onFire: { approval: -3, sat: [{ target: 'coalition', delta: -4 }] } },
+  { id: 'hotmic', weight: 0.15, goodNews: true, badNews: true, remedies: [], ignore: {},
+    onFire: { approval: -2, us: -2, sat: [{ target: 'coalition', delta: -3 }] } },
+  { id: 'midterms', weight: 0.08, goodNews: true, badNews: true, remedies: [], ignore: {},
+    onFire: { us: -10 } },
+  { id: 'newparty', weight: 0.08, goodNews: true, badNews: true, remedies: [], ignore: {},
+    onFire: { special: 'defector', approval: -1 } },
+  { id: 'rocketfree', weight: 0.2, goodNews: true, requires: { noWar: true }, remedies: [], ignore: {},
+    onFire: { approval: 2, street: 3 } },
+];
+
+/** random starting conditions: 1–2 per game */
+export const START_CONDITIONS: { id: string; effect: Effect }[] = [
+  { id: 'trumppost', effect: { us: 12 } },
+  { id: 'budgethole', effect: { fiscal: -15 } },
+  { id: 'trialresumes', effect: { trial: 5 } },
+  { id: 'heatwave', effect: { street: -12 } },
+  { id: 'honeymoon', effect: { sat: [{ target: 'coalition', delta: 10 }] } },
+  { id: 'rocketfree', effect: { approval: 3, street: 3 } },
 ];
 
 export const crisisById = new Map(CRISES.map((c) => [c.id, c]));

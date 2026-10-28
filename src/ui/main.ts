@@ -227,7 +227,9 @@ function renderHud(o: Observation) {
     ['ui.fiscal', m.fiscal, false], ['ui.trial', m.trial, true],
   ];
   region('meters', 'static', () => meters.map(([k], i) =>
-    `<div class="meter"><span>${t(k)}</span><div class="mbar"><div id="m${i}"></div></div><b id="mv${i}"></b></div>`).join(''));
+    `<div class="meter"><span>${t(k)}${k === 'ui.us' ? ' <i id="trumpface" class="tface"></i>' : ''}</span><div class="mbar"><div id="m${i}"></div></div><b id="mv${i}"></b></div>`).join(''));
+  const tf = document.getElementById('trumpface');
+  if (tf) { tf.textContent = o.trump.face; tf.title = t('ui.trumpMood'); }
   meters.forEach(([, v, inverse], i) => {
     const el = $(`m${i}`) as HTMLElement;
     el.style.width = pct(v);
@@ -261,7 +263,7 @@ function renderStage(o: Observation) {
       const chips = op.available
         ? `<span class="fx mini">${op.preview.slice(0, 4).map((p) => `<span class="${p.up ? 'up' : 'down'}">${p.up ? '▲' : '▼'}${esc(p.label)}</span>`).join('')}</span>`
         : `<span class="why">${esc(op.why)}</span>`;
-      return `<button class="hint hint-${dir}" data-dir="${dir}" ${op.available ? '' : 'disabled'} title="${esc(op.desc)}"><span class="arrow">${ARROW[dir]}</span> ${esc(op.label)}${chips}</button>`;
+      return `<button class="hint hint-${dir}" data-dir="${dir}" ${op.available ? '' : 'disabled'} title="${esc(op.desc)}"><span class="arrow">${ARROW[dir]}</span> ${esc(op.label)}${op.odds !== null ? ` <b class="odds" title="${esc(t('ui.odds'))}">${op.odds}%</b>` : ''}${chips}</button>`;
     };
     const urgent = ev.id === 'angry';
     const ign = ev.options.find((x) => x.dir === 'ignore');
@@ -425,7 +427,7 @@ const swipe = initSwipe({
 function renderParties(o: Observation) {
   const list = o.parties.filter((p) => p.seats > 0)
     .sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || b.seats - a.seats);
-  const key = list.map((p) => [p.id, p.seats, p.inCoalition, p.wartime, p.threatening, p.mayLeave, p.trust.state, p.trust.waiting, p.ministries.length, p.lastChange?.day, Math.round(p.trend.perMonth), p.trend.reason].join(':')).join('|')
+  const key = list.map((p) => [p.id, p.seats, p.inCoalition, p.wartime, p.threatening, p.mayLeave, p.trust.state, p.trust.waiting, p.ministries.length, p.trait?.id, p.lastChange?.day, Math.round(p.trend.perMonth), p.trend.reason].join(':')).join('|')
     + `|${o.cooldowns.invite > 0}|${o.cooldowns.law > 0}|${o.phase}`;
   region('parties', key, () => list.map((p) => {
     const promises = promisesFor(game.state, p.id);
@@ -445,7 +447,7 @@ function renderParties(o: Observation) {
     return `<div class="party ${p.inCoalition ? 'in' : 'out'} ${cls} ${p.mayLeave ? 'mayleave' : ''}" style="--c:${p.color}">
       <div class="phead"><b>${esc(p.name)}</b><span>${p.seats}</span></div>
       <div class="sat"><div data-sat="${p.id}"></div></div>
-      <div class="pmeta"><span data-trust="${p.id}"></span>${flags ? `<span class="bad ${p.mayLeave ? 'danger' : ''}">${flags}</span>` : ''}<span>${p.ministries.length ? `🏛 ${p.ministries.length}` : ''}</span></div>
+      <div class="pmeta"><span data-trust="${p.id}"></span>${flags ? `<span class="bad ${p.mayLeave ? 'danger' : ''}">${flags}</span>` : ''}<span>${p.ministries.length ? `🏛 ${p.ministries.length}` : ''}</span>${p.trait ? `<span class="trait" title="${esc(p.trait.desc)}">${esc(p.trait.label)}</span>` : ''}</div>
       ${trend}${cause}
       <div class="pbtns">${promiseSel}${deliver}${invite}</div>
     </div>`;

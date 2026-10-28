@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, budgetDueYear, unavailableReason, loseChance, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
+  act, budgetDueYear, trumpFace, unavailableReason, loseChance, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
@@ -44,6 +44,9 @@ export interface Observation {
   defectors: number;
   govPosition: number;
   meters: { approval: number; street: number; us: number; fiscal: number; trial: number };
+  /** Trump's mood −2..+2 and its face */
+  trump: { mood: number; face: string };
+  startConditions: { id: string; label: string }[];
   openCases: number;
   budget: { dueYear: number; passed: boolean };
   parties: {
@@ -60,6 +63,7 @@ export interface Observation {
     mayLeave: boolean;
     /** coalition seats if this partner left */
     seatsWithout: number;
+    trait: { id: string; label: string; desc: string } | null;
   }[];
   /** recent cause → result records, newest last; watch outcomeSeq for new ones */
   outcomes: OutcomeView[];
@@ -68,7 +72,7 @@ export interface Observation {
   event: null | {
     id: string; title: string; text: string; subject: string | null; daysLeft: number;
     /** left / right / up = remedies, down = early elections; timeout = ignore */
-    options: { id: string; dir: string; label: string; desc: string; available: boolean; preview: Preview[]; why: string }[];
+    options: { id: string; dir: string; odds: number | null; label: string; desc: string; available: boolean; preview: Preview[]; why: string }[];
   };
   war: { active: boolean; daysLeft: number; cooldownDays: number };
   /** Iran/Hezbollah tension: enables war, beepers, Fordow */
@@ -122,6 +126,7 @@ function quipOf(o: Outcome): string {
   const n = Number(p.quip ?? o.seq) % 3;
   let id = '';
   if (o.kind === 'news') return t(`crisis.${p.crisis}.text`);
+  if (p.fail) { const f = t(`quip.${p.remedy}.fail`); if (f !== `quip.${p.remedy}.fail`) return f; }
   if (o.cause.key === 'out.ignored' || o.cause.key === 'out.timedOutIgnore') id = 'ignore';
   else if (p.remedy) id = String(p.remedy);
   else if (o.cause.key === 'out.law') id = String(p.law);
@@ -236,7 +241,7 @@ export function observe(s: GameState, logTail = 12): Observation {
       subject: s.event.subject,
       daysLeft: Math.max(0, Math.ceil(s.event.leftDays)),
       options: eventOptions(s).map((o) => ({
-        ...o, label: t(`remedy.${o.id}`), desc: t(`remedy.${o.id}.desc`), preview: preview(s, o.id),
+        ...o, odds: oddsOf(o.id), label: t(`remedy.${o.id}`), desc: t(`remedy.${o.id}.desc`), preview: preview(s, o.id),
         why: o.available ? '' : whyText(s, o.id),
       })),
     },
@@ -244,6 +249,8 @@ export function observe(s: GameState, logTail = 12): Observation {
     tension: hasTension(s),
     iccDays: Math.max(0, Math.ceil(s.iccUntil - s.day)),
     usedOnce: [...s.usedOnce],
+    trump: { mood: Math.round((s.trumpMood ?? 0) * 10) / 10, face: trumpFace(s) },
+    startConditions: (s.startConditions ?? []).map((id) => ({ id, label: t(`start.${id}`) })),
     cooldowns: {
       ministry: Math.ceil(s.cooldowns.ministry), law: Math.ceil(s.cooldowns.law), invite: Math.ceil(s.cooldowns.invite),
     },
@@ -284,6 +291,7 @@ function partyExtras(s: GameState, id: string) {
     lastChange,
     mayLeave: p.inCoalition && p.id !== s.base.pmParty && p.satisfaction < s.config.threatenBelow,
     seatsWithout: p.inCoalition ? seats - p.seats : seats,
+    trait: p.trait ? { id: p.trait, label: t(`trait.${p.trait}`), desc: t(`trait.${p.trait}.desc`) } : null,
   };
 }
 
@@ -297,6 +305,12 @@ const tagLabel = (s: GameState, target: string, subject: string | null): string 
 function whyText(s: GameState, id: string): string {
   const r = unavailableReason(s, id);
   return r ? t(r.key, r.params) : t('why.na');
+}
+
+/** success chance in % of a risky remedy (null = no gamble) */
+export function oddsOf(id: string): number | null {
+  const r = remedyById.get(id)?.risk;
+  return r ? Math.round(r.chance * 100) : null;
 }
 
 /** qualitative effect preview of an option (no numbers): who/what goes up or down */
