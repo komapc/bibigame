@@ -127,6 +127,8 @@ export interface CrisisDef {
   urgent?: boolean;
   /** option applied on timeout (default 'ignore') */
   defaultOption?: string;
+  /** good-news event: no card; onFire applies and a result flash/headline shows it */
+  goodNews?: boolean;
 }
 
 export interface PromiseDef {
@@ -182,6 +184,8 @@ export interface LogEntry {
 
 export type Phase = 'governing' | 'campaign';
 export type Status = 'playing' | 'won' | 'lost';
+/** voters = lost the election; deadlock = nobody (incl. you) could form a government; indicted = trial meter maxed */
+export type LostReason = 'voters' | 'deadlock' | 'indicted';
 
 export interface GameState {
   seed: number;
@@ -241,6 +245,10 @@ export interface GameState {
   /** visible cause → result records (choices, timeouts, actions, coalition changes); last 40 */
   outcomes: Outcome[];
   outcomeSeq: number;
+  /** why the game was lost (for the game-over screen) */
+  lostReason: LostReason | null;
+  /** game days on which elections were called (election fatigue) */
+  electionDays: number[];
 }
 
 export type Action =
@@ -266,7 +274,7 @@ export interface Outcome {
   day: number;
   /** choice = picked a card option; timeout = card expired; action = drawer move;
    *  leave/join = coalition change outside a decision; elections/newGov = phase changes */
-  kind: 'choice' | 'timeout' | 'action' | 'leave' | 'join' | 'elections' | 'newGov';
+  kind: 'choice' | 'timeout' | 'action' | 'leave' | 'join' | 'elections' | 'newGov' | 'news';
   /** i18n key + params describing the cause ("You built a settlement") */
   cause: { key: string; params?: Record<string, string | number> };
   /** satisfaction deltas per party (rounded, |Δ| ≥ 1) */

@@ -31,20 +31,26 @@ app.innerHTML = `
     <div class="tl-caption" id="tlcap"></div>
   </button>
   <div id="history" class="history" hidden></div>
+  <div class="support">
+    <div class="bigseats" id="bigseats" aria-live="polite"><b id="seatnum">0</b><span class="of">/ 61</span><span id="margin" class="margin"></span><span id="seattrend" class="trend"></span></div>
+    <div class="appr"><span>${t('ui.approval')}</span><b id="apprnum">0%</b><div class="mbar"><div id="apprbar"></div></div></div>
+  </div>
+  <div id="danger" class="dangerm" hidden></div>
   <div class="seatbar" id="seatbar"></div>
   <div id="seattxt" class="seattxt"></div>
+  <div id="pchips" class="pchips" role="list"></div>
 </header>
 <main class="main">
   <section class="stage" id="stage"></section>
-  <section class="panel hud">
-    <div id="hemi"></div>
-    <div id="slider" class="slider"></div>
-    <div id="meters" class="meters"></div>
-    <div id="chips" class="chips"></div>
-  </section>
   <aside id="drawer" class="drawer" aria-label="${t('ui.moves')}">
     <button class="drawer-close" data-act="drawer">▾ ${t('ui.closeSheet')}</button>
     <button id="war" class="war" data-act="war"></button>
+    <details class="panel hud"><summary>${t('ui.overview')}</summary>
+      <div id="hemi"></div>
+      <div id="slider" class="slider"></div>
+      <div id="meters" class="meters"></div>
+      <div id="chips" class="chips"></div>
+    </details>
     <details class="panel" open><summary>${t('ui.parties')}</summary><div id="parties" class="parties"></div></details>
     <details class="panel"><summary>${t('ui.ministries')}</summary><div id="ministries" class="ministries"></div></details>
     <details class="panel"><summary>${t('ui.laws')}</summary><div id="laws" class="laws"></div></details>
@@ -80,11 +86,67 @@ function renderTop(o: Observation) {
   region('seatbar', [...coal, ...opp].map((p) => p.id + p.seats + p.inCoalition + p.mayLeave).join() + o.defectors, () =>
     [...coal, ...opp].map((p) => `<span class="seg ${p.inCoalition ? '' : 'opp'} ${p.mayLeave ? 'ghost' : ''}" style="flex:${p.seats};background:${p.color}" title="${esc(p.name)} ${p.seats}"></span>`).join('')
     + `<span class="maj" style="left:${(61 / 120) * 100}%"></span>`);
-  const ok = o.seats >= o.majority;
+  renderSupport(o, coal);
   $('seattxt').innerHTML = o.phase === 'campaign'
     ? `<b class="bad">${esc(t('ui.campaign', { days: o.phaseLeftDays }))}</b>`
-    : `${t('ui.seats')}: <b class="${ok ? 'good' : 'bad'}">${o.seats}</b>/120 · ${t('ui.majority')}${o.defectors ? ` · ${o.defectors} rogue` : ''}`
+    : `${o.defectors ? `${o.defectors} rogue MKs` : ''}`
       + coal.filter((p) => p.mayLeave).map((p) => ` · <span class="danger">⚠ ${esc(t('ui.without', { party: p.short || p.name, seats: p.seatsWithout }))}</span>`).join('');
+}
+
+// ------------------------------------------------------------------ big support indicator
+let shownSeats = -1, shownAppr = -1, seatsAtCard = -1, lastCardAt = -1;
+
+function animateNum(el: HTMLElement, from: number, to: number, fmt: (n: number) => string) {
+  const host = el.closest<HTMLElement>('.bigseats, .appr');
+  if (host) {
+    host.classList.remove('flash-up', 'flash-down');
+    void host.offsetWidth;
+    host.classList.add(to > from ? 'flash-up' : 'flash-down');
+  }
+  if (reduceMotion) { el.textContent = fmt(to); return; }
+  const t0 = performance.now(), dur = 900;
+  const tick = (now: number) => {
+    const k = Math.min(1, (now - t0) / dur);
+    el.textContent = fmt(Math.round(from + (to - from) * k));
+    if (k < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function renderSupport(o: Observation, coal: Observation['parties']) {
+  const seats = o.seats, margin = seats - o.majority;
+  if (game.state.event && game.state.event.firedAt !== lastCardAt) { lastCardAt = game.state.event.firedAt; seatsAtCard = seats; }
+  if (seatsAtCard < 0) seatsAtCard = seats;
+  if (shownSeats < 0) { shownSeats = seats; $('seatnum').textContent = String(seats); }
+  else if (seats !== shownSeats) { animateNum($('seatnum'), shownSeats, seats, String); shownSeats = seats; }
+  const big = $('bigseats');
+  big.dataset.state = o.phase === 'campaign' ? 'campaign' : margin >= 3 ? 'good' : margin >= 0 ? 'warn' : 'bad';
+  $('margin').textContent = o.phase === 'campaign' ? t('ui.campaignShort', { days: o.phaseLeftDays }) : margin >= 0 ? `+${margin}` : `${margin}`;
+  const d = seats - seatsAtCard;
+  $('seattrend').textContent = d > 0 ? `↑${d}` : d < 0 ? `↓${-d}` : '';
+  $('seattrend').className = `trend ${d > 0 ? 'good' : d < 0 ? 'bad' : ''}`;
+  const a = Math.round(o.meters.approval);
+  if (shownAppr < 0) { shownAppr = a; $('apprnum').textContent = `${a}%`; }
+  else if (Math.abs(a - shownAppr) >= 2) { animateNum($('apprnum'), shownAppr, a, (n) => `${n}%`); shownAppr = a; }
+  else if (a !== shownAppr && !game.state.event) { shownAppr = a; $('apprnum').textContent = `${a}%`; }
+  const bar = $('apprbar');
+  bar.style.width = pct(o.meters.approval);
+  bar.className = o.meters.approval < 35 ? 'low' : '';
+  // one extra meter, only when it's in danger
+  const m = o.meters;
+  const dangers: [string, number, boolean][] = [
+    ['ui.trial', m.trial, m.trial > 70], ['ui.street', m.street, m.street < 30], ['ui.us', m.us, m.us < 30], ['ui.fiscal', m.fiscal, m.fiscal < 25],
+  ];
+  const dg = dangers.find((x) => x[2]);
+  const dEl = $('danger');
+  dEl.hidden = !dg;
+  if (dg) dEl.innerHTML = `⚠ ${t(dg[0])} <b>${Math.round(dg[1])}</b>`;
+  // compact coalition chips; tap → full party sheet
+  region('pchips', coal.map((p) => [p.id, p.seats, p.satisfaction < 25 ? 'r' : p.satisfaction < 45 ? 'a' : 'g', p.mayLeave, p.trust.state === 'angry' || p.trust.waiting].join(':')).join('|'), () =>
+    [...coal].sort((x, y) => y.seats - x.seats).map((p) => {
+      const mood = p.mayLeave || p.satisfaction < 25 ? 'bad' : p.satisfaction < 45 ? 'warn' : 'good';
+      return `<button class="pchip ${mood}" role="listitem" data-act="open" data-sec="parties" title="${esc(p.name)}"><i style="background:${p.color}"></i>${esc(p.short || p.name)} ${p.seats}${p.mayLeave ? ` <em>${t('ui.mayLeave')}</em>` : ''}${p.trust.state === 'angry' || p.trust.waiting ? ' ⏳' : ''}</button>`;
+    }).join(''));
 }
 
 const ICON: Record<string, string> = {
@@ -99,7 +161,7 @@ function renderTimeline(o: Observation) {
   region('tltrack', key, () => {
     const past = tl.past.map((m) => `<span class="tl-m past ${m.kind}" style="left:${x(m.day)}" title="${esc(m.date + ' ' + m.label)}">${ICON[m.kind] ?? ''}</span>`).join('');
     const up = tl.upcoming.filter((m) => m.day <= end).map((m) => `<span class="tl-m up ${m.kind}" style="left:${x(m.day)}" title="${esc(m.date + ' ' + m.label)}">${ICON[m.kind] ?? '•'}</span>`).join('');
-    const trust = tl.trust.map((r, i) => `<span class="tl-trust believe" style="left:${x(r.from)};width:calc(${x(r.believeUntil)} - ${x(r.from)});background:${r.color};top:${22 + (i % 3) * 3}px"></span><span class="tl-trust distrust" style="left:${x(r.believeUntil)};width:calc(${x(r.distrustUntil)} - ${x(r.believeUntil)});top:${22 + (i % 3) * 3}px"></span>`).join('');
+    const trust = tl.trust.map((r, i) => `<span class="tl-trust believe" style="left:${x(r.from)};width:calc(${x(r.believeUntil)} - ${x(r.from)});background:${r.color};top:${12 + (i % 3) * 2}px"></span><span class="tl-trust distrust" style="left:${x(r.believeUntil)};width:calc(${x(r.distrustUntil)} - ${x(r.believeUntil)});top:${12 + (i % 3) * 2}px"></span>`).join('');
     return `<div class="tl-line"><div class="tl-fill" id="tlfill"></div></div>${trust}${past}${up}<span class="tl-now" id="tlnow"></span>`;
   });
   const fill = document.getElementById('tlfill');
@@ -159,8 +221,11 @@ function renderStage(o: Observation) {
   const ev = o.event;
   const key = ev ? `${ev.id}|${game.state.event?.firedAt}|${ev.options.map((x) => x.available).join()}` : `none|${newsKey(o)}`;
   if (swipe.dragging()) return;
+  const kind = ev ? `card:${game.state.event?.firedAt}` : 'news';
   region('stage', key, () => {
-    if (!ev) return newsHtml(o);
+    const enter = kind !== lastStageKind ? 'enter' : '';
+    lastStageKind = kind;
+    if (!ev) return newsHtml(o, enter);
     const by: Record<string, (typeof ev.options)[number] | undefined> = {};
     for (const op of ev.options) by[op.dir] = op;
     const hint = (dir: string) => {
@@ -172,7 +237,7 @@ function renderStage(o: Observation) {
     const ign = ev.options.find((x) => x.dir === 'ignore');
     const ignFx = ign ? ign.preview.filter((p) => !p.up).map((p) => p.label).slice(0, 3).join(', ') : '';
     const tutorial = o.outcomeSeq === 0 ? `<p class="tutorial">${t('ui.tutorial')}</p>` : '';
-    return `${tutorial}<div id="card" class="swipecard enter ${urgent ? 'urgent' : ''}" tabindex="0" aria-label="${esc(ev.title)}">
+    return `${tutorial}<div id="card" class="swipecard ${enter} ${urgent ? 'urgent' : ''}" tabindex="0" aria-label="${esc(ev.title)}">
       ${hint('up')}
       <div class="cbody">
         <svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16" class="ring-bg"/><circle id="ring" cx="20" cy="20" r="16" class="ring-fg"/></svg>
@@ -197,7 +262,7 @@ function renderStage(o: Observation) {
 // ------------------------------------------------------------------ headlines (no crisis)
 function headline(o: Observation): string {
   const name = (id: string) => partyName(o, id);
-  if (o.phase === 'campaign') return t('news.campaign', { days: o.phaseLeftDays, poll: game.state.campaignPollSeats });
+  if (o.phase === 'campaign') return t('news.campaign', { days: o.phaseLeftDays, poll: game.state.campaignPollSeats, risk: Math.round(o.electionRisk * 100) });
   const angry = o.parties.find((p) => p.trust.state === 'angry');
   if (angry) return t('news.angry', { party: name(angry.id), promise: t(`promise.${angry.trust.promiseId}`) });
   const leaving = o.parties.find((p) => p.mayLeave);
@@ -214,17 +279,20 @@ function newsKey(o: Observation) {
   return [o.phase, headline(o), o.timeline.upcoming[0]?.label, Math.floor(o.day / 15), o.cooldowns.ministry > 0, o.cooldowns.law > 0, o.war.cooldownDays > 0].join('|');
 }
 
-function newsHtml(o: Observation): string {
+let lastStageKind = '';
+
+function newsHtml(o: Observation, enter: string): string {
   const tl = o.timeline;
   const next = tl.upcoming.find((m) => m.kind !== 'goal');
   const ticker = [
     next ? t('news.next', { label: next.label, days: next.day - tl.nowDay }) : '',
     tl.nextTitle ? t('news.title', { title: tl.nextTitle.name, days: tl.nextTitle.inDays }) : '',
+    t(`news.flavour.${Math.floor(o.day / 23) % 10}`),
     t('news.poll', { approval: Math.round(o.meters.approval), seats: o.seats }),
   ].filter(Boolean).filter((x) => x !== headline(o));
   const gov = o.phase === 'governing';
   const warOk = gov && !o.war.active && o.war.cooldownDays === 0 && o.tension;
-  return `<div class="news enter">
+  return `<div class="news ${enter}">
     <div class="mast">${t('news.masthead')}</div>
     <h2>${esc(headline(o))}</h2>
     <ul class="ticker">${ticker.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
@@ -266,7 +334,9 @@ function showFlash(r: OutcomeView) {
   const risks = r.risks.length ? `<p class="risk">⚠ ${t('out.risk')}: ${esc(r.risks.join(' · '))}</p>` : '';
   const nothing = !sat && !meters && !seats && !lj ? `<p class="sub">${t('out.nothing')}</p>` : '';
   el.className = `result ${r.big ? 'big' : ''} ${r.kind}`;
-  el.innerHTML = `<h3>${esc(r.cause)}</h3>${seats}${lj}<div class="fxrow">${sat}${meters}</div>${risks}${nothing}<small class="sub">${t('ui.resultTap')}</small>`;
+  const quip = r.quip ? `<p class="quip">${esc(r.quip)}</p>` : '';
+  const react = r.reaction ? `<p class="react">${esc(r.reaction)}</p>` : '';
+  el.innerHTML = `<h3>${esc(r.cause)}</h3>${quip}${seats}${lj}<div class="fxrow">${sat}${meters}</div>${react}${risks}${nothing}<small class="sub">${t('ui.resultTap')}</small>`;
   el.hidden = false;
   flashUntil = performance.now() + (r.big ? 5000 : 2800);
   // floating deltas on the HUD meters + pulse on party cards
@@ -336,7 +406,7 @@ function renderParties(o: Observation) {
     const sgn = (n: number) => (n > 0 ? `+${n}` : `${n}`);
     const cause = p.lastChange ? `<div class="cause ${p.lastChange.delta > 0 ? 'good' : 'bad'}">${esc(t('out.because', { delta: sgn(p.lastChange.delta), cause: p.lastChange.because }))}</div>` : '';
     const trend = p.inCoalition && Math.abs(p.trend.perMonth) >= 0.3
-      ? `<div class="trend ${p.trend.perMonth > 0 ? 'good' : 'bad'}">${p.trend.perMonth > 0 ? '↗' : '↘'} ${esc(t('ui.trendMonth', { delta: sgn(Math.round(p.trend.perMonth)) || sgn(p.trend.perMonth), reason: p.trend.reason }))}</div>` : '';
+      ? `<div class="trend ${p.trend.perMonth > 0 ? 'good' : 'bad'}">${p.trend.perMonth > 0 ? '↗' : '↘'} ${esc(t('ui.trendMonth', { delta: (p.trend.perMonth > 0 ? '+' : '') + p.trend.perMonth.toFixed(1), reason: p.trend.reason }))}</div>` : '';
     const cls = p.trust.state === 'angry' ? 'angry' : p.trust.waiting ? 'waiting' : '';
     return `<div class="party ${p.inCoalition ? 'in' : 'out'} ${cls} ${p.mayLeave ? 'mayleave' : ''}" style="--c:${p.color}">
       <div class="phead"><b>${esc(p.name)}</b><span>${p.seats}</span></div>
@@ -404,8 +474,9 @@ function renderOver(o: Observation) {
   if (o.status === 'playing') { el.hidden = true; return; }
   if (!el.hidden) return;
   el.hidden = false;
-  el.innerHTML = `<div class="overcard"><h2>${t('ui.gameOver')}</h2>
-    <p>${o.status === 'won' ? t('ui.wonText') : t('ui.lostText')}</p>
+  const why = o.status === 'won' ? 'won' : o.lostReason ?? 'deadlock';
+  el.innerHTML = `<div class="overcard"><h2>${t('ui.gameOver')}: ${esc(t(`over.${why}.title`))}</h2>
+    <p>${esc(t(`over.${why}.text`))}</p>
     <p>${(o.pmDays / 365.25).toFixed(1)} years as PM · ${o.elections} elections</p>
     <h3>${t('ui.titles')}</h3>
     <ul class="board">${titleBoard(game.state.titles).map((x) => `<li class="${x.earned ? 'earned' : 'locked'}"><b>${esc(x.name)}</b><small>${esc(x.gloss)}</small></li>`).join('')}</ul>
@@ -444,6 +515,7 @@ function restart() {
   for (const k of Object.keys(keys)) delete keys[k];
   lastTitles = 0;
   seenSeq = 0;
+  shownSeats = shownAppr = seatsAtCard = lastCardAt = -1;
   flashQueue.length = 0;
   hideFlash();
   $('over').hidden = true;

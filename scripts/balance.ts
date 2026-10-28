@@ -16,8 +16,8 @@ const pct = (n: number, d: number) => `${Math.round((100 * n) / d)}%`;
 
 const rows: string[] = [];
 const titleRows: string[] = [];
-rows.push(`| strategy | games | 4-year term reached | lost | median years as PM | p25–p75 years | mean elections |`);
-rows.push(`|---|---|---|---|---|---|---|`);
+rows.push(`| strategy | games | 4-year term reached | lost | median years as PM | p25–p75 years | mean elections | lost to: voters / deadlock / indicted |`);
+rows.push(`|---|---|---|---|---|---|---|---|`);
 titleRows.push(`| strategy | titles reached (share of games) |`);
 titleRows.push(`|---|---|`);
 const started = Date.now();
@@ -28,7 +28,7 @@ for (const name of Object.keys(STRATEGIES)) {
   const yrs = res.map((r) => r.pmDays / 365.25).sort((a, b) => a - b);
   const won = res.filter((r) => r.termReached).length;
   const lost = res.filter((r) => r.status === 'lost').length;
-  rows.push(`| ${name} | ${games} | ${pct(won, games)} | ${pct(lost, games)} | ${median(yrs).toFixed(1)} | ${yrs[Math.floor(games * 0.25)].toFixed(1)}–${yrs[Math.floor(games * 0.75)].toFixed(1)} | ${(res.reduce((s, r) => s + r.elections, 0) / games).toFixed(1)} |`);
+  rows.push(`| ${name} | ${games} | ${pct(won, games)} | ${pct(lost, games)} | ${median(yrs).toFixed(1)} | ${yrs[Math.floor(games * 0.25)].toFixed(1)}–${yrs[Math.floor(games * 0.75)].toFixed(1)} | ${(res.reduce((s, r) => s + r.elections, 0) / games).toFixed(1)} | ${['voters', 'deadlock', 'indicted'].map((k) => res.filter((r) => r.lostReason === k).length).join(' / ')} |`);
   const counts = TITLES.map((x) => [x.id, res.filter((r) => r.titles.includes(x.id)).length] as const).filter(([, n]) => n > 0);
   titleRows.push(`| ${name} | ${counts.map(([id, n]) => `${t(`title.${id}`)} ${pct(n, games)}`).join(', ') || '—'} |`);
 }

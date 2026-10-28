@@ -45,6 +45,22 @@ export interface Config {
   knessetTermDays: number;
   /** every partner's satisfaction drains this much per day (appetite) */
   appetitePerDay: number;
+  /** appetite grows by this fraction per year as PM (entropy) */
+  appetiteGrowthPerYear: number;
+  /** crises come faster the longer you rule: interval / (1 + this × years as PM) */
+  eventSpeedupPerYear: number;
+  /** chance that a resolved crisis is followed by another within clusterDays */
+  clusterChance: number;
+  clusterDays: number;
+  /** election-loss roll: base + per approval point below approvalNeutral + per open case + per election in the last electionFatigueDays */
+  loseBase: number;
+  losePerApprovalPoint: number;
+  losePerOpenCase: number;
+  losePerRecentElection: number;
+  electionFatigueDays: number;
+  loseMax: number;
+  /** trial meter at which you're indicted and the game ends (0 = never) */
+  indictAt: number;
   /** consecutive elections without a Bibi government before game over */
   maxFailedElections: number;
 
@@ -135,6 +151,17 @@ export const DEFAULT_CONFIG: Config = {
   campaignDays: 60,
   knessetTermDays: 1461,
   appetitePerDay: 0.04,
+  appetiteGrowthPerYear: 0.3,
+  eventSpeedupPerYear: 0.15,
+  clusterChance: 0.15,
+  clusterDays: 4,
+  loseBase: 0.1,
+  losePerApprovalPoint: 0.015,
+  losePerOpenCase: 0.05,
+  losePerRecentElection: 0.1,
+  electionFatigueDays: 1461,
+  loseMax: 0.85,
+  indictAt: 100,
   maxFailedElections: 1,
 
   majority: 61,

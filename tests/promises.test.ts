@@ -33,13 +33,14 @@ describe('promises and trust', () => {
     expect(g.state.stats.promisesKept).toBe(1);
   });
   it('angry reminder: buy time works once, deliver at a premium clears it', () => {
-    const g = createGame({ seed: 8 });
+    // isolate the mechanic: no random crises; pass the budget when it nags
+    const g = createGame({ seed: 8, config: { eventIntervalDays: 100000, eventJitterDays: 0, clusterChance: 0 } });
     const c = g.state.config;
     g.act({ type: 'promise', partyId: 'shas', promiseId: 'exemption' });
     const shas = () => g.state.parties.find((p) => p.id === 'shas')!;
     const waitAngry = () => {
       for (let i = 0; i < 400 && g.state.event?.id !== 'angry'; i++) {
-        if (g.state.event) g.act({ type: 'choose', optionId: 'ignore' });
+        if (g.state.event) g.act({ type: 'choose', optionId: g.state.event.id === 'budget' ? 'left' : 'ignore' });
         g.advanceDays(1);
       }
       expect(g.state.event?.id).toBe('angry');

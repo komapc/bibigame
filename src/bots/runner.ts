@@ -12,6 +12,7 @@ export interface RunResult {
   pmDays: number;
   elections: number;
   titles: string[];
+  lostReason: string | null;
 }
 
 export interface RunOptions {
@@ -37,6 +38,6 @@ export function playGame(strategy: Strategy, seed: number, opts: RunOptions = {}
   return {
     strategy: strategy.name, seed, status: g.state.status, termReached: g.state.termReached,
     days: Math.floor(g.state.day), pmDays: Math.floor(g.state.pmDays), elections: g.state.elections,
-    titles: [...g.state.titles],
+    titles: [...g.state.titles], lostReason: g.state.lostReason ?? null,
   };
 }

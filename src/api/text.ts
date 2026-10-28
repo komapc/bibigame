@@ -38,8 +38,9 @@ function bar(v: number, width = 10): string {
 export function renderText(o: Observation): string {
   const L: string[] = [];
   const years = (o.pmDays / 365.25).toFixed(2);
+  if (o.status === 'lost' && o.lostReason) L.push(`GAME OVER: ${t(`over.${o.lostReason}.title`)} — ${t(`over.${o.lostReason}.text`)}`);
   L.push(`=== ${o.date} | day ${o.day} | PM for ${years}y (${Math.round(o.termProgress * 100)}% of 4y term${o.termReached ? ', TERM REACHED' : ''}) | ${o.status.toUpperCase()} ===`);
-  if (o.phase === 'campaign') L.push(`ELECTION CAMPAIGN: ${o.phaseLeftDays}d to election day (election #${o.elections})`);
+  if (o.phase === 'campaign') L.push(`ELECTION CAMPAIGN: ${o.phaseLeftDays}d to election day (election #${o.elections}); chance the voters throw you out: ${Math.round(o.electionRisk * 100)}%`);
   L.push(`Coalition: ${o.seats}/120 (need ${o.majority})${o.defectors ? `, ${o.defectors} rogue MKs` : ''} | gov position ${o.govPosition} (-10 left .. +10 right)`);
   const m = o.meters;
   L.push(`Approval ${m.approval} | street calm ${m.street} | US ${m.us} | budget health ${m.fiscal} | trial ${m.trial} | open cases ${o.openCases}`);
@@ -182,7 +183,11 @@ export function runText(g: Game, line: string): { reply: string; ok: boolean } {
   const lines: string[] = [];
   if (res.length) {
     lines.push('RESULT:');
-    for (const r of res) lines.push(`  ${r.big ? '!! ' : ''}${r.summary}`);
+    for (const r of res) {
+      lines.push(`  ${r.big ? '!! ' : ''}${r.summary}`);
+      if (r.quip) lines.push(`     ${r.quip}`);
+      if (r.reaction) lines.push(`     ${r.reaction}`);
+    }
   }
   if (cmd.kind === 'wait') {
     // passive drift: what time alone did, with the main reason

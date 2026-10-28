@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, budgetDueYear, hasTension, createState, dateOf, eventOptions, satDrivers, seatsOf, step,
+  act, budgetDueYear, loseChance, hasTension, createState, dateOf, eventOptions, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
 import { PROMISES } from '../data/promises.ts';
@@ -27,6 +27,9 @@ export interface Observation {
   termProgress: number;
   termReached: boolean;
   status: GameState['status'];
+  lostReason: GameState['lostReason'];
+  /** chance the voters throw you out if elections were held now */
+  electionRisk: number;
   phase: GameState['phase'];
   phaseLeftDays: number;
   seats: number;
@@ -92,6 +95,39 @@ export interface OutcomeView {
   big: boolean;
   /** one-line text version (text mode, logs) */
   summary: string;
+  /** satirical one-liner about what just happened */
+  quip: string;
+  /** a generic in-character reaction from the most affected party */
+  reaction: string;
+}
+
+const REACT_TAGS = ['farright', 'haredi', 'centrist', 'secular', 'left', 'arab'];
+
+function quipOf(o: Outcome): string {
+  const p = o.cause.params ?? {};
+  const n = Number(p.quip ?? o.seq) % 3;
+  let id = '';
+  if (o.kind === 'news') return t(`crisis.${p.crisis}.text`);
+  if (o.cause.key === 'out.ignored' || o.cause.key === 'out.timedOutIgnore') id = 'ignore';
+  else if (p.remedy) id = String(p.remedy);
+  else if (o.cause.key === 'out.law') id = String(p.law);
+  else if (o.cause.key === 'out.war') id = 'war';
+  else if (o.cause.key === 'out.ministry') id = 'ministry';
+  else if (o.cause.key === 'out.deliver') id = 'deliverpremium';
+  if (!id) return '';
+  const k = `quip.${id}.${n}`;
+  const q = t(k);
+  return q === k ? '' : q;
+}
+
+function reactionOf(s: GameState, o: Outcome): string {
+  if (o.kind === 'elections' || o.kind === 'newGov' || o.kind === 'news') return '';
+  const top = [...o.sat].filter((x) => Math.abs(x.delta) >= 3).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0];
+  if (!top) return '';
+  const p = s.parties.find((x) => x.id === top.party);
+  if (!p) return '';
+  const tag = p.id === s.base.pmParty ? 'pm' : REACT_TAGS.find((tg) => p.tags.includes(tg));
+  return tag ? t(`react.${tag}.${top.delta > 0 ? 'up' : 'down'}`) : '';
 }
 
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
@@ -116,6 +152,8 @@ export function formatOutcome(s: GameState, o: Outcome): OutcomeView {
     seq: o.seq, day: o.day, kind: o.kind, cause, sat, meters, seats: o.seats, left, joined, risks,
     big: left.length > 0 || joined.length > 0 || o.kind === 'elections' || o.kind === 'newGov',
     summary: `${cause} → ${parts.join('; ')}`,
+    quip: quipOf(o),
+    reaction: reactionOf(s, o),
   };
 }
 
@@ -148,6 +186,8 @@ export function observe(s: GameState, logTail = 12): Observation {
     termProgress: Math.min(1, s.pmDays / s.config.termDays),
     termReached: s.termReached,
     status: s.status,
+    lostReason: s.lostReason ?? null,
+    electionRisk: Math.round(loseChance(s) * 100) / 100,
     phase: s.phase,
     phaseLeftDays: Math.ceil(s.phaseLeftDays),
     seats: seatsOf(s),
@@ -202,8 +242,8 @@ function partyExtras(s: GameState, id: string) {
   const p = s.parties.find((x) => x.id === id)!;
   const drivers = satDrivers(s, p);
   const perMonth = Math.round(drivers.reduce((n, x) => n + x.perDay, 0) * 30 * 10) / 10;
-  const main = [...drivers].sort((a, b) => Math.abs(b.perDay) - Math.abs(a.perDay))
-    .find((x) => Math.sign(x.perDay) === Math.sign(perMonth)) ?? drivers[0];
+  const main = drivers.filter((x) => Math.abs(x.perDay) > 0.005).sort((a, b) => Math.abs(b.perDay) - Math.abs(a.perDay))
+    .find((x) => Math.sign(x.perDay) === Math.sign(perMonth));
   let lastChange: { delta: number; because: string; day: number } | null = null;
   for (let i = (s.outcomes?.length ?? 0) - 1; i >= 0; i--) {
     const o = s.outcomes[i];

@@ -76,26 +76,32 @@ function withOutcome<T>(s: GameState, kind: Outcome['kind'], cause: Outcome['cau
   try { return fn(); } finally { wrapDepth--; record(s, kind, cause, b); }
 }
 
-/** why a party's satisfaction drifts each day (sum = actual daily drift) */
-export function satDrivers(s: GameState, p: Party): { key: string; perDay: number }[] {
+/** why a party's satisfaction drifts each day (sum = actual daily drift; nothing thresholded) */
+export function satDrivers(
+  s: GameState, p: Party,
+  ctx: { coal: Party[]; counts: Record<string, number> } = { coal: coalition(s), counts: ministryCounts(s.ministries) },
+): { key: string; perDay: number }[] {
   const c = s.config;
   const out: { key: string; perDay: number }[] = [];
   if (s.phase !== 'governing') return out;
   if (p.inCoalition && p.id !== s.base.pmParty) {
-    const coal = coalition(s);
     const over = Math.max(0, Math.abs(s.govPosition - p.position) - p.tolerance);
-    if (over > 0) out.push({ key: s.govPosition > p.position ? 'drift.tooRight' : 'drift.tooLeft', perDay: -over * c.driftPenalty });
-    out.push({ key: 'drift.appetite', perDay: -c.appetitePerDay });
-    const fair = (ministryCounts(s.ministries)[p.id] ?? 0) - fairShare(p, s.parties, s.ministries.length);
-    if (Math.abs(fair) > 0.5) out.push({ key: fair > 0 ? 'drift.ministriesPlus' : 'drift.ministriesMinus', perDay: fair * c.ministryFairness });
-    const h = hateCount(p, coal);
-    if (h) out.push({ key: 'drift.hate', perDay: -h * c.hatePenalty });
+    out.push({ key: s.govPosition > p.position ? 'drift.tooRight' : 'drift.tooLeft', perDay: -over * c.driftPenalty });
+    out.push({ key: 'drift.appetite', perDay: -appetite(s) });
+    const fair = (ctx.counts[p.id] ?? 0) - fairShare(p, s.parties, s.ministries.length);
+    out.push({ key: fair > 0 ? 'drift.ministriesPlus' : 'drift.ministriesMinus', perDay: fair * c.ministryFairness });
+    out.push({ key: 'drift.hate', perDay: -hateCount(p, ctx.coal) * c.hatePenalty });
   }
   if (p.trust.state === 'believing') out.push({ key: 'drift.believe', perDay: c.believeDriftPerDay });
   if (p.trust.state === 'distrust') out.push({ key: 'drift.distrust', perDay: -c.distrustDriftPerDay });
   const reg = (c.satBaseline - p.satisfaction) * c.satRegression;
-  if (Math.abs(reg) > 0.005) out.push({ key: reg > 0 ? 'drift.recover' : 'drift.cool', perDay: reg });
+  out.push({ key: reg > 0 ? 'drift.recover' : 'drift.cool', perDay: reg });
   return out;
+}
+
+/** partners' daily appetite: grows with years in office (entropy) */
+export function appetite(s: GameState): number {
+  return s.config.appetitePerDay * (1 + s.config.appetiteGrowthPerYear * (s.pmDays / 365.25));
 }
 
 // ---------------------------------------------------------------- creation
@@ -154,6 +160,8 @@ export function createState(base: KnessetData, seed: number, config: Partial<Con
     log: [],
     outcomes: [],
     outcomeSeq: 0,
+    lostReason: null,
+    electionDays: [],
   };
   s.nextEventInDays = scheduleNext(s);
   log(s, 'log.start', { seats: seatsOf(s) }, 'info');
@@ -179,7 +187,23 @@ export function budgetDueYear(s: GameState): number {
 
 function scheduleNext(s: GameState): number {
   const c = s.config;
-  return c.eventIntervalDays + (rngOf(s).next() * 2 - 1) * c.eventJitterDays;
+  const rng = rngOf(s);
+  if (s.day > 0 && rng.next() < c.clusterChance) return 1 + rng.next() * c.clusterDays;
+  const base = c.eventIntervalDays / (1 + c.eventSpeedupPerYear * (s.pmDays / 365.25));
+  return base + (rng.next() * 2 - 1) * c.eventJitterDays * (base / c.eventIntervalDays);
+}
+
+function lose(s: GameState, reason: GameState['lostReason']) {
+  s.status = 'lost';
+  s.lostReason = reason;
+}
+
+/** chance the voters throw you out at this election */
+export function loseChance(s: GameState): number {
+  const c = s.config;
+  const recent = (s.electionDays ?? []).filter((d) => s.day - d <= c.electionFatigueDays).length - 1;
+  return clamp(c.loseBase + Math.max(0, c.approvalNeutral - s.approval) * c.losePerApprovalPoint
+    + s.openCases.length * c.losePerOpenCase + Math.max(0, recent) * c.losePerRecentElection, 0, c.loseMax);
 }
 
 export function crisisWeight(s: GameState, c: CrisisDef): number {
@@ -422,6 +446,7 @@ function callElections(s: GameState, reason: string) {
   s.phaseLeftDays = s.config.campaignDays;
   s.event = null;
   s.elections++;
+  (s.electionDays ??= []).push(s.day);
   const base = s.base.parties.find((p) => p.id === s.base.pmParty)!;
   s.campaignPollSeats = Math.round(base.seats + pmBonus(s));
   log(s, 'log.elections', { reason, n: s.elections, poll: s.campaignPollSeats }, 'bad');
@@ -432,7 +457,7 @@ function resolveElection(s: GameState) {
   const b = snap(s);
   wrapDepth++;
   try { resolveElectionInner(s); } finally { wrapDepth--; }
-  if (s.status === 'lost') record(s, 'newGov', { key: 'out.noGovLost' }, b);
+  if (s.status === 'lost') record(s, 'newGov', { key: s.lostReason === 'voters' ? 'out.votersLost' : 'out.noGovLost' }, b);
   else if (s.phase === 'governing') record(s, 'newGov', { key: 'out.newGov', params: { seats: seatsOf(s), pm: pmParty(s).seats } }, b);
   else record(s, 'elections', { key: 'out.elections.deadlock', params: { poll: s.campaignPollSeats } }, b);
 }
@@ -444,12 +469,19 @@ function resolveElectionInner(s: GameState) {
     pmBonus: pmBonus(s), pmId: s.base.pmParty,
   }, rngOf(s));
   for (const p of s.parties) { p.seats = seats[p.id] ?? 0; p.inCoalition = false; p.wartime = false; p.threatening = false; }
+  // the voters may simply be done with you (approval, cases, election fatigue)
+  if (rngOf(s).next() < loseChance(s)) {
+    log(s, 'log.results', { results: s.parties.filter((p) => p.seats > 0).map((p) => `${p.short} ${p.seats}`).join(', ') }, 'event');
+    log(s, 'log.votersLost', {}, 'bad');
+    lose(s, 'voters');
+    return;
+  }
   const ids = formGovernment(s.parties, s.base.pmParty, c.majority);
   log(s, 'log.results', { results: s.parties.filter((p) => p.seats > 0).map((p) => `${p.short} ${p.seats}`).join(', ') }, 'event');
   if (!ids) {
     s.failedElections++;
     if (s.failedElections >= c.maxFailedElections) {
-      s.status = 'lost';
+      lose(s, 'deadlock');
       log(s, 'log.lost', {}, 'bad');
       return;
     }
@@ -536,8 +568,8 @@ export function eventOptions(s: GameState): { id: string; dir: OptionDir; availa
 function resolveEvent(s: GameState, optionId: string, timedOut = false) {
   const ev = s.event!;
   const cause: Outcome['cause'] = optionId === 'ignore'
-    ? { key: timedOut ? 'out.timedOutIgnore' : 'out.ignored', params: { crisis: ev.id, party: ev.subject ?? '' } }
-    : { key: timedOut ? 'out.timedOut' : 'out.chose', params: { crisis: ev.id, remedy: optionId, party: ev.subject ?? '' } };
+    ? { key: timedOut ? 'out.timedOutIgnore' : 'out.ignored', params: { crisis: ev.id, party: ev.subject ?? '', quip: Math.floor(rngOf(s).next() * 3) } }
+    : { key: timedOut ? 'out.timedOut' : 'out.chose', params: { crisis: ev.id, remedy: optionId, party: ev.subject ?? '', quip: Math.floor(rngOf(s).next() * 3) } };
   withOutcome(s, timedOut ? 'timeout' : 'choice', cause, () => resolveEventInner(s, optionId));
 }
 
@@ -578,6 +610,13 @@ function tickDay(s: GameState, dt: number) {
   const c = s.config;
   // meters (both phases)
   if (s.day >= s.trialPausedUntil) s.trial = clamp(s.trial + c.trialGrowthPerDay * dt, 0, 100);
+  if (c.indictAt > 0 && s.trial >= c.indictAt) {
+    const b = snap(s);
+    log(s, 'log.indicted', {}, 'bad');
+    lose(s, 'indicted');
+    record(s, 'newGov', { key: 'out.indicted' }, b);
+    return;
+  }
   if (!s.war.active) s.street += (60 - s.street) * c.meterRegression * dt;
   s.us += (55 - s.us) * c.meterRegression * dt;
   s.fiscal += (50 - s.fiscal) * c.meterRegression * dt;
@@ -619,8 +658,9 @@ function tickDay(s: GameState, dt: number) {
 
   // party satisfaction
   const coal = coalition(s);
+  const ctx = { coal, counts: ministryCounts(s.ministries) };
   for (const p of s.parties) {
-    const d = satDrivers(s, p).reduce((n, x) => n + x.perDay, 0);
+    const d = satDrivers(s, p, ctx).reduce((n, x) => n + x.perDay, 0);
     p.satisfaction = clamp(p.satisfaction + d * dt, 0, 100);
   }
 
@@ -661,7 +701,11 @@ function tickDay(s: GameState, dt: number) {
     if (s.nextEventInDays <= 0) {
       const rng = rngOf(s);
       const c2 = pickWeighted(rng, CRISES.map((x) => ({ item: x, weight: crisisWeight(s, x) })));
-      if (c2) fireCrisis(s, c2);
+      if (c2?.goodNews) {
+        withOutcome(s, 'news', { key: 'out.goodNews', params: { crisis: c2.id } }, () => { if (c2.onFire) applyEffect(s, c2.onFire, null); });
+        log(s, 'log.goodNews', { crisis: c2.id }, 'good');
+        s.nextEventInDays = scheduleNext(s);
+      } else if (c2) fireCrisis(s, c2);
       else s.nextEventInDays = scheduleNext(s);
     }
   }
