@@ -367,8 +367,7 @@ function newsHtml(o: Observation, enter: string): string {
       <button data-act="open" data-sec="ministries" ${o.cooldowns.ministry ? 'disabled' : ''}>🏛 ${t('ui.qMinistry')}</button>
       <button data-act="open" data-sec="laws" ${o.cooldowns.law ? 'disabled' : ''}>📜 ${t('ui.qLaw')}</button>
       <button data-act="war" class="warq" ${warOk ? '' : 'disabled'}>⚔ ${t('ui.war')}</button>
-      <button data-act="open" data-sec="moves">🎲 ${t('ui.movesPanel')}</button>
-    </div>` : `<div class="quick"><button data-act="open" data-sec="moves">🎲 ${t('ui.movesPanel')}</button></div>`}
+    </div>` : ''}
   </div>`;
 }
 
@@ -433,7 +432,9 @@ function floatOn(el: HTMLElement | null, d: number, inverse = false) {
   const f = document.createElement('span');
   f.className = `floater ${(inverse ? d < 0 : d > 0) ? 'up' : 'down'}`;
   f.textContent = ltr(d > 0 ? `+${d}` : `${d}`);
+  el.parentElement?.querySelectorAll(':scope > .floater').forEach((x) => x.remove());
   el.parentElement?.appendChild(f);
+  f.addEventListener('animationend', () => f.remove(), { once: true });
   window.setTimeout(() => f.remove(), 1400);
 }
 

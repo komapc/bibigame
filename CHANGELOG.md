@@ -90,3 +90,17 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - Fixes: "hand out a ministry" on own-party cards does something; what a card does on arrival is shown on the card, not blamed on drift; the rogue backbencher counts real seats; the ICC warrant blocks the DC trip; the campaign risk counts tricks already applied; text-mode `wait` no longer auto-refuses an open card (`wait!` does).
 - Two mild bad-news cards during the summer recess.
 - Balance round 7.
+- ru/he follow-up: playtest keys; the rogue backbencher's seat count is plural-aware.
+
+## #20 Simpler UI
+- Intro screen on the first visit (five lines, big Start, EN/RU/HE switch, slim consent bar); the ? button reopens it.
+- One layer at a time (intro / sheet / game over) plus one queued toast.
+- The result popup becomes a single result line above the card.
+- Advisor popup → inline tip under the card; tutorial hints dropped (the intro covers them).
+- Friday edition popup → filed in the Log tab with a small toast.
+- Bottom bar: Moves / Parties / Log tabs of one sheet; the timeline opens the Log tab.
+
+## #21 UI follow-up
+- The Daily Coalition screen drops its Moves button (the bottom bar already has it).
+- The floating approval delta rises inside its own box and is cleared on animation end; it no longer lingers over the mute button.
+- README describes the new UI.

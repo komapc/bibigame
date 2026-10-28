@@ -217,7 +217,8 @@ body[data-layer=over] .toast { bottom: 16px; }
 /* ---------- result line: fixed slot between the top bar and the card */
 .resultline { min-height: 48px; padding: 6px 10px; border-radius: 12px; background: #13202f; border: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; gap: 1px; }
 .resultline:empty { display: none; }
-.appr .floater { top: 0; inset-inline-end: 4.2em; font-size: 18px; }
+/* the approval floater rises inside its own box (clipped), never up into the header buttons */
+.appr .floater { top: auto; bottom: 4px; inset-inline-end: auto; inset-inline-start: 45%; font-size: 18px; }
 .tabpane .panel, #parties { scroll-margin-top: 64px; }
 .resultline .cause { color: var(--mute); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .resultline .fxline { font-size: 16px; font-weight: 600; line-height: 1.3; }
@@ -230,7 +231,7 @@ body[data-layer=over] .toast { bottom: 16px; }
 @keyframes rpop { from { transform: scale(.97); background: #24405f; } to { transform: none; } }
 .advline { margin: 0; min-height: 1em; font-size: 13px; color: var(--mute); text-align: center; }
 .advline:empty { display: none; }
-.appr { position: relative; }
+.appr { position: relative; overflow: hidden; }
 /* RTL: lines may fall back to English until translated — let each pick its own direction */
 .introlines li > span:last-child, .satire, .resultline .cause, .advline, .toast, .paper h4 { unicode-bidi: plaintext; }
 [dir=rtl] .hero { justify-content: flex-end; }
