@@ -1,15 +1,21 @@
-// Text-mode CLI: `npm run text -- --seed 42 [--log run.jsonl] [--realtime]`
+// Text-mode CLI: `npm run text -- --seed 42 [--log run.jsonl] [--realtime] [--lang en|ru|he]`
 // Reads one command per line from stdin, prints the state after each.
 import { createInterface } from 'node:readline';
 import { appendFileSync } from 'node:fs';
 import { createGame } from '../api/game.ts';
 import { HELP, renderText, runText } from '../api/text.ts';
+import { isLang, loadLocale, setLocale } from '../i18n/index.ts';
 
 const args = process.argv.slice(2);
 const arg = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
 const seed = Number(arg('--seed') ?? Math.floor(Math.random() * 1e9));
 const logFile = arg('--log');
 const realtime = args.includes('--realtime');
+const lang = arg('--lang');
+if (lang && lang !== 'en') {
+  if (isLang(lang) && (await loadLocale(lang))) setLocale(lang);
+  else console.error(`unknown or missing locale "${lang}", using English`);
+}
 
 const game = createGame({ seed });
 console.log(`bibigame text mode — seed ${seed}${realtime ? ' (realtime)' : ' (turn-based: time moves only on "wait")'}`);

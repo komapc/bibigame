@@ -3,9 +3,28 @@ import './style.css';
 import { createGame, promisesFor, type Game, type Observation, type OutcomeView } from '../api/game.ts';
 import type { Action } from '../engine/types.ts';
 import { titleBoard } from '../api/text.ts';
-import { t } from '../i18n/index.ts';
+import { LANGS, getLocale, isLang, isRtl, loadLocale, setLocale, t, type Lang } from '../i18n/index.ts';
 import { hemicycleSvg } from './hemicycle.ts';
 import { initSwipe } from './swipe.ts';
+
+// ---- language: saved choice → browser language → English
+const LANG_KEY = 'bibigame.lang';
+function savedLang(): string | null { try { return localStorage.getItem(LANG_KEY); } catch { return null; } }
+function detectLang(): Lang {
+  const q = new URLSearchParams(location.search).get('lang');
+  if (isLang(q)) return q;
+  const s = savedLang();
+  if (isLang(s)) return s;
+  const nav = (navigator.languages?.[0] ?? navigator.language ?? 'en').toLowerCase();
+  return nav.startsWith('he') || nav.startsWith('iw') ? 'he' : nav.startsWith('ru') ? 'ru' : 'en';
+}
+{
+  const want = detectLang();
+  if (want !== 'en' && (await loadLocale(want))) setLocale(want);
+  document.documentElement.lang = getLocale();
+  document.documentElement.dir = isRtl() ? 'rtl' : 'ltr';
+  document.title = t('ui.docTitle');
+}
 
 const app = document.getElementById('app')!;
 let game: Game = createGame({ seed: Math.floor(Math.random() * 1e9) });
@@ -23,6 +42,7 @@ app.innerHTML = `
 <header class="top">
   <div class="row1">
     <div class="who"><b>${t('ui.player')}</b> <span id="title" class="badge"></span></div>
+    <div class="langs" role="group" aria-label="Language">${LANGS.map((l) => `<button data-lang="${l.code}" aria-pressed="${l.code === getLocale()}" lang="${l.code}">${l.label}</button>`).join('')}</div>
     <div id="date" class="date"></div>
     <button id="pause" class="icon" aria-label="${t('ui.pause')}">⏸</button>
   </div>
@@ -159,15 +179,15 @@ function renderTimeline(o: Observation) {
   const x = (d: number) => `${Math.max(0, Math.min(100, (d / end) * 100)).toFixed(2)}%`;
   const key = [Math.floor(end / 30), tl.past.length, tl.upcoming.map((m) => m.kind + m.day).join(), tl.trust.map((r) => r.party + r.believeUntil).join()].join('|');
   region('tltrack', key, () => {
-    const past = tl.past.map((m) => `<span class="tl-m past ${m.kind}" style="left:${x(m.day)}" title="${esc(m.date + ' ' + m.label)}">${ICON[m.kind] ?? ''}</span>`).join('');
-    const up = tl.upcoming.filter((m) => m.day <= end).map((m) => `<span class="tl-m up ${m.kind}" style="left:${x(m.day)}" title="${esc(m.date + ' ' + m.label)}">${ICON[m.kind] ?? '•'}</span>`).join('');
-    const trust = tl.trust.map((r, i) => `<span class="tl-trust believe" style="left:${x(r.from)};width:calc(${x(r.believeUntil)} - ${x(r.from)});background:${r.color};top:${12 + (i % 3) * 2}px"></span><span class="tl-trust distrust" style="left:${x(r.believeUntil)};width:calc(${x(r.distrustUntil)} - ${x(r.believeUntil)});top:${12 + (i % 3) * 2}px"></span>`).join('');
+    const past = tl.past.map((m) => `<span class="tl-m past ${m.kind}" style="inset-inline-start:${x(m.day)}" title="${esc(m.date + ' ' + m.label)}">${ICON[m.kind] ?? ''}</span>`).join('');
+    const up = tl.upcoming.filter((m) => m.day <= end).map((m) => `<span class="tl-m up ${m.kind}" style="inset-inline-start:${x(m.day)}" title="${esc(m.date + ' ' + m.label)}">${ICON[m.kind] ?? '•'}</span>`).join('');
+    const trust = tl.trust.map((r, i) => `<span class="tl-trust believe" style="inset-inline-start:${x(r.from)};width:calc(${x(r.believeUntil)} - ${x(r.from)});background:${r.color};top:${12 + (i % 3) * 2}px"></span><span class="tl-trust distrust" style="inset-inline-start:${x(r.believeUntil)};width:calc(${x(r.distrustUntil)} - ${x(r.believeUntil)});top:${12 + (i % 3) * 2}px"></span>`).join('');
     return `<div class="tl-line"><div class="tl-fill" id="tlfill"></div></div>${trust}${past}${up}<span class="tl-now" id="tlnow"></span>`;
   });
   const fill = document.getElementById('tlfill');
   if (fill) fill.style.width = x(tl.nowDay);
   const now = document.getElementById('tlnow');
-  if (now) now.style.left = x(tl.nowDay);
+  if (now) now.style.insetInlineStart = x(tl.nowDay);
   const next = tl.upcoming.find((m) => m.kind !== 'goal');
   const parts = [`${(o.pmDays / 365.25).toFixed(1)}/4y`];
   if (next) parts.push(`${next.label} ${next.day - tl.nowDay}d`);
@@ -237,12 +257,13 @@ function renderStage(o: Observation) {
     const ign = ev.options.find((x) => x.dir === 'ignore');
     const ignFx = ign ? ign.preview.filter((p) => !p.up).map((p) => p.label).slice(0, 3).join(', ') : '';
     const tutorial = o.outcomeSeq === 0 ? `<p class="tutorial">${t('ui.tutorial')}</p>` : '';
-    return `${tutorial}<div id="card" class="swipecard ${enter} ${urgent ? 'urgent' : ''}" tabindex="0" aria-label="${esc(ev.title)}">
+    return `<div id="card" class="swipecard ${enter} ${urgent ? 'urgent' : ''}" tabindex="0" aria-label="${esc(ev.title)}">
       ${hint('up')}
       <div class="cbody">
         <svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16" class="ring-bg"/><circle id="ring" cx="20" cy="20" r="16" class="ring-fg"/></svg>
         <h2>${esc(ev.title)}${ev.subject ? ` <small>· ${esc(partyName(o, ev.subject))}</small>` : ''}</h2>
         <p>${esc(ev.text)}</p>
+        ${tutorial}
         <div id="swipelabel" class="swipelabel" hidden></div>
       </div>
       <div class="lr">${hint('left')}${hint('right')}</div>
@@ -326,9 +347,10 @@ function pumpOutcomes(o: Observation) {
 function showFlash(r: OutcomeView) {
   const el = $('result');
   const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
-  const chip = (label: string, d: number, extra = '') => `<span class="fxchip ${d > 0 ? 'up' : 'down'} ${extra}">${esc(label)} <b>${sign(d)}</b> ${d > 0 ? '😊' : '😠'}</span>`;
+  /** good = colour/emoji direction; shown = the number printed (trial: up is bad) */
+  const chip = (label: string, good: number, extra = '', shown = good) => `<span class="fxchip ${good > 0 ? 'up' : 'down'} ${extra}">${esc(label)} <b><bdi dir="ltr">${sign(shown)}</bdi></b> ${good > 0 ? '😊' : '😠'}</span>`;
   const sat = r.sat.slice(0, 7).map((x) => chip(x.name, x.delta, x.inCoalition ? '' : 'opp')).join('');
-  const meters = r.meters.map((x) => chip(x.label, x.meter === 'trial' ? -x.delta : x.delta).replace(`<b>${sign(x.meter === 'trial' ? -x.delta : x.delta)}</b>`, `<b>${sign(x.delta)}</b>`)).join('');
+  const meters = r.meters.map((x) => chip(x.label, x.meter === 'trial' ? -x.delta : x.delta, '', x.delta)).join('');
   const seats = r.seats.from !== r.seats.to ? `<p class="seats ${r.seats.to < r.seats.from ? 'bad' : 'good'}">${esc(t('out.seats', r.seats))}</p>` : '';
   const lj = [r.left.length ? t('out.leftList', { parties: r.left.join(', ') }) : '', r.joined.length ? t('out.joinedList', { parties: r.joined.join(', ') }) : ''].filter(Boolean).map((x) => `<p class="lj">${esc(x)}</p>`).join('');
   const risks = r.risks.length ? `<p class="risk">⚠ ${t('out.risk')}: ${esc(r.risks.join(' · '))}</p>` : '';
@@ -540,6 +562,11 @@ app.addEventListener('click', (e) => {
   if (d.dir === 'ignore') choose('ignore');
   else if (d.dir) { if (!swipe.consumedClick()) swipe.flyThenChoose(d.dir); }
   else if (d.act === 'open' && d.sec) openSection(d.sec);
+  else if (d.lang) {
+    const u = new URL(location.href);
+    try { localStorage.setItem(LANG_KEY, d.lang); u.searchParams.delete('lang'); } catch { u.searchParams.set('lang', d.lang); }
+    location.href = u.toString();
+  }
   else if (d.act === 'war') doAct({ type: 'startWar' });
   else if (d.act === 'restart') restart();
   else if (d.act === 'drawer') $('drawer').classList.toggle('open');

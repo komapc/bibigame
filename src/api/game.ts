@@ -8,7 +8,13 @@ import {
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
 import { PROMISES } from '../data/promises.ts';
 import { TITLES } from '../data/titles.ts';
-import { formatLog, t } from '../i18n/index.ts';
+import { formatLog, partyLabel, t } from '../i18n/index.ts';
+
+/** translated party display name */
+export function pname(s: GameState, id: string): string {
+  const p = s.parties.find((x) => x.id === id);
+  return p ? partyLabel(p.id, p.name) : id;
+}
 import { matchesTag } from '../engine/coalition.ts';
 
 export const DEFAULT_KNESSET = knesset as KnessetData;
@@ -133,7 +139,7 @@ function reactionOf(s: GameState, o: Outcome): string {
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 
 export function formatOutcome(s: GameState, o: Outcome): OutcomeView {
-  const nameOf = (id: string) => s.parties.find((p) => p.id === id)?.name ?? id;
+  const nameOf = (id: string) => pname(s, id);
   const cause = formatLog({ t: o.day, key: o.cause.key, params: o.cause.params }, nameOf);
   const sat = o.sat.map((x) => ({ ...x, name: nameOf(x.party) }));
   const meters = o.meters.map((x) => ({ ...x, label: t(`fx.${x.meter}`) }));
@@ -159,7 +165,7 @@ export function formatOutcome(s: GameState, o: Outcome): OutcomeView {
 
 /** short "because" text for a party's satisfaction change in an outcome */
 function becauseOf(s: GameState, o: Outcome): string {
-  const nameOf = (id: string) => s.parties.find((p) => p.id === id)?.name ?? id;
+  const nameOf = (id: string) => pname(s, id);
   return formatLog({ t: o.day, key: o.cause.key, params: o.cause.params }, nameOf);
 }
 
@@ -177,7 +183,7 @@ export interface Timeline {
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
 export function observe(s: GameState, logTail = 12): Observation {
-  const nameOf = (id: string) => s.parties.find((p) => p.id === id)?.name ?? id;
+  const nameOf = (id: string) => pname(s, id);
   return {
     day: Math.floor(s.day),
     date: dateOf(s).toISOString().slice(0, 10),
@@ -198,7 +204,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     openCases: s.openCases.length,
     budget: { dueYear: budgetDueYear(s), passed: s.budgetPassedYear >= budgetDueYear(s) },
     parties: s.parties.map((p) => ({
-      id: p.id, name: p.name, short: p.short, color: p.color, seats: p.seats, position: p.position,
+      id: p.id, name: partyLabel(p.id, p.name), short: partyLabel(`${p.id}.short`, p.short), color: p.color, seats: p.seats, position: p.position,
       tolerance: p.tolerance, satisfaction: r1(p.satisfaction), inCoalition: p.inCoalition, wartime: p.wartime,
       threatening: p.threatening, willSitWithBibi: p.willSitWithBibi, tags: p.tags,
       ministries: s.ministries.filter((m) => m.holder === p.id).map((m) => m.id),
@@ -261,9 +267,9 @@ function partyExtras(s: GameState, id: string) {
 }
 
 const tagLabel = (s: GameState, target: string, subject: string | null): string => {
-  if (target === 'subject') return s.parties.find((p) => p.id === subject)?.name ?? t('tag.coalition');
+  if (target === 'subject') return subject ? pname(s, subject) : t('tag.coalition');
   const p = s.parties.find((x) => x.id === target);
-  if (p) return p.name;
+  if (p) return pname(s, p.id);
   return t(`tag.${target}`);
 };
 
@@ -305,7 +311,7 @@ function dateStr(s: GameState, day: number) {
 
 export function timeline(s: GameState): Timeline {
   const mark = (day: number, kind: string, label: string): TimelineMark => ({ day: Math.floor(day), date: dateStr(s, day), kind, label });
-  const nameOf = (id: string) => s.parties.find((p) => p.id === id)?.name ?? id;
+  const nameOf = (id: string) => pname(s, id);
   const past: TimelineMark[] = [];
   for (const e of s.log) {
     if (e.key === 'log.crisis') past.push(mark(e.t, 'crisis', t(`crisis.${e.params?.crisis}.title`)));

@@ -1,5 +1,5 @@
 // Balance harness: plays many seeded games per strategy and prints a markdown table.
-//   npm run balance -- [--games 40] [--years 20] [--only greedy,random]
+//   npm run balance -- [--games 40] [--years 20] [--only greedy,random] [--set key=value,...]
 import { STRATEGIES } from '../src/bots/strategies.ts';
 import { playGame, type RunResult } from '../src/bots/runner.ts';
 import { TITLES } from '../src/data/titles.ts';
@@ -10,6 +10,11 @@ const arg = (n: string, d: string) => { const i = args.indexOf(n); return i >= 0
 const games = Number(arg('--games', '40'));
 const years = Number(arg('--years', '20'));
 const only = arg('--only', '').split(',').filter(Boolean);
+// --set key=value,key=value overrides config values (for tuning experiments)
+const config = Object.fromEntries(arg('--set', '').split(',').filter(Boolean).map((kv) => {
+  const [k, v] = kv.split('=');
+  return [k, v === 'true' ? true : v === 'false' ? false : Number(v)];
+}));
 
 const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0; };
 const pct = (n: number, d: number) => `${Math.round((100 * n) / d)}%`;
@@ -24,7 +29,7 @@ const started = Date.now();
 for (const name of Object.keys(STRATEGIES)) {
   if (only.length && !only.includes(name)) continue;
   const res: RunResult[] = [];
-  for (let seed = 1; seed <= games; seed++) res.push(playGame(STRATEGIES[name](seed), seed, { maxYears: years }));
+  for (let seed = 1; seed <= games; seed++) res.push(playGame(STRATEGIES[name](seed), seed, { maxYears: years, config }));
   const yrs = res.map((r) => r.pmDays / 365.25).sort((a, b) => a - b);
   const won = res.filter((r) => r.termReached).length;
   const lost = res.filter((r) => r.status === 'lost').length;
