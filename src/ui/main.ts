@@ -66,7 +66,7 @@ app.innerHTML = `
   <div id="history" class="history" hidden></div>
   <div class="support">
     <div class="bigseats" id="bigseats" aria-live="polite"><b id="seatnum">0</b><span class="of">/ 61</span><span id="margin" class="margin"></span><span id="seattrend" class="trend"></span></div>
-    <div class="appr"><span>${t('ui.approval')}</span><b id="apprnum">0%</b><div class="mbar"><div id="apprbar"></div></div></div>
+    <div class="appr"><span>${t('ui.approval')}</span><b id="apprnum">0%</b><small id="apprtgt" class="trend"></small><div class="mbar"><div id="apprbar"></div></div></div>
   </div>
   <div id="danger" class="dangerm" hidden></div>
   <div class="seatbar" id="seatbar"></div>
@@ -171,6 +171,12 @@ function renderSupport(o: Observation, coal: Observation['parties']) {
   const bar = $('apprbar');
   bar.style.width = pct(o.meters.approval);
   bar.className = o.meters.approval < 35 ? 'low' : '';
+  // where it is drifting: an arrow when the target is clearly elsewhere, red under the panic line
+  const tgt = Math.round(o.approvalTarget);
+  const arrow = tgt < a - 2 ? '↘' : tgt > a + 2 ? '↗' : '';
+  $('apprtgt').textContent = arrow ? `${arrow}${tgt}%` : '';
+  $('apprtgt').className = `trend ${o.approvalTarget < o.panicBelow ? 'bad' : ''}`;
+  $('apprtgt').title = t('ui.approvalTarget', { n: tgt, panic: o.panicBelow });
   // one extra meter, only when it's in danger
   const m = o.meters;
   const dangers: [string, number, boolean][] = [
@@ -258,6 +264,17 @@ function renderHud(o: Observation) {
 }
 
 // ------------------------------------------------------------------ crisis card
+/** what the crisis already did when it arrived (onFire): small chips under the card text */
+function arrivalHtml(a: OutcomeView | null): string {
+  if (!a) return '';
+  const chips = [
+    ...a.sat.slice(0, 4).map((x) => ({ label: x.name, good: x.delta, shown: x.delta })),
+    ...a.meters.map((x) => ({ label: x.label, good: x.meter === 'trial' ? -x.delta : x.delta, shown: x.delta })),
+  ];
+  if (!chips.length) return '';
+  return `<p class="arrival"><small>${t('ui.arrival')}:</small> ${chips.map((c) => `<span class="${c.good > 0 ? 'up' : 'down'}">${esc(c.label)} <bdi dir="ltr">${c.shown > 0 ? '+' : ''}${c.shown}</bdi></span>`).join(' ')}</p>`;
+}
+
 function renderStage(o: Observation) {
   const ev = o.event;
   const key = ev ? `${ev.id}|${game.state.event?.firedAt}|${ev.options.map((x) => x.available).join()}` : `none|${newsKey(o)}`;
@@ -288,6 +305,7 @@ function renderStage(o: Observation) {
         <svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16" class="ring-bg"/><circle id="ring" cx="20" cy="20" r="16" class="ring-fg"/></svg>
         <h2>${esc(ev.title)}${ev.subject ? ` <small>· ${esc(partyName(o, ev.subject))}</small>` : ''}</h2>
         <p>${esc(ev.text)}</p>
+        ${arrivalHtml(ev.arrival)}
         ${tutorial}
         <div id="swipelabel" class="swipelabel" hidden></div>
       </div>
@@ -361,7 +379,7 @@ const flashing = () => flashUntil > 0;
 
 function pumpOutcomes(o: Observation) {
   if (o.outcomeSeq > seenSeq) {
-    for (const r of o.outcomes) if (r.seq > seenSeq) flashQueue.push(r);
+    for (const r of o.outcomes) if (r.seq > seenSeq && r.kind !== 'arrival') flashQueue.push(r); // arrivals show on the card
     seenSeq = o.outcomeSeq;
   }
   const now = performance.now();

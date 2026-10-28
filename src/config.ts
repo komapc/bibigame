@@ -108,6 +108,8 @@ export interface Config {
   kaplanStreetMaxMult: number;
   /** the same card never fires twice within this many days */
   crisisCooldownDays: number;
+  /** each earlier firing of the same card this game multiplies its weight by this */
+  crisisRepeatDecay: number;
   goodNewsCooldownDays: number;
   /** ceasefire/deal cards: during a war or this many days after it */
   recentWarDays: number;
@@ -153,6 +155,8 @@ export interface Config {
 
   // --- ministries / invites ---
   ministryGain: number;
+  /** "hand out a ministry" when the subject is your own party: a deputy post, this much mood */
+  pmPostBoost: number;
   ministryLoss: number;
   inviteBaseChance: number;
 
@@ -270,9 +274,10 @@ export const DEFAULT_CONFIG: Config = {
   trumpUsPull: 4,
   kaplanStreetMaxMult: 2,
   crisisCooldownDays: 60,
+  crisisRepeatDecay: 0.75,
   goodNewsCooldownDays: 365,
   recentWarDays: 90,
-  remedyFatigue: 0.6,
+  remedyFatigue: 1.0,
   remedyFatigueDays: 365,
   fundsMinFiscal: 15,
   leaveChancePerDay: 0.02,
@@ -280,7 +285,7 @@ export const DEFAULT_CONFIG: Config = {
   threatenResetAbove: 35,
 
   approvalRegression: 0.01,
-  fatiguePerYear: 1.5,
+  fatiguePerYear: 1.0,
   trialGrowthPerDay: 0.03,
   meterRegression: 0.002,
   approvalSeatFactor: 0.35,
@@ -303,6 +308,7 @@ export const DEFAULT_CONFIG: Config = {
   distrustDriftPerDay: 0.06,
 
   ministryGain: 12,
+  pmPostBoost: 8,
   ministryLoss: 15,
   inviteBaseChance: 0.25,
 

@@ -8,7 +8,7 @@ import { type Game, type Observation, formatOutcome, promisesFor } from './game.
 
 export type Command =
   | { kind: 'action'; action: Action }
-  | { kind: 'wait'; days: number; untilEvent: boolean }
+  | { kind: 'wait'; days: number; untilEvent: boolean; force?: boolean }
   | { kind: 'help' }
   | { kind: 'look' }
   | { kind: 'error'; message: string };
@@ -25,7 +25,8 @@ export const HELP = `Commands (one per line):
   law <law>                    pass a law (see LAWS)
   war                          start a war (emergency button)
   move <id>                    a drawer move (see MOVES; also campaign tricks and opposition moves)
-  wait [N|Nd|Nm]               let time pass; stops early when a crisis fires (default: until next crisis, max 30d)
+  wait [N|Nd|Nm]               let time pass; stops early when a crisis fires (default: until next crisis, max 30d).
+                               Refuses while a card is open: wait! [N] lets the card time out
   look                         print the state again
   help                         this text
 Parties can be named by id, short code, name or leader alias.`;
@@ -43,12 +44,12 @@ export function renderText(o: Observation): string {
   if ((o.status === 'lost' || o.status === 'retired') && o.lostReason) L.push(`GAME OVER: ${t(`over.${o.lostReason}.title`)} — ${t(`over.${o.lostReason}.text`)}`);
   L.push(`=== ${o.date} | day ${o.day} | PM for ${years}y (${Math.round(o.termProgress * 100)}% of 4y term${o.termReached ? ', TERM REACHED' : ''}) | ${o.status.toUpperCase()} ===`);
   if (o.opposition) L.push(`IN OPPOSITION: rival government stability ${o.opposition.stability}% (falls at 0; elections in ${o.opposition.daysLeft}d at the latest). Lose the next election and it is over.`);
-  if (o.phase === 'campaign') L.push(`ELECTION CAMPAIGN: ${o.phaseLeftDays}d to election day (election #${o.elections}); chance the voters throw you out: ${Math.round(o.electionRisk * 100)}%`);
+  if (o.phase === 'campaign') L.push(`ELECTION CAMPAIGN: ${o.phaseLeftDays}d to election day (election #${o.elections}); chance the voters throw you out: ${Math.round(o.electionRisk * 100)}%${o.campaignTricks.length ? ` (tricks applied: ${o.campaignTricks.join(', ')}; already counted)` : ''}`);
   L.push(`Coalition: ${o.seats}/120 (need ${o.majority})${o.defectors ? `, ${o.defectors} rogue MKs` : ''} | gov position ${o.govPosition} (-10 left .. +10 right)`);
   const m = o.meters;
   if (o.recess) L.push('RECESS: Knesset summer recess (no regular crises; wildcards still possible)');
   if (o.startConditions.length && o.day < 60) L.push(`Start: ${o.startConditions.map((x) => x.label).join('; ')}`);
-  L.push(`Approval ${m.approval} | street calm ${m.street} | US ${m.us} (Trump ${o.trump.face} ${o.trump.mood}) | budget health ${m.fiscal} | trial ${m.trial} | open cases ${o.openCases}`);
+  L.push(`Approval ${m.approval} (drifting toward ${Math.round(o.approvalTarget)}${o.approvalTarget < o.panicBelow ? `; partners panic below ${o.panicBelow}` : ''}) | street calm ${m.street} | US ${m.us} (Trump ${o.trump.face} ${o.trump.mood}) | budget health ${m.fiscal} | trial ${m.trial} | open cases ${o.openCases}`);
   L.push(`Budget ${o.budget.dueYear}: ${o.budget.passed ? 'passed' : 'NOT passed (due 31 March)'}`);
   L.push(`War: ${o.war.active ? `ACTIVE ${o.war.daysLeft}d left` : o.war.cooldownDays ? `cooldown ${o.war.cooldownDays}d` : 'ready'} | cooldowns: ministry ${o.cooldowns.ministry}d, law ${o.cooldowns.law}d, invite ${o.cooldowns.invite}d`);
   L.push('PARTIES (id seats pos sat trust ministries trend):');
@@ -145,13 +146,14 @@ export function parseCommand(g: Game, line: string): Command {
       if (!g.state.ministries.some((x) => x.id === mid)) return { kind: 'error', message: `Ministries: ${g.state.ministries.map((x) => x.id).join(', ')}` };
       return { kind: 'action', action: { type: 'giveMinistry', ministryId: mid, partyId: to } };
     }
-    case 'wait': {
+    case 'wait': case 'wait!': {
+      const force = c === 'wait!' || undefined;
       const a = rest[0]?.toLowerCase();
-      if (!a) return { kind: 'wait', days: 30, untilEvent: true };
+      if (!a) return { kind: 'wait', days: 30, untilEvent: true, force };
       const mm = /^(\d+)([dm]?)$/.exec(a);
       if (!mm) return { kind: 'error', message: 'wait [N|Nd|Nm]' };
       const days = Number(mm[1]) * (mm[2] === 'm' ? 30 : 1);
-      return { kind: 'wait', days: Math.min(days, 365), untilEvent: true };
+      return { kind: 'wait', days: Math.min(days, 365), untilEvent: true, force };
     }
   }
   return { kind: 'error', message: `Unknown command: ${cmd}. Type help.` };
@@ -175,6 +177,12 @@ export function runText(g: Game, line: string): { reply: string; ok: boolean } {
       break;
     }
     case 'wait': {
+      if (g.state.event && !cmd.force) {
+        // a blind wait used to let the card time out (ignore / refuse) without noticing
+        head = `NOT WAITING: a card is open (${g.state.event.id}). Answer it, \`ignore\` it, or \`wait! [N]\` to let it time out (${g.state.event.id === 'angry' ? 'refuse' : 'ignore'}).`;
+        ok = false;
+        break;
+      }
       const start = g.state.day;
       const hadEvent = !!g.state.event;
       while (!g.over && g.state.day - start < cmd.days) {
@@ -198,8 +206,11 @@ export function runText(g: Game, line: string): { reply: string; ok: boolean } {
   }
   if (cmd.kind === 'wait') {
     // passive drift: what time alone did, with the main reason
+    // passive only: changes already shown as RESULTs (a crisis arriving, a walkout, news) are not drift
+    const shown: Record<string, number> = {};
+    for (const x of (g.state.outcomes ?? []).filter((y) => y.seq > seq0)) for (const d of x.sat) shown[d.party] = (shown[d.party] ?? 0) + d.delta;
     const drift = o.parties.filter((p) => p.inCoalition && p.seats > 0)
-      .map((p) => ({ p, d: Math.round(p.satisfaction - sat0[p.id]) })).filter((x) => x.d !== 0);
+      .map((p) => ({ p, d: Math.round(p.satisfaction - sat0[p.id] - (shown[p.id] ?? 0)) })).filter((x) => x.d !== 0);
     if (drift.length) lines.push(`DRIFT: ${drift.map(({ p, d }) => `${p.id} ${d > 0 ? '+' : ''}${d} (${p.trend.reason})`).join('; ')}`);
   }
   const adv = advice(g.state)[0];

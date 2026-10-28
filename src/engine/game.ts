@@ -306,12 +306,16 @@ export function crisisWeight(s: GameState, c: CrisisDef): number {
   const c0 = s.config;
   // summer recess: the Knesset is at the beach; only wildcards (no-card news) still happen
   if (!c.goodNews && s.recess) return 0;
+  if (req?.recess && !s.recess) return 0;
+  if (req?.subjectMoodBelow !== undefined && c.subjectTag
+    && !coalition(s).some((p) => matchesTag(p, c.subjectTag!) && p.satisfaction < req.subjectMoodBelow!)) return 0;
   // no card twice within crisisCooldownDays (good news: within a year)
   const last = s.lastFired[c.id];
   if (last !== undefined && s.day - last < (c.goodNews ? c0.goodNewsCooldownDays : c0.crisisCooldownDays)) return 0;
   if (req?.notPassed && s.lawsPassed.includes(req.notPassed)) return 0;
   if (req?.recentWar && !s.war.active && s.day - s.lastWarEnd > c0.recentWarDays) return 0;
-  let w = c.weight * (1 + (s.pressure[c.id] ?? 0));
+  // the same card again and again gets old: each earlier firing this game scales the weight down
+  let w = c.weight * (1 + (s.pressure[c.id] ?? 0)) * c0.crisisRepeatDecay ** (s.firedCount?.[c.id] ?? 0);
   switch (c.id) {
     case 'kaplan': w *= Math.min(c0.kaplanStreetMaxMult, 1 + Math.max(0, 60 - s.street) / 20); break;
     case 'case': w *= 0.5 + s.trial / 50; break;
@@ -464,6 +468,12 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
       const to = (subject && partyById(s, subject)?.inCoalition ? partyById(s, subject) : null)
         ?? [...coal].filter((p) => p.id !== s.base.pmParty).sort((a, b) => a.satisfaction - b.satisfaction)[0];
       if (!to) break;
+      if (to.id === s.base.pmParty) {
+        // a rebel in your own party: a deputy-minister post (no partner loses a ministry)
+        to.satisfaction = clamp(to.satisfaction + c.pmPostBoost, 0, 100);
+        log(s, 'log.pmPost', {}, 'info');
+        break;
+      }
       const m = ministryFor(s, to);
       if (m) transferMinistry(s, m.id, to.id);
       break;
@@ -571,9 +581,10 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
     }
       break;
     case 'merger': s.campaignFx.merger = true; log(s, 'log.merger', {}, 'info'); break;
-    case 'gevalt': s.campaignFx.gevalt = true; log(s, 'log.gevalt', {}, 'info'); break;
+    case 'gevalt': s.campaignFx.gevalt = true; s.campaignPollSeats += c.gevaltSeats; log(s, 'log.gevalt', {}, 'info'); break;
     case 'spoiler':
       s.campaignFx.spoiler = true;
+      s.campaignPollSeats += c.spoilerSeats;
       if (rngOf(s).next() < c.spoilerExposeChance) {
         s.openCases.push(s.day + 730);
         s.stats.casesSurvived++;
@@ -942,8 +953,11 @@ function fireCrisis(s: GameState, c: CrisisDef, subjectOverride?: string | null)
       .sort((a, b) => a.satisfaction - b.satisfaction)[0]?.id ?? null;
   }
   s.lastFired[c.id] = s.day;
+  (s.firedCount ??= {})[c.id] = (s.firedCount[c.id] ?? 0) + 1;
   s.event = { id: c.id, subject, firedAt: s.day, leftDays: c.urgent ? s.config.urgentTimeoutDays : s.config.eventTimeoutDays };
-  if (c.onFire) applyEffect(s, c.onFire, subject);
+  // what the crisis did on arrival is a recorded outcome (shown on the card / in text mode),
+  // so later drift isn't blamed for it
+  if (c.onFire) withOutcome(s, 'arrival', { key: 'out.arrival', params: { crisis: c.id } }, () => applyEffect(s, c.onFire!, subject));
   if (c.tension) s.tensionUntil = Math.max(s.tensionUntil, s.day + c.tension);
   if (c.icc) s.iccUntil = Math.max(s.iccUntil, s.day + c.icc);
   if (c.opensCase) {
@@ -1027,6 +1041,14 @@ function trumpTick(s: GameState, dt: number) {
   }
 }
 
+/** where approval drifts to: street, US, budget, trial, war rally, years in office, opposition bonus */
+export function approvalTarget(s: GameState): number {
+  const c = s.config;
+  return 20 + 0.2 * s.street + 0.15 * s.us + 0.1 * s.fiscal - 0.15 * s.trial
+    + (s.war.active ? c.warApprovalBonusTarget : 0) - c.fatiguePerYear * (s.pmDays / 365.25)
+    + (s.phase === 'opposition' ? c.oppositionApprovalBonus : 0);
+}
+
 function tickDay(s: GameState, dt: number) {
   const c = s.config;
   // meters (both phases)
@@ -1044,9 +1066,13 @@ function tickDay(s: GameState, dt: number) {
   s.us += (55 + c.trumpUsPull * (s.trumpMood ?? 0) - s.us) * c.meterRegression * dt;
   trumpTick(s, dt);
   s.fiscal += (50 - s.fiscal) * c.meterRegression * dt;
-  const target = 20 + 0.2 * s.street + 0.15 * s.us + 0.1 * s.fiscal - 0.15 * s.trial
-    + (s.war.active ? c.warApprovalBonusTarget : 0) - c.fatiguePerYear * (s.pmDays / 365.25)
-    + (s.phase === 'opposition' ? c.oppositionApprovalBonus : 0);
+  const target = approvalTarget(s);
+  // the slide toward a target under the panic line is invisible otherwise: say it when it crosses
+  const below = target < c.pollPanicBelow;
+  if (below !== !!s.targetBelowPanic) {
+    s.targetBelowPanic = below;
+    log(s, below ? 'log.driftPollsDown' : 'log.driftPollsUp', { target: Math.round(target) }, below ? 'bad' : 'good');
+  }
   s.approval = clamp(s.approval + (target - s.approval) * c.approvalRegression * dt, 0, 100);
   for (const k of Object.keys(s.pressure)) s.pressure[k] *= Math.max(0, 1 - c.pressureDecayPerDay * dt);
   s.openCases = s.openCases.filter((d) => d > s.day);
@@ -1151,6 +1177,7 @@ function tickDay(s: GameState, dt: number) {
       const c2 = pickWeighted(rng, CRISES.map((x) => ({ item: x, weight: crisisWeight(s, x) })));
       if (c2?.goodNews) {
         s.lastFired[c2.id] = s.day;
+        (s.firedCount ??= {})[c2.id] = (s.firedCount[c2.id] ?? 0) + 1;
         withOutcome(s, 'news', { key: c2.badNews ? 'out.badNews' : 'out.goodNews', params: { crisis: c2.id } }, () => { if (c2.onFire) applyEffect(s, c2.onFire, null); });
         log(s, c2.badNews ? 'log.badNews' : 'log.goodNews', { crisis: c2.id }, c2.badNews ? 'bad' : 'good');
         s.nextEventInDays = scheduleNext(s);
