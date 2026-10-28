@@ -50,7 +50,7 @@ button:active:not(:disabled) { transform: scale(.98); }
 .bigseats[data-state=bad] b, .bigseats[data-state=bad] .margin { color: var(--bad); }
 .bigseats[data-state=campaign] b { color: var(--accent); }
 .bigseats[data-state=campaign] .margin { font-size: 13px; font-weight: 600; color: var(--accent); }
-.appr { flex: 1; display: grid; grid-template-columns: auto auto; justify-content: space-between; align-items: baseline; gap: 2px 8px; font-size: 12px; color: var(--mute); padding: 4px 8px; border-radius: 10px; }
+.appr { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr auto auto; align-items: baseline; gap: 2px 8px; font-size: 12px; color: var(--mute); padding: 4px 8px; border-radius: 10px; }
 .appr b { font-size: 22px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .appr .mbar { grid-column: 1 / -1; }
 .flash-down { animation: flashR 1.2s ease-out; } .flash-up { animation: flashG 1.2s ease-out; }
