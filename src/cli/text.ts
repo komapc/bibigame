@@ -3,7 +3,7 @@
 import { createInterface } from 'node:readline';
 import { appendFileSync } from 'node:fs';
 import { createGame } from '../api/game.ts';
-import { HELP, renderText, runText } from '../api/text.ts';
+import { HELP, intro, renderText, runText } from '../api/text.ts';
 import { isLang, loadLocale, setLocale } from '../i18n/index.ts';
 
 const args = process.argv.slice(2);
@@ -19,7 +19,7 @@ if (lang && lang !== 'en') {
 
 const game = createGame({ seed });
 console.log(`bibigame text mode — seed ${seed}${realtime ? ' (realtime)' : ' (turn-based: time moves only on "wait")'}`);
-console.log(HELP + '\n');
+console.log(intro() + '\n\n' + HELP + '\n');
 let lastState = renderText(game.observe());
 console.log(lastState);
 process.stdout.write('> ');
