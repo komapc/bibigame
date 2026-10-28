@@ -281,7 +281,7 @@ details[open] > summary::before { transform: rotate(90deg); }
 .friday .mast small { display: block; font: 400 11px Rubik, sans-serif; letter-spacing: 0; margin-top: 2px; }
 .friday h3 { font-size: 19px; margin: 12px 0 8px; }
 .friday ul { margin: 0 0 12px; padding-inline-start: 18px; font-size: 14px; }
-.friday li { margin: 4px 0; } .friday li.good b { color: #1b5e20; } .friday li.bad b { color: #b71c1c; }
+.friday li { margin: 4px 0; color: #3a3326; } .friday li.good b { color: #1b5e20; } .friday li.bad b { color: #b71c1c; }
 .friday button { width: 100%; }
 .consent { position: fixed; inset-inline: 12px; bottom: 12px; max-width: 560px; margin: 0 auto; z-index: 70; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   padding: 12px 14px; border-radius: 12px; background: #1d1630; border: 1px solid #4a3a70; color: var(--ink); font-size: 14px; }
