@@ -3,7 +3,7 @@
 // and track() is a no-op. Never send free text or personal data — only ids and numbers.
 import { t } from '../i18n/index.ts';
 
-export const GA_MEASUREMENT_ID = '';
+export const GA_MEASUREMENT_ID = 'G-5X17LS4GDR';
 const KEY = 'bibigame-consent';
 
 declare global { interface Window { dataLayer?: unknown[]; gtag?: (...a: unknown[]) => void } }
