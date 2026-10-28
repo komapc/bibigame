@@ -159,6 +159,10 @@ details[open] > summary::before { transform: rotate(90deg); }
 .ministries { display: grid; gap: 6px; }
 .min { display: grid; grid-template-columns: 1fr 1.2fr; align-items: center; gap: 8px; font-size: 14px; }
 .laws { display: grid; gap: 6px; }
+.moves button { text-align: start; display: grid; gap: 2px; }
+.moves .mdesc { display: block; font-size: 12px; color: var(--mute); font-weight: 400; }
+.moves button.exit { border-color: var(--bad); }
+.moves .sub { margin: 8px 0 0; }
 .log { list-style: none; margin: 0; padding: 0; max-height: 40vh; overflow: auto; font-size: 13px; }
 .log li { padding: 4px 0; border-bottom: 1px solid var(--line); }
 .log time { color: var(--mute); font-variant-numeric: tabular-nums; margin-inline-end: 4px; }

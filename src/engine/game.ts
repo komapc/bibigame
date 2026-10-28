@@ -10,6 +10,7 @@ import {
 import { runElection } from './elections.ts';
 import { CRISES, LAWS, crisisById, remedyById } from '../data/crises.ts';
 import { promiseById } from '../data/promises.ts';
+import { NEW_MINISTRIES, moveById } from '../data/moves.ts';
 import { TITLES } from '../data/titles.ts';
 import { DEFAULT_CONFIG } from '../config.ts';
 
@@ -155,7 +156,7 @@ export function createState(base: KnessetData, seed: number, config: Partial<Con
     stats: {
       warsEnded: 0, electionsSurvived: 0, casesSurvived: 0, maxOpenCases: 0, refusedByAll: 0,
       comebacks: 0, brokenPromises: 0, promisesKept: 0, bigCoalitionStreak: 0, bigCoalitionBest: 0,
-      crisesHandled: 0,
+      crisesHandled: 0, returns: 0,
     },
     titles: [],
     log: [],
@@ -164,6 +165,12 @@ export function createState(base: KnessetData, seed: number, config: Partial<Con
     lostReason: null,
     electionDays: [],
     remedyUses: {},
+    electionLosses: 0,
+    rival: null,
+    fromOpposition: false,
+    campaignFx: { merger: false, spoiler: false, gevalt: false },
+    moveReadyAt: {},
+    usedThisTerm: [],
   };
   s.nextEventInDays = scheduleNext(s);
   log(s, 'log.start', { seats: seatsOf(s) }, 'info');
@@ -200,12 +207,23 @@ function lose(s: GameState, reason: GameState['lostReason']) {
   s.lostReason = reason;
 }
 
+/** a special ending (Miami, plea bargain, rotation handover): the game ends, titles stay */
+function retire(s: GameState, reason: 'miami' | 'plea' | 'rotation') {
+  s.status = 'retired';
+  s.lostReason = reason;
+  s.event = null;
+  log(s, `log.end.${reason}`, {}, 'event');
+  checkTitles(s);
+}
+
 /** chance the voters throw you out at this election */
 export function loseChance(s: GameState): number {
   const c = s.config;
   const recent = (s.electionDays ?? []).filter((d) => s.day - d <= c.electionFatigueDays).length - 1;
+  const fx = s.campaignFx;
   return clamp(c.loseBase + Math.max(0, c.approvalNeutral - s.approval) * c.losePerApprovalPoint
-    + s.openCases.length * c.losePerOpenCase + Math.max(0, recent) * c.losePerRecentElection, 0, c.loseMax);
+    + s.openCases.length * c.losePerOpenCase + Math.max(0, recent) * c.losePerRecentElection
+    - (fx?.gevalt ? c.gevaltLose : 0) - (fx?.spoiler ? c.spoilerLose : 0), 0, c.loseMax);
 }
 
 export function crisisWeight(s: GameState, c: CrisisDef): number {
@@ -244,8 +262,32 @@ export function remedyAvailable(s: GameState, id: string): boolean {
   }
   if (id === 'funds' && s.fiscal < s.config.fundsMinFiscal) return false;
   if (id === 'fire') return coalition(s).some((p) => p.tags.includes('farright') && ministryCounts(s.ministries)[p.id]);
+  if (id === 'newministry') return s.ministries.length < s.base.ministries.length + s.config.newMinistryMax;
   return true;
 }
+
+/** opposition party an MK can be poached from (the biggest one with 2+ seats) */
+export function poachDonor(s: GameState): Party | undefined {
+  return s.parties.filter((p) => !p.inCoalition && p.id !== s.base.pmParty && p.seats >= 2).sort((a, b) => b.seats - a.seats)[0];
+}
+
+/** can this drawer move be used right now? */
+export function moveAvailable(s: GameState, id: string): boolean {
+  const m = moveById.get(id);
+  if (!m || s.status !== 'playing' || !m.phases.includes(s.phase)) return false;
+  if ((s.moveReadyAt?.[id] ?? 0) > s.day) return false;
+  if (m.oncePerTerm && s.usedThisTerm?.includes(id)) return false;
+  if (!remedyAvailable(s, id)) return false;
+  const r = m.requires;
+  if (r?.war && !s.war.active) return false;
+  if (r?.minTrial !== undefined && s.trial < r.minTrial) return false;
+  if (r?.electionsWithinDays !== undefined && s.termEndsDay - s.day > r.electionsWithinDays) return false;
+  if (r?.oppositionDonor && !poachDonor(s)) return false;
+  return true;
+}
+
+/** days until a move is off cooldown (0 = ready) */
+export const moveCooldown = (s: GameState, id: string) => Math.max(0, Math.ceil((s.moveReadyAt?.[id] ?? 0) - s.day));
 
 // ---------------------------------------------------------------- effects
 
@@ -261,6 +303,8 @@ function resolveTargets(s: GameState, target: string, subject: string | null): P
 }
 
 function applyEffect(s: GameState, e: Effect, subject: string | null) {
+  const c = s.config;
+  if (e.rival && s.rival) s.rival.stability = clamp(s.rival.stability + e.rival, 0, 100);
   if (e.position) s.govPosition = clamp(s.govPosition + e.position, -10, 10);
   if (e.approval) s.approval = clamp(s.approval + e.approval, 0, 100);
   if (e.street && !(s.war.active && e.street < 0)) s.street = clamp(s.street + e.street, 0, 100);
@@ -347,6 +391,81 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
       s.defectors++;
       log(s, 'log.defector', { n: s.defectors }, 'bad');
       break;
+    case 'poach': {
+      const donor = poachDonor(s);
+      if (!donor) break;
+      donor.seats--;
+      pmParty(s).seats++;
+      donor.satisfaction = clamp(donor.satisfaction - 25, 0, 100);
+      log(s, 'log.poach', { party: donor.id }, 'info');
+      break;
+    }
+    case 'newMinistry': {
+      const id = NEW_MINISTRIES.find((x) => !s.ministries.some((m) => m.id === x));
+      if (!id) break;
+      const sub = subject ? partyById(s, subject) : undefined;
+      const to = (sub?.inCoalition ? sub : undefined)
+        ?? coalition(s).filter((p) => p.id !== s.base.pmParty).sort((a, b) => a.satisfaction - b.satisfaction)[0]
+        ?? pmParty(s);
+      s.ministries.push({ id, holder: to.id });
+      if (to.id !== s.base.pmParty) to.satisfaction = clamp(to.satisfaction + c.ministryGain, 0, 100);
+      log(s, 'log.newMinistry', { ministry: id, party: to.id }, 'info');
+      break;
+    }
+    case 'exileRival':
+      s.pressure.rebel = 0;
+      if (s.defectors > 0) s.defectors--;
+      log(s, 'log.exileRival', {}, 'info');
+      break;
+    case 'primetime': {
+      const d = c.primetimeMin + rngOf(s).next() * (c.primetimeMax - c.primetimeMin);
+      s.approval = clamp(s.approval + d, 0, 100);
+      log(s, d >= 0 ? 'log.primetimeUp' : 'log.primetimeDown', { n: Math.round(Math.abs(d)) }, d >= 0 ? 'good' : 'bad');
+      break;
+    }
+    case 'postponeElections':
+      s.termEndsDay = Math.max(s.termEndsDay, s.day) + c.postponeDays;
+      log(s, 'log.postponed', {}, 'bad');
+      break;
+    case 'merger': s.campaignFx.merger = true; log(s, 'log.merger', {}, 'info'); break;
+    case 'gevalt': s.campaignFx.gevalt = true; log(s, 'log.gevalt', {}, 'info'); break;
+    case 'spoiler':
+      s.campaignFx.spoiler = true;
+      if (rngOf(s).next() < c.spoilerExposeChance) {
+        s.openCases.push(s.day + 730);
+        s.stats.casesSurvived++;
+        s.stats.maxOpenCases = Math.max(s.stats.maxOpenCases, s.openCases.length);
+        s.trial = clamp(s.trial + 8, 0, 100);
+        s.approval = clamp(s.approval - 3, 0, 100);
+        log(s, 'log.spoilerExposed', {}, 'bad');
+      } else log(s, 'log.spoiler', {}, 'info');
+      break;
+    case 'oppPoach': log(s, 'log.oppPoach', {}, 'info'); break;
+    case 'noConfidence': {
+      if (!s.rival) break;
+      const chance = clamp(1 - s.rival.stability / c.noConfidenceScale, 0.05, 0.9);
+      if (rngOf(s).next() < chance) {
+        log(s, 'log.noConfidenceWon', {}, 'good');
+        callElections(s, 'noconfidence');
+      } else {
+        s.approval = clamp(s.approval - 2, 0, 100);
+        log(s, 'log.noConfidenceFailed', {}, 'bad');
+      }
+      break;
+    }
+    case 'breakRotation': {
+      const p = subject ? partyById(s, subject) : undefined;
+      if (!p) break;
+      p.trust = { state: 'distrust', promiseId: 'rotation', until: s.day + c.rotationDistrustDays };
+      p.satisfaction = clamp(p.satisfaction - c.rotationBrokenPenalty, 0, 100);
+      for (const x of coalition(s)) if (x.id !== p.id && x.id !== s.base.pmParty) x.satisfaction = clamp(x.satisfaction - 5, 0, 100);
+      s.stats.brokenPromises++;
+      log(s, 'log.brokeRotation', { party: p.id }, 'bad');
+      break;
+    }
+    case 'handover': retire(s, 'rotation'); break;
+    case 'plea': retire(s, 'plea'); break;
+    case 'miami': retire(s, 'miami'); break;
   }
 }
 
@@ -475,6 +594,15 @@ function callElections(s: GameState, reason: string) {
   if (s.phase === 'campaign' || s.status !== 'playing') return;
   const b = wrapDepth ? null : snap(s);
   if (s.war.active) endWar(s);
+  s.fromOpposition = s.phase === 'opposition';
+  s.rival = null;
+  s.campaignFx = { merger: false, spoiler: false, gevalt: false };
+  s.usedThisTerm = [];
+  // elections void a rotation agreement (the classic way out)
+  for (const p of s.parties) if (p.trust.promiseId === 'rotation' && (p.trust.state === 'believing' || p.trust.state === 'angry')) {
+    p.trust = { state: 'neutral', promiseId: null, until: 0 };
+    log(s, 'log.rotationVoided', { party: p.id }, 'bad');
+  }
   s.phase = 'campaign';
   s.phaseLeftDays = s.config.campaignDays;
   s.event = null;
@@ -491,22 +619,36 @@ function resolveElection(s: GameState) {
   wrapDepth++;
   try { resolveElectionInner(s); } finally { wrapDepth--; }
   if (s.status === 'lost') record(s, 'newGov', { key: s.lostReason === 'voters' ? 'out.votersLost' : 'out.noGovLost' }, b);
+  else if (s.phase === 'opposition') record(s, 'newGov', { key: 'out.opposition' }, b);
   else if (s.phase === 'governing') record(s, 'newGov', { key: 'out.newGov', params: { seats: seatsOf(s), pm: pmParty(s).seats } }, b);
   else record(s, 'elections', { key: 'out.elections.deadlock', params: { poll: s.campaignPollSeats } }, b);
 }
 
 function resolveElectionInner(s: GameState) {
   const c = s.config;
+  const fx = s.campaignFx ?? { merger: false, spoiler: false, gevalt: false };
+  // far-right merger: one list, no wasted votes under the threshold
+  const merge = fx.merger
+    ? s.base.parties.filter((p) => p.tags.includes('farright')).sort((a, b) => b.seats - a.seats).map((p) => p.id) : undefined;
   const seats = runElection(s.base.parties, {
     totalSeats: c.totalSeats, threshold: c.threshold, noise: c.electionNoise, noiseMin: c.electionNoiseMin,
-    pmBonus: pmBonus(s), pmId: s.base.pmParty,
+    pmBonus: pmBonus(s) + (fx.gevalt ? c.gevaltSeats : 0), pmId: s.base.pmParty,
+    merge, bonus: merge?.length ? { [merge[0]]: c.mergerSeats } : undefined,
   }, rngOf(s));
+  // spoiler list: splits the biggest anti-Bibi party's vote
+  if (fx.spoiler) {
+    const big = s.base.parties.filter((p) => !p.willSitWithBibi && (seats[p.id] ?? 0) > c.spoilerSeats + c.threshold)
+      .sort((a, b) => (seats[b.id] ?? 0) - (seats[a.id] ?? 0))[0];
+    if (big) { seats[big.id] -= c.spoilerSeats; seats[s.base.pmParty] += c.spoilerSeats; }
+  }
+  const lossRoll = loseChance(s);
+  s.campaignFx = { merger: false, spoiler: false, gevalt: false };
   for (const p of s.parties) { p.seats = seats[p.id] ?? 0; p.inCoalition = false; p.wartime = false; p.threatening = false; }
   // the voters may simply be done with you (approval, cases, election fatigue)
-  if (rngOf(s).next() < loseChance(s)) {
+  if (rngOf(s).next() < lossRoll) {
     log(s, 'log.results', { results: s.parties.filter((p) => p.seats > 0).map((p) => `${p.short} ${p.seats}`).join(', ') }, 'event');
     log(s, 'log.votersLost', {}, 'bad');
-    lose(s, 'voters');
+    enterOpposition(s, 'voters');
     return;
   }
   const ids = formGovernment(s.parties, s.base.pmParty, c.majority);
@@ -514,8 +656,7 @@ function resolveElectionInner(s: GameState) {
   if (!ids) {
     s.failedElections++;
     if (s.failedElections >= c.maxFailedElections) {
-      lose(s, 'deadlock');
-      log(s, 'log.lost', {}, 'bad');
+      enterOpposition(s, 'deadlock');
       return;
     }
     s.phase = 'governing'; // so callElections proceeds
@@ -538,6 +679,9 @@ function resolveElectionInner(s: GameState) {
   s.failedElections = 0;
   s.stats.electionsSurvived++;
   if (s.campaignPollSeats < 25) s.stats.comebacks++;
+  if (s.fromOpposition) { s.stats.returns++; log(s, 'log.returned', {}, 'good'); }
+  s.fromOpposition = false;
+  s.usedThisTerm = [];
   s.refusedBy = [];
   s.termEndsDay = s.day + c.knessetTermDays;
   s.approval = clamp(s.approval + 5, 0, 100);
@@ -545,6 +689,33 @@ function resolveElectionInner(s: GameState) {
   s.nextEventInDays = scheduleNext(s);
   if (c.restartTermOnElection) s.pmDays = 0;
   log(s, 'log.newGov', { seats: seatsOf(s), parties: ids.length }, 'good');
+}
+
+/** lost an election (or nobody could form a government with you): the first time you go to the
+ *  opposition and can topple the rival government; config.maxElectionLosses ends the game */
+function enterOpposition(s: GameState, why: 'voters' | 'deadlock') {
+  const c = s.config;
+  s.electionLosses = (s.electionLosses ?? 0) + 1;
+  s.usedThisTerm = [];
+  s.fromOpposition = false;
+  if (s.electionLosses >= c.maxElectionLosses) {
+    lose(s, why);
+    log(s, 'log.lost', {}, 'bad');
+    return;
+  }
+  s.phase = 'opposition';
+  s.phaseLeftDays = 0;
+  s.rival = { stability: c.rivalStartStability, until: s.day + c.oppositionMaxDays };
+  for (const p of s.parties) {
+    p.inCoalition = false; p.wartime = false; p.threatening = false;
+    p.trust = { state: 'neutral', promiseId: null, until: 0 };
+  }
+  for (const m of s.ministries) m.holder = null;
+  s.queue = [];
+  s.event = null;
+  s.defectors = 0;
+  s.failedElections = 0;
+  log(s, why === 'voters' ? 'log.oppositionVoters' : 'log.oppositionDeadlock', {}, 'bad');
 }
 
 // ---------------------------------------------------------------- events
@@ -655,17 +826,21 @@ function tickDay(s: GameState, dt: number) {
   s.us += (55 - s.us) * c.meterRegression * dt;
   s.fiscal += (50 - s.fiscal) * c.meterRegression * dt;
   const target = 20 + 0.2 * s.street + 0.15 * s.us + 0.1 * s.fiscal - 0.15 * s.trial
-    + (s.war.active ? c.warApprovalBonusTarget : 0) - c.fatiguePerYear * (s.pmDays / 365.25);
+    + (s.war.active ? c.warApprovalBonusTarget : 0) - c.fatiguePerYear * (s.pmDays / 365.25)
+    + (s.phase === 'opposition' ? c.oppositionApprovalBonus : 0);
   s.approval = clamp(s.approval + (target - s.approval) * c.approvalRegression * dt, 0, 100);
   for (const k of Object.keys(s.pressure)) s.pressure[k] *= Math.max(0, 1 - c.pressureDecayPerDay * dt);
   s.openCases = s.openCases.filter((d) => d > s.day);
 
   for (const p of s.parties) {
     if (p.trust.state === 'believing' && s.day >= p.trust.until) {
-      if (p.seats > 0) {
-        // no silent switch: the party comes to collect (angry-reminder card)
+      const card = (p.trust.promiseId && promiseById.get(p.trust.promiseId)?.card) || 'angry';
+      if (card === 'rotation' && !p.inCoalition) {
+        p.trust = { state: 'neutral', promiseId: null, until: 0 }; // they left: no rotation to claim
+      } else if (p.seats > 0) {
+        // no silent switch: the party comes to collect (angry-reminder / rotation card)
         p.trust = { ...p.trust, state: 'angry' };
-        s.queue.push({ id: 'angry', subject: p.id });
+        s.queue.push({ id: card, subject: p.id });
       } else breakPromise(s, p);
     } else if (p.trust.state === 'distrust' && s.day >= p.trust.until) {
       p.trust = { state: 'neutral', promiseId: null, until: 0 };
@@ -675,6 +850,15 @@ function tickDay(s: GameState, dt: number) {
   if (s.phase === 'campaign') {
     s.phaseLeftDays -= dt;
     if (s.phaseLeftDays <= 0) resolveElection(s);
+    return;
+  }
+  if (s.phase === 'opposition') {
+    const r = s.rival ??= { stability: c.rivalStartStability, until: s.day + c.oppositionMaxDays };
+    r.stability = clamp(r.stability - c.rivalDecayPerDay * dt, 0, 100);
+    if (r.stability <= 0 || s.day >= r.until) {
+      log(s, 'log.rivalFell', {}, 'good');
+      callElections(s, 'rivalCollapse');
+    }
     return;
   }
 
@@ -749,7 +933,9 @@ function tickDay(s: GameState, dt: number) {
 function checkTitles(s: GameState) {
   for (const t of TITLES) {
     if (s.titles.includes(t.id)) continue;
-    const ok = t.kind === 'tenure' ? s.pmDays >= t.threshold : (s.stats[t.stat!] ?? 0) >= t.threshold;
+    const ok = t.kind === 'tenure' ? s.pmDays >= t.threshold
+      : t.kind === 'ending' ? s.status === 'retired' && s.lostReason === t.ending
+      : (s.stats[t.stat!] ?? 0) >= t.threshold;
     if (ok) {
       s.titles.push(t.id);
       log(s, 'log.title', { title: t.id }, 'title');
@@ -765,7 +951,7 @@ export function step(s: GameState, days: number) {
     tickDay(s, dt);
     if (s.status !== 'playing') break;
     s.day += dt;
-    s.pmDays += dt;
+    if (s.phase !== 'opposition') s.pmDays += dt;
     left -= dt;
     if (!s.termReached && s.pmDays >= s.config.termDays) {
       s.termReached = true;
@@ -798,6 +984,7 @@ function actionCause(a: Action): Outcome['cause'] {
     case 'invite': return { key: 'out.invite', params: { party: a.partyId } };
     case 'promise': return { key: 'out.promise', params: { party: a.partyId, promise: a.promiseId } };
     case 'deliver': return { key: 'out.deliver', params: { party: a.partyId, promise: a.promiseId } };
+    case 'move': return { key: 'out.move', params: { remedy: a.moveId } };
     default: return { key: 'out.action' };
   }
 }
@@ -805,8 +992,20 @@ function actionCause(a: Action): Outcome['cause'] {
 function actInner(s: GameState, a: Action): ActionResult {
   if (s.status !== 'playing') return { ok: false, error: 'err.over' };
   if (a.type === 'noop') return { ok: true };
-  if (s.phase !== 'governing') return { ok: false, error: 'err.campaign' };
   const c = s.config;
+  if (a.type === 'move') {
+    const m = moveById.get(a.moveId);
+    if (!m) return { ok: false, error: 'err.unknown' };
+    if (!moveAvailable(s, a.moveId)) return { ok: false, error: (s.moveReadyAt?.[a.moveId] ?? 0) > s.day ? 'err.cooldown' : 'err.unavailable' };
+    if (m.cooldownDays) (s.moveReadyAt ??= {})[a.moveId] = s.day + m.cooldownDays;
+    if (m.oncePerTerm) (s.usedThisTerm ??= []).push(a.moveId);
+    log(s, 'log.move', { remedy: a.moveId }, 'info');
+    applyMove(s, a.moveId, null);
+    checkCoalition(s);
+    return { ok: true };
+  }
+  if (s.phase === 'opposition') return { ok: false, error: 'err.opposition' };
+  if (s.phase !== 'governing') return { ok: false, error: 'err.campaign' };
   switch (a.type) {
     case 'choose': {
       if (!s.event) return { ok: false, error: 'err.noEvent' };
@@ -882,8 +1081,13 @@ function actInner(s: GameState, a: Action): ActionResult {
         return { ok: false, error: 'err.distrust' };
       }
       if (p.trust.state === 'believing') return { ok: false, error: 'err.alreadyPromised' };
-      p.trust = { state: 'believing', promiseId: def.id, until: s.day + c.promiseBelieveDays };
-      p.satisfaction = clamp(p.satisfaction + c.promiseBoost, 0, 100);
+      const rotation = def.id === 'rotation';
+      if (rotation) {
+        if (!p.inCoalition || p.id === s.base.pmParty || p.seats < (def.minSeats ?? 0)) return { ok: false, error: 'err.wrongParty' };
+        if (s.parties.some((x) => x.trust.promiseId === 'rotation' && (x.trust.state === 'believing' || x.trust.state === 'angry'))) return { ok: false, error: 'err.oneRotation' };
+      }
+      p.trust = { state: 'believing', promiseId: def.id, until: s.day + (rotation ? c.rotationBelieveDays : def.believeDays ?? c.promiseBelieveDays) };
+      p.satisfaction = clamp(p.satisfaction + (rotation ? c.rotationBoost : def.boost ?? c.promiseBoost), 0, 100);
       log(s, 'log.promised', { party: p.id, promise: def.id }, 'info');
       return { ok: true };
     }
@@ -891,6 +1095,7 @@ function actInner(s: GameState, a: Action): ActionResult {
       const p = partyById(s, a.partyId);
       const def = promiseById.get(a.promiseId);
       if (!p || !def) return { ok: false, error: 'err.unknown' };
+      if (def.cardOnly) return { ok: false, error: 'err.unavailable' };
       if (s.cooldowns.law > 0) return { ok: false, error: 'err.cooldown' };
       if (def.deliveredBy === 'ministry') {
         if (!p.inCoalition) return { ok: false, error: 'err.notInCoalition' };

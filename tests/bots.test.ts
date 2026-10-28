@@ -7,7 +7,7 @@ describe('headless bots', () => {
     it(`${name} plays a full game headlessly`, () => {
       const r = playGame(STRATEGIES[name](1), 1, { maxYears: 6 });
       expect(r.days).toBeGreaterThan(0);
-      expect(r.status === 'lost' || r.days >= 6 * 365).toBe(true);
+      expect(r.status === 'lost' || r.status === 'retired' || r.days >= 6 * 365).toBe(true);
     }, 60_000);
   }
   it('is deterministic for a seed', () => {

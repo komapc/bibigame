@@ -75,8 +75,12 @@ export interface Effect {
   /** delay next random event by N days */
   quietDays?: number;
   sat?: { target: Target; delta: number }[];
+  /** opposition only: the rival government's stability */
+  rival?: number;
   /** special mechanics */
-  special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'buyTime' | 'refuse' | 'passBudget' | 'defector';
+  special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'buyTime' | 'refuse' | 'passBudget' | 'defector'
+    | 'poach' | 'newMinistry' | 'merger' | 'spoiler' | 'gevalt' | 'exileRival' | 'primetime' | 'postponeElections'
+    | 'plea' | 'miami' | 'handover' | 'breakRotation' | 'noConfidence' | 'oppPoach';
 }
 
 export interface RemedyDef {
@@ -142,11 +146,37 @@ export interface PromiseDef {
   deliveredBy: string;
   /** other remedies that also count as delivering it */
   alsoBy?: string[];
+  /** believe window (default config.promiseBelieveDays) */
+  believeDays?: number;
+  /** satisfaction boost when made (default config.promiseBoost) */
+  boost?: number;
+  /** card fired when the window runs out (default 'angry') */
+  card?: string;
+  /** partner must have at least this many seats */
+  minSeats?: number;
+  /** can't be delivered early from the drawer (only on its card) */
+  cardOnly?: boolean;
+}
+
+/** a drawer move: the effect is the REMEDIES entry with the same id (cards and moves share it) */
+export interface MoveDef {
+  id: string;
+  /** phases in which the move can be used */
+  phases: Phase[];
+  /** own cooldown after use */
+  cooldownDays?: number;
+  /** once per Knesset term / election (reset when a new government forms or you lose) */
+  oncePerTerm?: boolean;
+  requires?: { war?: boolean; minTrial?: number; electionsWithinDays?: number; oppositionDonor?: boolean };
+  /** ends the game (special ending) */
+  ending?: boolean;
 }
 
 export interface TitleDef {
   id: string;
-  kind: 'tenure' | 'achievement';
+  /** ending: earned when the game ends that way (lostReason) */
+  kind: 'tenure' | 'achievement' | 'ending';
+  ending?: LostReason;
   /** tenure: days as PM; achievement: threshold for stat */
   threshold: number;
   stat?: keyof Stats;
@@ -169,6 +199,8 @@ export interface Stats {
   bigCoalitionStreak: number;
   bigCoalitionBest: number;
   crisesHandled: number;
+  /** came back from the opposition to form a government */
+  returns: number;
 }
 
 export interface ActiveEvent {
@@ -187,10 +219,11 @@ export interface LogEntry {
   kind?: 'info' | 'good' | 'bad' | 'event' | 'title';
 }
 
-export type Phase = 'governing' | 'campaign';
-export type Status = 'playing' | 'won' | 'lost';
+export type Phase = 'governing' | 'campaign' | 'opposition';
+/** retired = a special ending (Miami, plea bargain, rotation handover): not a defeat, not a win */
+export type Status = 'playing' | 'won' | 'lost' | 'retired';
 /** voters = lost the election; deadlock = nobody (incl. you) could form a government; indicted = trial meter maxed */
-export type LostReason = 'voters' | 'deadlock' | 'indicted';
+export type LostReason = 'voters' | 'deadlock' | 'indicted' | 'miami' | 'plea' | 'rotation';
 
 export interface GameState {
   seed: number;
@@ -256,6 +289,18 @@ export interface GameState {
   electionDays: number[];
   /** remedy id → game days it was used (diminishing returns) */
   remedyUses: Record<string, number[]>;
+  /** elections lost (voters or deadlock); config.maxElectionLosses ends the game */
+  electionLosses: number;
+  /** in opposition: the rival government (falls at stability 0 or at `until`) */
+  rival: { stability: number; until: number } | null;
+  /** the current campaign came from the opposition */
+  fromOpposition: boolean;
+  /** campaign tricks in effect for the next election roll */
+  campaignFx: { merger: boolean; spoiler: boolean; gevalt: boolean };
+  /** move id → game day it is usable again */
+  moveReadyAt: Record<string, number>;
+  /** once-per-term moves already used this term */
+  usedThisTerm: string[];
 }
 
 export type Action =
@@ -267,7 +312,9 @@ export type Action =
   | { type: 'invite'; partyId: string }
   | { type: 'promise'; partyId: string; promiseId: string }
   /** actually do the thing you promised (uses the law cooldown) */
-  | { type: 'deliver'; partyId: string; promiseId: string };
+  | { type: 'deliver'; partyId: string; promiseId: string }
+  /** a drawer move (src/data/moves.ts) */
+  | { type: 'move'; moveId: string };
 
 export interface ActionResult {
   ok: boolean;

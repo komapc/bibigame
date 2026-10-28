@@ -12,6 +12,10 @@ export interface ElectionParams {
   /** extra seats for the PM party (from approval) */
   pmBonus: number;
   pmId: string;
+  /** merge these parties' votes into the first one (a joint list) */
+  merge?: string[];
+  /** extra raw seats per party id */
+  bonus?: Record<string, number>;
 }
 
 /** Returns new seat counts by party id; sums to totalSeats exactly. */
@@ -21,7 +25,12 @@ export function runElection(base: PartyDef[], params: ElectionParams, rng: Rng):
     const sd = Math.max(params.noiseMin, p.seats * params.noise);
     let v = p.seats + gaussian(rng) * sd;
     if (p.id === params.pmId) v += params.pmBonus;
+    v += params.bonus?.[p.id] ?? 0;
     raw[p.id] = Math.max(0, v);
+  }
+  if (params.merge && params.merge.length > 1) {
+    const [into, ...rest] = params.merge;
+    for (const id of rest) { raw[into] = (raw[into] ?? 0) + (raw[id] ?? 0); raw[id] = 0; }
   }
   // threshold: parties below it get nothing
   let passed = base.filter((p) => raw[p.id] >= params.threshold);

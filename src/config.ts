@@ -133,6 +133,40 @@ export interface Config {
 
   /** budget must pass by 31 March each year; crisis starts nagging from this month (0=Jan) */
   budgetNagFromMonth: number;
+
+  // --- opposition (after losing an election) ---
+  /** elections lost (voters or deadlock) before game over; the first loss sends you to the opposition */
+  maxElectionLosses: number;
+  rivalStartStability: number;
+  /** rival government stability lost per day (it falls apart on its own, eventually) */
+  rivalDecayPerDay: number;
+  /** the rival government falls after this many days at the latest (elections) */
+  oppositionMaxDays: number;
+  /** approval target bonus in opposition ("they miss you") */
+  oppositionApprovalBonus: number;
+  /** no-confidence vote: success chance = 1 − stability / this */
+  noConfidenceScale: number;
+
+  // --- moves ---
+  /** rotation promise: believe window, boost, penalty if broken, distrust days */
+  rotationBelieveDays: number;
+  rotationBoost: number;
+  rotationBrokenPenalty: number;
+  rotationDistrustDays: number;
+  /** at most this many invented ministries */
+  newMinistryMax: number;
+  /** campaign tricks: seats in the election roll / lower loss chance */
+  mergerSeats: number;
+  gevaltSeats: number;
+  gevaltLose: number;
+  spoilerSeats: number;
+  spoilerLose: number;
+  spoilerExposeChance: number;
+  /** emergency law: scheduled elections move this far */
+  postponeDays: number;
+  /** prime-time statement: approval swing range [min, max] */
+  primetimeMin: number;
+  primetimeMax: number;
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -225,4 +259,26 @@ export const DEFAULT_CONFIG: Config = {
   warApprovalBonusTarget: 10,
 
   budgetNagFromMonth: 1,
+
+  maxElectionLosses: 2,
+  rivalStartStability: 60,
+  rivalDecayPerDay: 0.08,
+  oppositionMaxDays: 730,
+  oppositionApprovalBonus: 6,
+  noConfidenceScale: 50,
+
+  rotationBelieveDays: 540,
+  rotationBoost: 30,
+  rotationBrokenPenalty: 40,
+  rotationDistrustDays: 730,
+  newMinistryMax: 4,
+  mergerSeats: 2,
+  gevaltSeats: 3,
+  gevaltLose: 0.05,
+  spoilerSeats: 3,
+  spoilerLose: 0.04,
+  spoilerExposeChance: 0.3,
+  postponeDays: 365,
+  primetimeMin: -4,
+  primetimeMax: 7,
 };
