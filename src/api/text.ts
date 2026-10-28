@@ -46,6 +46,7 @@ export function renderText(o: Observation): string {
   if (o.phase === 'campaign') L.push(`ELECTION CAMPAIGN: ${o.phaseLeftDays}d to election day (election #${o.elections}); chance the voters throw you out: ${Math.round(o.electionRisk * 100)}%`);
   L.push(`Coalition: ${o.seats}/120 (need ${o.majority})${o.defectors ? `, ${o.defectors} rogue MKs` : ''} | gov position ${o.govPosition} (-10 left .. +10 right)`);
   const m = o.meters;
+  if (o.recess) L.push('RECESS: Knesset summer recess (no regular crises; wildcards still possible)');
   if (o.startConditions.length && o.day < 60) L.push(`Start: ${o.startConditions.map((x) => x.label).join('; ')}`);
   L.push(`Approval ${m.approval} | street calm ${m.street} | US ${m.us} (Trump ${o.trump.face} ${o.trump.mood}) | budget health ${m.fiscal} | trial ${m.trial} | open cases ${o.openCases}`);
   L.push(`Budget ${o.budget.dueYear}: ${o.budget.passed ? 'passed' : 'NOT passed (due 31 March)'}`);

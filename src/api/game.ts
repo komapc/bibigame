@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, budgetDueYear, trumpFace, unavailableReason, loseChance, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
+  act, budgetDueYear, recessWindow, trumpFace, unavailableReason, loseChance, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
@@ -33,6 +33,8 @@ export interface Observation {
   termDays: number;
   termProgress: number;
   termReached: boolean;
+  /** Knesset summer recess: regular crises paused, the UI clock runs faster */
+  recess: boolean;
   status: GameState['status'];
   lostReason: GameState['lostReason'];
   /** chance the voters throw you out if elections were held now */
@@ -209,6 +211,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     termDays: s.config.termDays,
     termProgress: Math.min(1, s.pmDays / s.config.termDays),
     termReached: s.termReached,
+    recess: !!s.recess,
     status: s.status,
     lostReason: s.lostReason ?? null,
     electionRisk: Math.round(loseChance(s) * 100) / 100,
@@ -385,6 +388,11 @@ export function timeline(s: GameState): Timeline {
   if (s.phase === 'campaign') up.push(mark(s.day + s.phaseLeftDays, 'election', t('tl.electionDay')));
   else up.push(mark(s.termEndsDay, 'election', t('tl.scheduled')));
   if (s.war.active) up.push(mark(s.day + s.war.leftDays, 'war', t('tl.warEnds')));
+  if (s.config.recessMonths && s.phase === 'governing') {
+    const w = recessWindow(s);
+    if (s.recess) up.push(mark(w.end, 'recess', t('tl.recessEnds')));
+    else up.push(mark(w.start, 'recess', t('tl.recess')));
+  }
   if (s.iccUntil > s.day) up.push(mark(s.iccUntil, 'icc', t('tl.iccEnds')));
   for (const d of s.openCases) up.push(mark(d, 'case', t('tl.caseCloses')));
   const trust: Timeline['trust'] = [];
