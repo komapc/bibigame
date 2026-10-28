@@ -1,5 +1,11 @@
 # Balance
 
+**Current target** (since Round 3): the human-proxy bot **card-only-hud-aware** reaches the 4-year
+term **~40–50%** of the time; dumb bots ≤ 10%; random loses ≥ 90% with a median < 1.5 years.
+**Current numbers**: [Round 6](#round-6-2026-10-28-satire-pack-2--summer-recess) (hud-aware 51%, median 4.0 y).
+Rounds 1–2 below (targets table, "Before"/"After") are history: they tuned the rollout bots and
+predate the opposition period, moves, randomness and recess.
+
 Reproduce: `npm run balance` (defaults: 40 seeds, 20-year cap). Sweep a value without editing code:
 `npm run balance -- --only greedy --games 24 --set pollPanicPerPoint=0.014`.
 
@@ -19,7 +25,7 @@ was effectively an oracle and never lost).
 | card-only-trial-aware | human proxy: no drawer, no rollouts; picks the option with the best immediate coalition mood + approval − trial, always delivers on angry cards |
 | **card-only-hud-aware** | **primary "decent human" target**: like trial-aware but reads every meter (approval, street, fiscal, US, trial, budget) and avoids leaving a partner below 20 |
 
-## Targets (from the brief)
+## Targets (from the brief; rounds 1–2, historical)
 
 | target | result |
 |---|---|
@@ -58,7 +64,7 @@ eventually loses an election. Loss reasons are mostly the voters (election-loss 
 Every strategy survived for years; greedy and lookahead never lost in 20 years. Doing nothing reached
 the term 50% of the time, random 65%.
 
-## After (current values)
+## After (round 2 values, historical)
 
 Seeds 1..40, cap 20 game years, 582s
 
@@ -100,8 +106,8 @@ Config (`src/config.ts`):
 | clusterChance / clusterDays (new) | 0.15 / 4 | crises sometimes arrive back-to-back |
 | loseBase, losePerApprovalPoint, losePerOpenCase, losePerRecentElection, loseMax (new) | 0.1, 0.015, 0.05, 0.1, 0.85 | elections are a gamble: base risk + low approval + open cases + recent elections (`electionFatigueDays` 1461). Without it a snap election was a free reset (HaKosem 60–85% for dumb bots) |
 | indictAt (new) | 100 | the trial meter can end the game |
-| leaveBelow / leaveChancePerDay (new) | 15 / 0.02 | an unhappy partner may walk out before reaching 0 (rolled once per game day) |
-| pollPanicBelow / pollPanicPerPoint (new) | 32 / 0.015 | partners get nervous when approval is low. Most sensitive knob: greedy term rate 92% at 0.012, 56% at 0.014, 33% at 0.015, 13% at 0.016, 0% at 0.03 |
+| leaveBelow / leaveChancePerDay (new) | 15 / 0.02 | an unhappy partner may walk out before reaching 0 (rolled once per game day); since Round 5 fuzzed ±`leaveFuzz` (3) per party per game |
+| pollPanicBelow / pollPanicPerPoint (new) | 32 / 0.015 | partners get nervous when approval is low. Most sensitive knob: greedy term rate 92% at 0.012, 56% at 0.014, 33% at 0.015, 13% at 0.016, 0% at 0.03 (capped since Round 3 by `pollPanicMaxPerDay` 0.13) |
 | remedyFatigue / remedyFatigueDays (new) | 0.6 / 365 | repeating the same remedy within a year gives diminishing positive effects |
 | fundsMinFiscal (new) | 15 | "coalition funds" unavailable when the treasury is empty |
 | pauseOnDecision, uiIdleClockScale, uiAnswerMs… | UI only | no effect on bots |
@@ -152,7 +158,7 @@ What moved it (all in PR #7 + this PR; no knob had to change further):
 | card-only-trial-aware | 0% / 1.5 | 13% / 2.9 | 34 / 6 / 0 |
 | **card-only-hud-aware** | **3% / 2.8** | **45% / 3.9** | 36 / 4 / 0 |
 | greedy (rollouts) | 33% / 3.8 | 98% / 5.3 | 30 / 2 / 8 |
-| lookahead (rollouts) | 43% / 3.8 | (run pending, see PR) | |
+| lookahead (rollouts) | 43% / 3.8 | not run in Round 3 (lost in a restart); Round 6: 80% / 4.3 | |
 
 Random's median rose 0.7 → 1.3 y because a lost election is no longer the end (opposition period);
 it still never reaches the term and loses every game.
@@ -227,3 +233,33 @@ The new random draw shifts every seed's stream, so the 40-game numbers moved by 
 
 Constitution-promise sensitivity (hud-aware, 80 seeds): haredi −10 / far right −5 / approval −1 → 38%;
 the shipped −8 / −3 → 41%. `leaveFuzz` 0 / 3 / 4 at 40 seeds: 38% / 45% / 30% (inside the noise).
+
+## Round 6 (2026-10-28): satire pack 2 + summer recess
+
+PR #16 adds 7 cards and 3 moves (blame the AG, the "life itself" speech, a security detail); PR #17
+adds the Knesset summer recess (1 Aug – 30 Sep: regular crisis cards pause, wildcards and angry
+promise reminders don't). Measured on F+H+I combined (= current `main`), 80 seeds × 20 years:
+
+| strategy (80 seeds × 20y) | term | median y (p25–p75) | lost to voters / deadlock / indicted |
+|---|---|---|---|
+| never-act | 0% | 1.6 (1.3–2.2) | 50 / 9 / 21 |
+| random | 0% | 1.2 (0.8–1.6) | 64 / 15 / 1 |
+| always-war | 0% | 1.3 (0.9–1.5) | 32 / 17 / 31 |
+| promise-spammer | 0% | 1.1 (0.7–1.3) | 61 / 13 / 6 |
+| card-only-trial-aware | 26% | 3.3 (2.9–4.0) | 58 / 15 / 7 |
+| **card-only-hud-aware** | **51%** | 4.0 (3.5–4.3) | 49 / 16 / 15 |
+
+Step by step (hud-aware, 80 seeds): Round 5 (F) 41% → + satire pack (F+H) 38% (noise) → + recess
+(F+H+I) 51%. Two crisis-free months a year make the game easier, as expected; the result sits at the
+top of the 40–50% band. If it should be lower, `recessMonths: 1` is the obvious knob.
+
+Rollout bots (upper bound only, not tuned for; 40 seeds × 20y):
+
+| strategy | term | median y (p25–p75) | lost to voters / deadlock / indicted |
+|---|---|---|---|
+| greedy | 68% | 4.3 (3.6–4.9) | 15 / 1 / 24 |
+| lookahead | 80% | 4.3 (4.3–5.3) | 26 / 2 / 12 |
+
+(Run time ≈ 20 min for both; lookahead ≈ 16 s per game. Greedy fell from 98% in Round 3: risky
+remedies and outcome noise hurt a bot that trusts its one-step score; it now often ignores the trial
+meter until indictment.)

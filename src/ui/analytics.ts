@@ -1,5 +1,5 @@
 // Google Analytics 4, loaded only after the visitor allows it (same pattern as the other lipu sites).
-// GA_MEASUREMENT_ID is empty until the owner picks a GA4 property: then nothing loads, no banner shows,
+// With an empty GA_MEASUREMENT_ID nothing loads, no banner shows,
 // and track() is a no-op. Never send free text or personal data — only ids and numbers.
 import { t } from '../i18n/index.ts';
 
