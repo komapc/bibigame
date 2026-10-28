@@ -79,3 +79,14 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 ## #17 Knesset summer recess
 - Aug–Sep: regular crises pause, the clock runs faster, and the recess is shown on the timeline.
 - Balance round 6.
+
+## #18 Docs
+- README, this changelog, balance round 6 with rollout bots.
+
+## #19 Playtest fixes
+- The approval target ("polls drifting toward X") is shown in the HUD, in text mode and in the log when it crosses the panic line. Slower late-game fatigue.
+- Fewer obvious picks: Beepers once per game, harsher remedy fatigue, and new card-specific answers for polls collapse, the reservists' letter and the ICC warrant.
+- Less repetition: "You're a leftist!" only when the far right is unhappy, repeat cards get rarer, and text variants for the Trump post, Iran and others.
+- Fixes: "hand out a ministry" on own-party cards does something; what a card does on arrival is shown on the card, not blamed on drift; the rogue backbencher counts real seats; the ICC warrant blocks the DC trip; the campaign risk counts tricks already applied; text-mode `wait` no longer auto-refuses an open card (`wait!` does).
+- Two mild bad-news cards during the summer recess.
+- Balance round 7.
