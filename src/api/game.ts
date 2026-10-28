@@ -3,8 +3,9 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, budgetDueYear, loseChance, hasTension, createState, dateOf, eventOptions, satDrivers, seatsOf, step,
+  act, budgetDueYear, loseChance, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
+import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
 import { PROMISES } from '../data/promises.ts';
 import { TITLES } from '../data/titles.ts';
@@ -77,6 +78,13 @@ export interface Observation {
   usedOnce: string[];
   cooldowns: { ministry: number; law: number; invite: number };
   laws: { id: string; label: string }[];
+  /** drawer moves for the current phase (src/data/moves.ts); `ending` ones end the game */
+  moves: { id: string; label: string; desc: string; available: boolean; cooldown: number; ending: boolean; preview: Preview[] }[];
+  /** in opposition: the rival government's stability (falls at 0) and days until it must call elections */
+  opposition: { stability: number; daysLeft: number } | null;
+  /** elections lost so far; at maxElectionLosses the game is over */
+  electionLosses: number;
+  maxElectionLosses: number;
   promises: { id: string; label: string; to: string[]; deliveredBy: string }[];
   titles: { id: string; name: string; gloss: string }[];
   stats: GameState['stats'];
@@ -235,6 +243,14 @@ export function observe(s: GameState, logTail = 12): Observation {
       ministry: Math.ceil(s.cooldowns.ministry), law: Math.ceil(s.cooldowns.law), invite: Math.ceil(s.cooldowns.invite),
     },
     laws: LAWS.map((id) => ({ id, label: t(`remedy.${id}`) })),
+    moves: MOVES.filter((m) => m.phases.includes(s.phase)).map((m) => ({
+      id: m.id, label: t(`remedy.${m.id}`), desc: t(`remedy.${m.id}.desc`), available: moveAvailable(s, m.id),
+      cooldown: moveCooldown(s, m.id), ending: !!m.ending, preview: preview(s, m.id),
+    })),
+    opposition: s.phase === 'opposition' && s.rival
+      ? { stability: Math.round(s.rival.stability), daysLeft: Math.max(0, Math.ceil(s.rival.until - s.day)) } : null,
+    electionLosses: s.electionLosses ?? 0,
+    maxElectionLosses: s.config.maxElectionLosses,
     promises: PROMISES.map((p) => ({ id: p.id, label: t(`promise.${p.id}`), to: p.to, deliveredBy: p.deliveredBy })),
     titles: s.titles.map((id) => ({ id, name: t(`title.${id}`), gloss: t(`title.${id}.gloss`) })),
     stats: { ...s.stats },
@@ -294,11 +310,17 @@ export function preview(s: GameState, optionId: string): Preview[] {
     for (const x of e.sat ?? []) out.push({ label: tagLabel(s, x.target, subject), up: x.delta > 0 });
     if (e.pauseTrialDays) out.push({ label: t('fx.pause'), up: true });
     if (e.quietDays) out.push({ label: t('fx.quiet'), up: true });
+    if (e.rival) out.push({ label: t('fx.rival'), up: e.rival < 0 });
     const sp: Record<string, [string, boolean]> = {
       war: ['fx.war', true], endWar: ['fx.endWar', true], ministryToSubject: ['fx.ministry', true],
       fireFarRight: ['fx.fire', false], fireDefence: ['fx.fire', false], elections: ['fx.elections', false],
       passBudget: ['fx.budget', true], defector: ['fx.defector', false],
       deliverPromise: ['fx.deliver', true], buyTime: ['fx.buyTime', true], refuse: ['fx.refuse', false],
+      poach: ['fx.poach', true], newMinistry: ['fx.newMinistry', true], merger: ['fx.merger', true],
+      spoiler: ['fx.spoiler', true], gevalt: ['fx.gevalt', true], exileRival: ['fx.exileRival', true],
+      primetime: ['fx.primetime', true], postponeElections: ['fx.postponeElections', true],
+      plea: ['fx.ending', false], miami: ['fx.ending', false], handover: ['fx.ending', false],
+      breakRotation: ['fx.breakRotation', false], noConfidence: ['fx.noConfidence', true], oppPoach: ['fx.poach', true],
     };
     if (e.special && sp[e.special]) out.push({ label: t(sp[e.special][0]), up: sp[e.special][1] });
     if (e.special === 'war') out.push({ label: t('fx.fiscal'), up: false });

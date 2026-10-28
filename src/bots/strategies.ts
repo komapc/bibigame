@@ -12,8 +12,9 @@ export interface Strategy {
 /** score a game state from Bibi's point of view (used by greedy/lookahead) */
 export function scoreState(g: Game): number {
   const s = g.state;
-  if (s.status === 'lost') return -1e6;
+  if (s.status === 'lost' || s.status === 'retired') return -1e6;
   const o = g.observe(0);
+  if (o.opposition) return -800 + 1.5 * o.meters.approval - 4 * o.opposition.stability - 3 * Math.max(0, o.meters.trial - 50);
   let sc = o.phase === 'campaign' ? -400 : 0;
   sc += 12 * Math.min(o.seats - o.majority, 6);
   sc += 1.5 * o.meters.approval;
@@ -39,6 +40,9 @@ export function randomBot(seed = 1): Strategy {
     name: 'random',
     decide(_g, o) {
       const acts: Action[] = [];
+      // a random player also tries the drawer moves now and then (never the game-ending exits)
+      const moves = o.moves.filter((m) => m.available && !m.ending);
+      if (moves.length && rng.next() < (o.phase === 'governing' ? 0.02 : 0.05)) acts.push({ type: 'move', moveId: pick(moves).id });
       if (o.phase !== 'governing') return acts;
       if (o.event && rng.next() < 0.3) {
         const opts = o.event.options.filter((x) => x.available);
@@ -136,6 +140,17 @@ export function greedy(lookaheadDays = 0, name = 'greedy', rollouts = 1): Strate
     decide(g, o) {
       const acts: Action[] = [];
       const s = g.state;
+      const ready = (id: string) => o.moves.some((m) => m.id === id && m.available);
+      if (o.phase === 'campaign') {
+        for (const id of ['merger', 'gevalt']) if (ready(id)) acts.push({ type: 'move', moveId: id });
+        if (ready('spoiler') && o.meters.trial < 70) acts.push({ type: 'move', moveId: 'spoiler' });
+        return acts;
+      }
+      if (o.opposition) {
+        if (ready('noconfidence') && o.opposition.stability < 20) acts.push({ type: 'move', moveId: 'noconfidence' });
+        for (const id of ['opppoach', 'oppattack']) if (ready(id)) acts.push({ type: 'move', moveId: id });
+        return acts;
+      }
       if (o.phase !== 'governing') return acts;
       if (o.event) {
         const b = bestOption(g, o, lookaheadDays, rollouts);
@@ -179,6 +194,17 @@ export function greedy(lookaheadDays = 0, name = 'greedy', rollouts = 1): Strate
         const cand = o.parties.filter((p) => !p.inCoalition && p.seats > 0 && p.willSitWithBibi)
           .sort((a, b) => Math.abs(a.position - o.govPosition) - Math.abs(b.position - o.govPosition))[0];
         if (cand) acts.push({ type: 'invite', partyId: cand.id });
+      }
+      // drawer moves: the one with the best rollout gain, if clearly positive (never the exits)
+      if (!o.event) {
+        let bestMove: string | null = null;
+        let bestMoveGain = 8;
+        for (const m of o.moves) {
+          if (!m.available || m.ending) continue;
+          const gain = gainOf(g, { type: 'move', moveId: m.id }, horizon, baseline(), rollouts);
+          if (gain > bestMoveGain) { bestMoveGain = gain; bestMove = m.id; }
+        }
+        if (bestMove) acts.push({ type: 'move', moveId: bestMove });
       }
       // emergency button when the coalition is about to break
       if (o.seats < o.majority + 2 && partners.some((p) => p.satisfaction < 10) && !o.war.active && o.war.cooldownDays === 0) {

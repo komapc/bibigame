@@ -25,4 +25,9 @@ export const TITLES: TitleDef[] = [
   { id: 'mahapach', kind: 'achievement', stat: 'comebacks', threshold: 1 },
   { id: 'havtachot', kind: 'achievement', stat: 'brokenPromises', threshold: 10 },
   { id: 'kablan', kind: 'achievement', stat: 'bigCoalitionBest', threshold: 365 },
+  { id: 'shiva', kind: 'achievement', stat: 'returns', threshold: 1 },
+  // special endings
+  { id: 'miamivice', kind: 'ending', ending: 'miami', threshold: 0 },
+  { id: 'turpitude', kind: 'ending', ending: 'plea', threshold: 0 },
+  { id: 'rotated', kind: 'ending', ending: 'rotation', threshold: 0 },
 ];

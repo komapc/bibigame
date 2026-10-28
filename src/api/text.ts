@@ -23,6 +23,7 @@ export const HELP = `Commands (one per line):
   invite <party>               try to bring a party into the coalition
   law <law>                    pass a law (see LAWS)
   war                          start a war (emergency button)
+  move <id>                    a drawer move (see MOVES; also campaign tricks and opposition moves)
   wait [N|Nd|Nm]               let time pass; stops early when a crisis fires (default: until next crisis, max 30d)
   look                         print the state again
   help                         this text
@@ -38,8 +39,9 @@ function bar(v: number, width = 10): string {
 export function renderText(o: Observation): string {
   const L: string[] = [];
   const years = (o.pmDays / 365.25).toFixed(2);
-  if (o.status === 'lost' && o.lostReason) L.push(`GAME OVER: ${t(`over.${o.lostReason}.title`)} — ${t(`over.${o.lostReason}.text`)}`);
+  if ((o.status === 'lost' || o.status === 'retired') && o.lostReason) L.push(`GAME OVER: ${t(`over.${o.lostReason}.title`)} — ${t(`over.${o.lostReason}.text`)}`);
   L.push(`=== ${o.date} | day ${o.day} | PM for ${years}y (${Math.round(o.termProgress * 100)}% of 4y term${o.termReached ? ', TERM REACHED' : ''}) | ${o.status.toUpperCase()} ===`);
+  if (o.opposition) L.push(`IN OPPOSITION: rival government stability ${o.opposition.stability}% (falls at 0; elections in ${o.opposition.daysLeft}d at the latest). Lose the next election and it is over.`);
   if (o.phase === 'campaign') L.push(`ELECTION CAMPAIGN: ${o.phaseLeftDays}d to election day (election #${o.elections}); chance the voters throw you out: ${Math.round(o.electionRisk * 100)}%`);
   L.push(`Coalition: ${o.seats}/120 (need ${o.majority})${o.defectors ? `, ${o.defectors} rogue MKs` : ''} | gov position ${o.govPosition} (-10 left .. +10 right)`);
   const m = o.meters;
@@ -73,6 +75,7 @@ export function renderText(o: Observation): string {
     }
   } else if (o.phase === 'governing') L.push('No crisis right now.');
   L.push(`LAWS: ${o.laws.map((l) => l.id).join(', ')}`);
+  if (o.moves.length) L.push(`MOVES: ${o.moves.map((m) => `${m.id}${m.available ? '' : m.cooldown ? ` (${m.cooldown}d)` : ' (n/a)'}${m.ending ? ' [ENDS GAME]' : ''}`).join(', ')}`);
   L.push(`PROMISES: ${o.promises.map((p) => `${p.id}->${p.to.join('/')}`).join(', ')}`);
   L.push(`TITLES: ${o.titles.length ? o.titles.map((x) => `${x.name} (${x.gloss})`).join('; ') : 'none yet'}`);
   if (o.log.length) {
@@ -111,6 +114,7 @@ export function parseCommand(g: Game, line: string): Command {
     case 'look': case 'state': return { kind: 'look' };
     case 'choose': return rest[0] ? { kind: 'action', action: { type: 'choose', optionId: rest[0].toLowerCase() } } : { kind: 'error', message: 'choose <option>' };
     case 'war': return { kind: 'action', action: { type: 'startWar' } };
+    case 'move': return rest[0] ? { kind: 'action', action: { type: 'move', moveId: rest[0].toLowerCase() } } : { kind: 'error', message: 'move <id> (see MOVES)' };
     case 'noop': return { kind: 'action', action: { type: 'noop' } };
     case 'law': return rest[0] ? { kind: 'action', action: { type: 'passLaw', lawId: rest[0].toLowerCase() } } : { kind: 'error', message: 'law <law>' };
     case 'invite': {

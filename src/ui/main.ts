@@ -76,6 +76,7 @@ app.innerHTML = `
     <details class="panel" open><summary>${t('ui.parties')}</summary><div id="parties" class="parties"></div></details>
     <details class="panel"><summary>${t('ui.ministries')}</summary><div id="ministries" class="ministries"></div></details>
     <details class="panel"><summary>${t('ui.laws')}</summary><div id="laws" class="laws"></div></details>
+    <details class="panel"><summary>${t('ui.movesPanel')}</summary><div id="moves" class="laws moves"></div></details>
     <details class="panel"><summary>${t('ui.log')}</summary><ol id="log" class="log"></ol></details>
     <p class="bothint">${t('ui.botHint')}</p>
   </aside>
@@ -109,8 +110,10 @@ function renderTop(o: Observation) {
     [...coal, ...opp].map((p) => `<span class="seg ${p.inCoalition ? '' : 'opp'} ${p.mayLeave ? 'ghost' : ''}" style="flex:${p.seats};background:${p.color}" title="${esc(p.name)} ${p.seats}"></span>`).join('')
     + `<span class="maj" style="left:${(61 / 120) * 100}%"></span>`);
   renderSupport(o, coal);
-  $('seattxt').innerHTML = o.phase === 'campaign'
-    ? `<b class="bad">${esc(t('ui.campaign', { days: o.phaseLeftDays }))}</b>`
+  $('seattxt').innerHTML = o.opposition
+    ? `<b class="bad">${esc(t('ui.rival', { n: o.opposition.stability }))}</b> · ${esc(t('ui.lastChance'))}`
+    : o.phase === 'campaign'
+    ? `<b class="bad">${esc(t('ui.campaign', { days: o.phaseLeftDays }))}</b>${o.electionLosses ? ` · ${esc(t('ui.lastChance'))}` : ''}`
     : `${o.defectors ? `${o.defectors} rogue MKs` : ''}`
       + coal.filter((p) => p.mayLeave).map((p) => ` · <span class="danger">⚠ ${esc(t('ui.without', { party: p.short || p.name, seats: p.seatsWithout }))}</span>`).join('');
 }
@@ -142,8 +145,9 @@ function renderSupport(o: Observation, coal: Observation['parties']) {
   if (shownSeats < 0) { shownSeats = seats; $('seatnum').textContent = String(seats); }
   else if (seats !== shownSeats) { animateNum($('seatnum'), shownSeats, seats, String); shownSeats = seats; }
   const big = $('bigseats');
-  big.dataset.state = o.phase === 'campaign' ? 'campaign' : margin >= 3 ? 'good' : margin >= 0 ? 'warn' : 'bad';
-  $('margin').textContent = o.phase === 'campaign' ? t('ui.campaignShort', { days: o.phaseLeftDays }) : ltr(margin >= 0 ? `+${margin}` : `${margin}`);
+  big.dataset.state = o.phase === 'campaign' ? 'campaign' : o.opposition ? 'bad' : margin >= 3 ? 'good' : margin >= 0 ? 'warn' : 'bad';
+  $('margin').textContent = o.phase === 'campaign' ? t('ui.campaignShort', { days: o.phaseLeftDays })
+    : o.opposition ? t('ui.oppositionShort') : ltr(margin >= 0 ? `+${margin}` : `${margin}`);
   const d = seats - seatsAtCard;
   $('seattrend').textContent = d > 0 ? `↑${d}` : d < 0 ? `↓${-d}` : '';
   $('seattrend').className = `trend ${d > 0 ? 'good' : d < 0 ? 'bad' : ''}`;
@@ -285,6 +289,7 @@ function renderStage(o: Observation) {
 // ------------------------------------------------------------------ headlines (no crisis)
 function headline(o: Observation): string {
   const name = (id: string) => partyName(o, id);
+  if (o.opposition) return t('news.opposition', { n: o.opposition.stability });
   if (o.phase === 'campaign') return t('news.campaign', { days: o.phaseLeftDays, poll: game.state.campaignPollSeats, risk: Math.round(o.electionRisk * 100) });
   const angry = o.parties.find((p) => p.trust.state === 'angry');
   if (angry) return t('news.angry', { party: name(angry.id), promise: t(`promise.${angry.trust.promiseId}`) });
@@ -324,7 +329,8 @@ function newsHtml(o: Observation, enter: string): string {
       <button data-act="open" data-sec="ministries" ${o.cooldowns.ministry ? 'disabled' : ''}>🏛 ${t('ui.qMinistry')}</button>
       <button data-act="open" data-sec="laws" ${o.cooldowns.law ? 'disabled' : ''}>📜 ${t('ui.qLaw')}</button>
       <button data-act="war" class="warq" ${warOk ? '' : 'disabled'}>⚔ ${t('ui.war')}</button>
-    </div>` : ''}
+      <button data-act="open" data-sec="moves">🎲 ${t('ui.movesPanel')}</button>
+    </div>` : `<div class="quick"><button data-act="open" data-sec="moves">🎲 ${t('ui.movesPanel')}</button></div>`}
   </div>`;
 }
 
@@ -468,6 +474,15 @@ function renderLaws(o: Observation) {
     o.laws.map((l) => `<button data-law="${l.id}" ${ready ? '' : 'disabled'} title="${esc(t(`remedy.${l.id}.desc`))}">${esc(l.label)}</button>`).join(''));
 }
 
+function renderMoves(o: Observation) {
+  region('moves', o.phase + o.moves.map((m) => `${m.id}${m.available}${m.cooldown}`).join(), () => {
+    const btn = (m: Observation['moves'][number]) => `<button data-move="${m.id}" class="${m.ending ? 'exit' : ''}" ${m.available ? '' : 'disabled'} title="${esc(m.desc)}">${esc(m.label)}${m.cooldown ? ` <small>${esc(t('ui.cooldown', { days: m.cooldown }))}</small>` : ''}<small class="mdesc">${esc(m.desc)}</small></button>`;
+    const main = o.moves.filter((m) => !m.ending), exits = o.moves.filter((m) => m.ending);
+    return (o.opposition ? `<p class="sub">${esc(t('ui.rival', { n: o.opposition.stability }))}</p>` : '')
+      + main.map(btn).join('') + (exits.length ? `<p class="sub">${t('ui.exits')}</p>${exits.map(btn).join('')}` : '');
+  });
+}
+
 function renderWar(o: Observation) {
   const btn = $('war') as HTMLButtonElement;
   const can = o.phase === 'governing' && !o.war.active && o.war.cooldownDays === 0 && o.tension;
@@ -516,6 +531,7 @@ function render() {
   renderParties(o);
   renderMinistries(o);
   renderLaws(o);
+  renderMoves(o);
   renderWar(o);
   renderLog();
   if (o.titles.length > lastTitles) {
@@ -573,6 +589,11 @@ app.addEventListener('click', (e) => {
   else if (d.act === 'restart') restart();
   else if (d.act === 'drawer') $('drawer').classList.toggle('open');
   else if (d.law) doAct({ type: 'passLaw', lawId: d.law });
+  else if (d.move) {
+    const m = game.observe(0).moves.find((x) => x.id === d.move);
+    if (m?.ending && !window.confirm(`${m.label}\n\n${m.desc}`)) return;
+    doAct({ type: 'move', moveId: d.move });
+  }
   else if (d.invite) doAct({ type: 'invite', partyId: d.invite });
   else if (d.deliver && d.pid) doAct({ type: 'deliver', partyId: d.deliver, promiseId: d.pid });
   else if (b.id === 'timeline') {
