@@ -50,9 +50,21 @@ export function withLocale<T>(code: Lang | undefined, fn: () => T): T {
 }
 
 export function has(key: string): boolean { return key in dict || key in en; }
+/** True only if the active locale itself defines the key (no English fallback). */
+export function hasOwn(key: string): boolean { return key in dict; }
+
+/** Count params that get a pluralised companion: {days} → {daysText} ("1 day", "3 days"), {seats} → {seatsText}. */
+const COUNTS: [string, string][] = [['days', 'unit.days'], ['seats', 'unit.seats']];
 
 export function t(key: string, params: Record<string, string | number> = {}): string {
   const s = dict[key] ?? en[key] ?? key;
+  if (!key.startsWith('unit.')) {
+    for (const [p, unit] of COUNTS) {
+      if (typeof params[p] === 'number' && params[`${p}Text`] === undefined && s.includes(`{${p}Text}`)) {
+        params = { ...params, [`${p}Text`]: tp(unit, params[p] as number) };
+      }
+    }
+  }
   return s.replace(/\{(\w+)\}/g, (_, k) => (params[k] !== undefined ? String(params[k]) : `{${k}}`));
 }
 
@@ -65,6 +77,12 @@ export function tp(key: string, n: number, params: Record<string, string | numbe
   const cat = new Intl.PluralRules(current).select(n);
   const k = has(`${key}.${cat}`) ? `${key}.${cat}` : has(`${key}.other`) ? `${key}.other` : key;
   return t(k, { n, ...params });
+}
+
+/** Header-chip label: optional locale-only `party.<id>.chip` (an extra-short form), else the given short name. */
+export function partyChip(id: string, short: string): string {
+  const k = `party.${id}.chip`;
+  return hasOwn(k) ? t(k) : short;
 }
 
 /** Party display name: translated `party.<id>` if present, else the data name. */

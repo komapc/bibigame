@@ -3,7 +3,7 @@ import './style.css';
 import { createGame, promisesFor, type Game, type Observation, type OutcomeView } from '../api/game.ts';
 import type { Action } from '../engine/types.ts';
 import { titleBoard } from '../api/text.ts';
-import { LANGS, getLocale, isLang, isRtl, loadLocale, setLocale, t, type Lang } from '../i18n/index.ts';
+import { LANGS, getLocale, isLang, isRtl, loadLocale, partyChip, setLocale, t, type Lang } from '../i18n/index.ts';
 import { hemicycleSvg } from './hemicycle.ts';
 import { initSwipe } from './swipe.ts';
 
@@ -34,6 +34,8 @@ let lastTitles = 0;
 const keys: Record<string, string> = {};
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/** Bidi-isolate a signed number so RTL text shows "+3", not "3+" (survives esc()). */
+const ltr = (x: string) => `\u2066${x}\u2069`;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const pct = (v: number) => `${Math.max(0, Math.min(100, v)).toFixed(1)}%`;
 const ARROW: Record<string, string> = { left: '←', right: '→', up: '↑', down: '↓' };
@@ -141,7 +143,7 @@ function renderSupport(o: Observation, coal: Observation['parties']) {
   else if (seats !== shownSeats) { animateNum($('seatnum'), shownSeats, seats, String); shownSeats = seats; }
   const big = $('bigseats');
   big.dataset.state = o.phase === 'campaign' ? 'campaign' : margin >= 3 ? 'good' : margin >= 0 ? 'warn' : 'bad';
-  $('margin').textContent = o.phase === 'campaign' ? t('ui.campaignShort', { days: o.phaseLeftDays }) : margin >= 0 ? `+${margin}` : `${margin}`;
+  $('margin').textContent = o.phase === 'campaign' ? t('ui.campaignShort', { days: o.phaseLeftDays }) : ltr(margin >= 0 ? `+${margin}` : `${margin}`);
   const d = seats - seatsAtCard;
   $('seattrend').textContent = d > 0 ? `↑${d}` : d < 0 ? `↓${-d}` : '';
   $('seattrend').className = `trend ${d > 0 ? 'good' : d < 0 ? 'bad' : ''}`;
@@ -165,7 +167,7 @@ function renderSupport(o: Observation, coal: Observation['parties']) {
   region('pchips', coal.map((p) => [p.id, p.seats, p.satisfaction < 25 ? 'r' : p.satisfaction < 45 ? 'a' : 'g', p.mayLeave, p.trust.state === 'angry' || p.trust.waiting].join(':')).join('|'), () =>
     [...coal].sort((x, y) => y.seats - x.seats).map((p) => {
       const mood = p.mayLeave || p.satisfaction < 25 ? 'bad' : p.satisfaction < 45 ? 'warn' : 'good';
-      return `<button class="pchip ${mood}" role="listitem" data-act="open" data-sec="parties" title="${esc(p.name)}"><i style="background:${p.color}"></i>${esc(p.short || p.name)} ${p.seats}${p.mayLeave ? ` <em>${t('ui.mayLeave')}</em>` : ''}${p.trust.state === 'angry' || p.trust.waiting ? ' ⏳' : ''}</button>`;
+      return `<button class="pchip ${mood}" role="listitem" data-act="open" data-sec="parties" title="${esc(p.name)}"><i style="background:${p.color}"></i><span class="pn">${esc(partyChip(p.id, p.short || p.name))}</span> ${p.seats}${p.mayLeave ? ` <em>${t('ui.mayLeave')}</em>` : ''}${p.trust.state === 'angry' || p.trust.waiting ? ' ⏳' : ''}</button>`;
     }).join(''));
 }
 
@@ -190,7 +192,7 @@ function renderTimeline(o: Observation) {
   if (now) now.style.insetInlineStart = x(tl.nowDay);
   const next = tl.upcoming.find((m) => m.kind !== 'goal');
   const parts = [`${(o.pmDays / 365.25).toFixed(1)}/4y`];
-  if (next) parts.push(`${next.label} ${next.day - tl.nowDay}d`);
+  if (next) parts.push(t('tl.next', { label: next.label, days: next.day - tl.nowDay }));
   if (tl.nextTitle) parts.push(`👑 ${t('tl.nextTitle', { title: tl.nextTitle.name, days: tl.nextTitle.inDays })}`);
   $('tlcap').textContent = parts.join(' · ');
   const hist = $('history');
@@ -376,7 +378,7 @@ function floatOn(el: HTMLElement | null, d: number, inverse = false) {
   if (!el || reduceMotion) return;
   const f = document.createElement('span');
   f.className = `floater ${(inverse ? d < 0 : d > 0) ? 'up' : 'down'}`;
-  f.textContent = d > 0 ? `+${d}` : `${d}`;
+  f.textContent = ltr(d > 0 ? `+${d}` : `${d}`);
   el.parentElement?.appendChild(f);
   window.setTimeout(() => f.remove(), 1400);
 }
@@ -425,10 +427,10 @@ function renderParties(o: Observation) {
     const invite = !p.inCoalition && canAct
       ? `<button data-invite="${p.id}" ${o.cooldowns.invite > 0 ? 'disabled' : ''}>${t('ui.invite')}</button>` : '';
     const flags = [p.wartime && t('ui.wartime'), p.mayLeave ? t('ui.mayLeave') : p.threatening && t('ui.threatening')].filter(Boolean).join(' · ');
-    const sgn = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+    const sgn = (n: number) => ltr(n > 0 ? `+${n}` : `${n}`);
     const cause = p.lastChange ? `<div class="cause ${p.lastChange.delta > 0 ? 'good' : 'bad'}">${esc(t('out.because', { delta: sgn(p.lastChange.delta), cause: p.lastChange.because }))}</div>` : '';
     const trend = p.inCoalition && Math.abs(p.trend.perMonth) >= 0.3
-      ? `<div class="trend ${p.trend.perMonth > 0 ? 'good' : 'bad'}">${p.trend.perMonth > 0 ? '↗' : '↘'} ${esc(t('ui.trendMonth', { delta: (p.trend.perMonth > 0 ? '+' : '') + p.trend.perMonth.toFixed(1), reason: p.trend.reason }))}</div>` : '';
+      ? `<div class="trend ${p.trend.perMonth > 0 ? 'good' : 'bad'}">${p.trend.perMonth > 0 ? '↗' : '↘'} ${esc(t('ui.trendMonth', { delta: ltr((p.trend.perMonth > 0 ? '+' : '') + p.trend.perMonth.toFixed(1)), reason: p.trend.reason }))}</div>` : '';
     const cls = p.trust.state === 'angry' ? 'angry' : p.trust.waiting ? 'waiting' : '';
     return `<div class="party ${p.inCoalition ? 'in' : 'out'} ${cls} ${p.mayLeave ? 'mayleave' : ''}" style="--c:${p.color}">
       <div class="phead"><b>${esc(p.name)}</b><span>${p.seats}</span></div>

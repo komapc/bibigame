@@ -62,6 +62,7 @@ button:active:not(:disabled) { transform: scale(.98); }
 .pchips { display: flex; gap: 6px; overflow-x: auto; margin-top: 6px; padding-bottom: 2px; scrollbar-width: none; }
 .pchips::-webkit-scrollbar { display: none; }
 .pchip { flex: none; min-height: 32px; padding: 4px 10px; border-radius: 999px; font-size: 13px; display: inline-flex; align-items: center; gap: 5px; background: #13283c; }
+.pchip .pn { max-width: 7.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pchip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .pchip.good { border-color: #2e6b3a; } .pchip.warn { border-color: var(--warn); color: var(--warn); }
 .pchip.bad { border-color: var(--bad); color: var(--bad); background: #2a1216; }
