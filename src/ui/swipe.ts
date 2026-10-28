@@ -9,6 +9,8 @@ interface Opts {
   canChoose: (dir: Dir) => boolean;
   onPreview: (dir: Dir | null, strength: number) => void;
   onChoose: (dir: Dir) => void;
+  /** a swipe/arrow toward an option that cannot be chosen (the card snaps back) */
+  onBlocked: (dir: Dir) => void;
 }
 
 const TH_X = 110;
@@ -33,7 +35,8 @@ export function initSwipe(o: Opts) {
 
   function flyThenChoose(dir: string) {
     const d = dir as Dir;
-    if (busy || !o.canChoose(d)) return;
+    if (busy) return;
+    if (!o.canChoose(d)) { o.onBlocked(d); return; }
     const el = card();
     if (!el || o.reduceMotion) { o.onChoose(d); return; }
     busy = true;
@@ -75,7 +78,10 @@ export function initSwipe(o: Opts) {
     el.classList.remove('dragging');
     const { dir, strength } = dirOf(dx, dy);
     if (e.type === 'pointerup' && strength >= 1 && o.canChoose(dir)) flyThenChoose(dir);
-    else { setT(el, 0, 0, true); o.onPreview(null, 0); }
+    else {
+      setT(el, 0, 0, true); o.onPreview(null, 0);
+      if (e.type === 'pointerup' && strength >= 1) o.onBlocked(dir);
+    }
     moved = false;
   };
   o.root.addEventListener('pointerup', end);

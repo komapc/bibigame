@@ -1,6 +1,7 @@
 // DOM layer. Reads Observation, sends Actions. No game logic here.
 import './style.css';
-import { createGame, promisesFor, type Game, type Observation, type OutcomeView } from '../api/game.ts';
+import { createGame, promisesFor, type Game, type Observation, type OutcomeView, type Preview } from '../api/game.ts';
+import { promiseById } from '../data/promises.ts';
 import type { Action } from '../engine/types.ts';
 import { titleBoard } from '../api/text.ts';
 import { LANGS, getLocale, isLang, isRtl, loadLocale, partyChip, setLocale, t, type Lang } from '../i18n/index.ts';
@@ -8,7 +9,7 @@ import { hemicycleSvg } from './hemicycle.ts';
 import { initSwipe } from './swipe.ts';
 import { buzz, play, setSound, soundOn } from './fx.ts';
 import { consentPending, initConsent, mountConsent, track } from './analytics.ts';
-import { advice, editionSnap, fridayEdition, type EditionSnap } from '../api/extras.ts';
+import { editionSnap, fridayEdition, type EditionSnap } from '../api/extras.ts';
 import { dailySeed, isDateKey, shareText, todayKey, whatsappUrl } from '../api/share.ts';
 
 // ---- language: saved choice → browser language → English
@@ -57,28 +58,24 @@ const TABS: [string, string, string][] = [['moves', '🎲', 'ui.movesPanel'], ['
 app.innerHTML = `
 <header class="top">
   <div class="row1">
-    <div class="who"><b>${t('ui.player')}</b> <span id="title" class="badge"></span></div>
-    <div id="date" class="date"></div>
+    <span id="date" class="date"></span>
+    <button id="trialb" class="trialb" data-act="trial" hidden></button>
+    <span class="sp"></span>
     <button class="icon help" data-act="intro" aria-label="${t('ui.help')}">?</button>
     <button id="sound" class="icon" data-act="sound" aria-label="${t('ui.sound')}"></button>
     <button id="pause" class="icon" aria-label="${t('ui.pause')}">⏸</button>
   </div>
   <div class="support">
-    <div class="bigseats" id="bigseats" aria-live="polite"><b id="seatnum">0</b><span class="of">/ 61</span><span id="margin" class="margin"></span><span id="seattrend" class="trend"></span></div>
+    <div class="bigseats" id="bigseats" aria-live="polite"><b id="seatnum">0</b><span id="seatof" class="of">/ 61</span><span id="margin" class="margin"></span><span id="seattrend" class="trend"></span></div>
     <div class="appr"><span>${t('ui.approval')}</span><b id="apprnum">0%</b><small id="apprtgt" class="trend"></small><div class="mbar"><div id="apprbar"></div></div></div>
   </div>
   <div class="seatbar" id="seatbar"></div>
-  <div id="pchips" class="pchips" role="list"></div>
-  <div id="seattxt" class="seattxt"></div>
-  <button id="timeline" class="timeline" data-act="open" data-sec="log" aria-label="${t('ui.timeline')}">
-    <div class="tl-track" id="tltrack"></div>
-    <div class="tl-caption" id="tlcap"></div>
-  </button>
+  <button id="timeline" class="timeline" data-act="open" data-sec="log" aria-label="${t('ui.timeline')}"><div class="tl-track" id="tltrack"></div></button>
+  <div class="statusrow"><button id="alert" class="alert" data-act="open" data-sec="parties" hidden></button><button id="tlcap" class="tl-caption" data-act="open" data-sec="log"></button></div>
 </header>
 <main class="main">
   <div id="result" class="resultline" role="status" aria-live="polite"></div>
   <section class="stage" id="stage"></section>
-  <p id="advline" class="advline"></p>
   <aside id="drawer" class="drawer" aria-label="${t('ui.moves')}">
     <div class="tabs" role="tablist">${TABS.map(([id, ic, k]) => `<button role="tab" data-act="tab" data-tab="${id}" aria-selected="false">${ic} ${t(k)}</button>`).join('')}<button class="icon drawer-close" data-act="close" aria-label="${t('ui.closeSheet')}">✕</button></div>
     <div class="tabpane" data-pane="moves">
@@ -97,7 +94,7 @@ app.innerHTML = `
       </section>
     </div>
     <div class="tabpane" data-pane="log">
-      <section class="panel"><h3>${t('ui.timeline')}</h3><ul id="upcoming" class="tl-up"></ul></section>
+      <section class="panel"><h3>${t('ui.timeline')}</h3><p id="titleline" class="sub titleline"></p><ul id="upcoming" class="tl-up"></ul></section>
       <div id="editions"></div>
       <section class="panel"><h3>${t('ui.log')}</h3><ol id="log" class="log"></ol></section>
       <p class="bothint">${t('ui.botHint')}</p>
@@ -121,33 +118,45 @@ function region(id: string, key: string, html: () => string) {
 const partyName = (o: Observation, id: string | null) => o.parties.find((p) => p.id === id)?.name ?? id ?? '—';
 
 // ------------------------------------------------------------------ header
+// Header = date · trial · buttons, then seats + approval, the seat bar, a thin timeline and ONE
+// status line (a warning when something is about to break, otherwise the next timeline event).
 function renderTop(o: Observation) {
-  const best = o.titles.length ? o.titles[o.titles.length - 1] : null;
-  const title = $('title');
-  title.textContent = best ? best.name : t('ui.noTitle');
-  title.title = best ? best.gloss : '';
   $('date').textContent = o.date;
   const coal = o.parties.filter((p) => p.inCoalition && p.seats > 0).sort((a, b) => a.position - b.position);
   const opp = o.parties.filter((p) => !p.inCoalition && p.seats > 0).sort((a, b) => a.position - b.position);
   region('seatbar', [...coal, ...opp].map((p) => p.id + p.seats + p.inCoalition + p.mayLeave).join() + o.defectors, () =>
     [...coal, ...opp].map((p) => `<span class="seg ${p.inCoalition ? '' : 'opp'} ${p.mayLeave ? 'ghost' : ''}" style="flex:${p.seats};background:${p.color}" title="${esc(p.name)} ${p.seats}"></span>`).join('')
     + `<span class="maj" style="left:${(61 / 120) * 100}%"></span>`);
-  renderSupport(o, coal);
-  // one status line under the seat bar: phase, who may leave, or the one meter in danger
+  renderSupport(o);
+  // trial: always visible once it is running (also in opposition) — it ends the game at 100
+  const trial = Math.round(o.meters.trial);
+  const tb = $('trialb') as HTMLButtonElement;
+  tb.hidden = trial <= 0;
+  tb.textContent = `⚖ ${trial}/100`;
+  tb.className = `trialb ${trial >= 80 ? 'bad' : trial >= 60 ? 'warn' : ''}`;
+  tb.title = t('ui.trialBadge', { n: trial });
+  tb.setAttribute('aria-label', tb.title);
+  // the one warning: a partner about to walk (biggest first), else a meter in danger
   const m = o.meters;
-  const dangers: [string, number, boolean][] = [
-    ['ui.trial', m.trial, m.trial > 70], ['ui.street', m.street, m.street < 30], ['ui.us', m.us, m.us < 30], ['ui.fiscal', m.fiscal, m.fiscal < 25],
-  ];
+  const leaving = coal.filter((p) => p.mayLeave).sort((a, b) => b.seats - a.seats);
+  const dangers: [string, number, boolean][] = [['ui.street', m.street, m.street < 30], ['ui.us', m.us, m.us < 30], ['ui.fiscal', m.fiscal, m.fiscal < 25]];
   const dg = dangers.find((x) => x[2]);
-  const parts = o.opposition
-    ? [`<b class="bad">${esc(t('ui.rival', { n: o.opposition.stability }))}</b>`, esc(t('ui.lastChance'))]
-    : o.phase === 'campaign'
-    ? [`<b class="bad">${esc(t('ui.campaign', { days: o.phaseLeftDays }))}</b>`, o.electionLosses ? esc(t('ui.lastChance')) : '']
-    : [
-      ...coal.filter((p) => p.mayLeave).map((p) => `<span class="danger">⚠ ${esc(t('ui.without', { party: p.short || p.name, seats: p.seatsWithout }))}</span>`),
-      dg ? `<span class="bad">⚠ ${esc(t(dg[0]))} <b>${Math.round(dg[1])}</b></span>` : '',
-    ];
-  $('seattxt').innerHTML = parts.filter(Boolean).join(' · ');
+  const al = $('alert') as HTMLButtonElement;
+  let text = '', sec = 'parties', cls = 'alert';
+  if (o.phase === 'governing' && leaving.length) {
+    const p = leaving[0];
+    text = `⚠ ${t('ui.mayLeaveLine', { party: partyChip(p.id, p.short || p.name), seats: p.seatsWithout })}${leaving.length > 1 ? ` ${ltr(`+${leaving.length - 1}`)}` : ''}`;
+    cls += ' danger';
+  } else if (o.phase === 'governing' && dg) {
+    text = `⚠ ${t(dg[0])} ${Math.round(dg[1])}`;
+  } else if ((o.opposition || o.phase === 'campaign') && o.electionLosses) {
+    text = `⚠ ${t('ui.lastChance')}`; sec = 'moves';
+  }
+  al.hidden = !text;
+  al.textContent = text;
+  al.dataset.sec = sec;
+  al.className = cls;
+  $('tlcap').hidden = !!text;
 }
 
 // ------------------------------------------------------------------ big support indicator
@@ -170,19 +179,37 @@ function animateNum(el: HTMLElement, from: number, to: number, fmt: (n: number) 
   requestAnimationFrame(tick);
 }
 
-function renderSupport(o: Observation, coal: Observation['parties']) {
+function renderSupport(o: Observation) {
   const seats = o.seats, margin = seats - o.majority;
+  const big = $('bigseats');
+  if (o.opposition) {
+    // nothing to count in opposition: show what you are fighting, the rival government's stability
+    const st = Math.round(o.opposition.stability);
+    big.dataset.state = 'opp';
+    $('seatnum').textContent = `${st}%`;
+    $('seatof').textContent = t('ui.rivalShort');
+    $('margin').textContent = '';
+    $('seattrend').textContent = '';
+    big.title = t('ui.rival', { n: st });
+    shownSeats = -1;
+    renderApproval(o);
+    return;
+  }
+  $('seatof').textContent = `/ ${o.majority}`;
+  big.title = '';
   if (game.state.event && game.state.event.firedAt !== lastCardAt) { lastCardAt = game.state.event.firedAt; seatsAtCard = seats; }
   if (seatsAtCard < 0) seatsAtCard = seats;
   if (shownSeats < 0) { shownSeats = seats; $('seatnum').textContent = String(seats); }
   else if (seats !== shownSeats) { animateNum($('seatnum'), shownSeats, seats, String); shownSeats = seats; }
-  const big = $('bigseats');
-  big.dataset.state = o.phase === 'campaign' ? 'campaign' : o.opposition ? 'bad' : margin >= 3 ? 'good' : margin >= 0 ? 'warn' : 'bad';
-  $('margin').textContent = o.phase === 'campaign' ? t('ui.campaignShort', { days: o.phaseLeftDays })
-    : o.opposition ? t('ui.oppositionShort') : ltr(margin >= 0 ? `+${margin}` : `${margin}`);
+  big.dataset.state = o.phase === 'campaign' ? 'campaign' : margin >= 3 ? 'good' : margin >= 0 ? 'warn' : 'bad';
+  $('margin').textContent = o.phase === 'campaign' ? t('ui.campaignShort', { days: o.phaseLeftDays }) : ltr(margin >= 0 ? `+${margin}` : `${margin}`);
   const d = seats - seatsAtCard;
   $('seattrend').textContent = d > 0 ? `↑${d}` : d < 0 ? `↓${-d}` : '';
   $('seattrend').className = `trend ${d > 0 ? 'good' : d < 0 ? 'bad' : ''}`;
+  renderApproval(o);
+}
+
+function renderApproval(o: Observation) {
   const a = Math.round(o.meters.approval);
   if (shownAppr < 0) { shownAppr = a; $('apprnum').textContent = `${a}%`; }
   else if (Math.abs(a - shownAppr) >= 2) { animateNum($('apprnum'), shownAppr, a, (n) => `${n}%`); shownAppr = a; }
@@ -196,12 +223,6 @@ function renderSupport(o: Observation, coal: Observation['parties']) {
   $('apprtgt').textContent = arrow ? `${arrow}${tgt}%` : '';
   $('apprtgt').className = `trend ${o.approvalTarget < o.panicBelow ? 'bad' : ''}`;
   $('apprtgt').title = t('ui.approvalTarget', { n: tgt, panic: o.panicBelow });
-  // compact coalition chips; tap → full party sheet
-  region('pchips', coal.map((p) => [p.id, p.seats, p.satisfaction < 25 ? 'r' : p.satisfaction < 45 ? 'a' : 'g', p.mayLeave, p.trust.state === 'angry' || p.trust.waiting].join(':')).join('|'), () =>
-    [...coal].sort((x, y) => y.seats - x.seats).map((p) => {
-      const mood = p.mayLeave || p.satisfaction < 25 ? 'bad' : p.satisfaction < 45 ? 'warn' : 'good';
-      return `<button class="pchip ${mood}" role="listitem" data-act="open" data-sec="parties" title="${esc(p.name)}"><i style="background:${p.color}"></i><span class="pn">${esc(partyChip(p.id, p.short || p.name))}</span> ${p.seats}${p.mayLeave ? ` <em>${t('ui.mayLeave')}</em>` : ''}${p.trust.state === 'angry' || p.trust.waiting ? ' ⏳' : ''}</button>`;
-    }).join(''));
 }
 
 const ICON: Record<string, string> = {
@@ -226,8 +247,13 @@ function renderTimeline(o: Observation) {
   const next = tl.upcoming.find((m) => m.kind !== 'goal');
   const parts = [`${(o.pmDays / 365.25).toFixed(1)}/4y`];
   if (next) parts.push(t('tl.next', { label: next.label, days: next.day - tl.nowDay }));
-  if (tl.nextTitle) parts.push(`👑 ${t('tl.nextTitle', { title: tl.nextTitle.name, days: tl.nextTitle.inDays })}`);
   $('tlcap').textContent = parts.join(' · ');
+  // titles are secondary: they live in the Log tab
+  const best = o.titles.length ? o.titles[o.titles.length - 1] : null;
+  const tline = $('titleline');
+  tline.textContent = [`👑 ${t('ui.titleNow', { title: best ? best.name : t('ui.noTitle') })}`,
+    tl.nextTitle ? t('news.title', { title: tl.nextTitle.name, days: tl.nextTitle.inDays }) : ''].filter(Boolean).join(' · ');
+  tline.title = best ? best.gloss : '';
   if (sheetTab === 'log') region('upcoming', tl.upcoming.map((m) => m.kind + m.day).join() + Math.floor(tl.nowDay), () =>
     tl.upcoming.map((m) => `<li>${ICON[m.kind] ?? '•'} ${m.date} — ${esc(m.label)} (${m.day - tl.nowDay}d)</li>`).join(''));
 }
@@ -268,12 +294,16 @@ function renderHud(o: Observation) {
 }
 
 // ------------------------------------------------------------------ crisis card
+/** an effect chip's text: "▲Approval", but the trial reads "Trial slower" / "Trial faster" (no arrows to decode) */
+const chipText = (p: Preview, sep = '') => p.meter === 'trial' ? t(p.up ? 'ui.trialSlower' : 'ui.trialFaster') : `${p.up ? '▲' : '▼'}${sep}${p.label}`;
+const meterLabel = (meter: string, label: string, delta: number) => meter === 'trial' ? t(delta > 0 ? 'ui.trialFaster' : 'ui.trialSlower') : label;
+
 /** what the crisis already did when it arrived (onFire): small chips under the card text */
 function arrivalHtml(a: OutcomeView | null): string {
   if (!a) return '';
   const chips = [
     ...a.sat.slice(0, 4).map((x) => ({ label: x.name, good: x.delta, shown: x.delta })),
-    ...a.meters.map((x) => ({ label: x.label, good: x.meter === 'trial' ? -x.delta : x.delta, shown: x.delta })),
+    ...a.meters.map((x) => ({ label: meterLabel(x.meter, x.label, x.delta), good: x.meter === 'trial' ? -x.delta : x.delta, shown: x.delta })),
   ];
   if (!chips.length) return '';
   return `<p class="arrival"><small>${t('ui.arrival')}:</small> ${chips.map((c) => `<span class="${c.good > 0 ? 'up' : 'down'}">${esc(c.label)} <bdi dir="ltr">${c.shown > 0 ? '+' : ''}${c.shown}</bdi></span>`).join(' ')}</p>`;
@@ -295,13 +325,14 @@ function renderStage(o: Observation) {
       if (!op) return `<span class="hint-${dir} hint empty"></span>`;
       // effect chips right on the card (no need to drag to see them; the engine computes op.preview)
       const chips = op.available
-        ? `<span class="fx mini">${op.preview.slice(0, 4).map((p) => `<span class="${p.up ? 'up' : 'down'}">${p.up ? '▲' : '▼'}${esc(p.label)}</span>`).join('')}</span>`
+        ? `<span class="fx mini">${op.preview.slice(0, 4).map((p) => `<span class="${p.up ? 'up' : 'down'}">${esc(chipText(p))}</span>`).join('')}</span>`
         : `<span class="why">${esc(op.why)}</span>`;
-      return `<button class="hint hint-${dir}" data-dir="${dir}" ${op.available ? '' : 'disabled'} title="${esc(op.desc)}"><span class="arrow">${ARROW[dir]}</span> ${esc(op.label)}${op.odds !== null ? ` <b class="odds" title="${esc(t('ui.odds'))}">${op.odds}%</b>` : ''}${chips}</button>`;
+      // unavailable options stay tappable (aria-disabled) so a tap/swipe can say why
+      return `<button class="hint hint-${dir} ${op.available ? '' : 'na'}" data-dir="${dir}" ${op.available ? '' : 'aria-disabled="true"'} title="${esc(op.desc)}"><span class="arrow">${ARROW[dir]}</span> ${esc(op.label)}${op.odds !== null ? ` <b class="odds" title="${esc(t('ui.odds'))}">${op.odds}%</b>` : ''}${chips}</button>`;
     };
     const urgent = ev.id === 'angry';
     const ign = ev.options.find((x) => x.dir === 'ignore');
-    const ignFx = ign ? ign.preview.filter((p) => !p.up).map((p) => p.label).slice(0, 3).join(', ') : '';
+    const ignFx = ign ? ign.preview.filter((p) => !p.up).map((p) => (p.meter === 'trial' ? t('ui.trialFaster') : p.label)).slice(0, 3).join(', ') : '';
     return `<div id="card" class="swipecard ${enter} ${urgent ? 'urgent' : ''}" tabindex="0" aria-label="${esc(ev.title)}">
       ${hint('up')}
       <div class="cbody">
@@ -342,7 +373,8 @@ function headline(o: Observation): string {
 }
 
 function newsKey(o: Observation) {
-  return [o.phase, headline(o), o.timeline.upcoming[0]?.label, Math.floor(o.day / 15), o.cooldowns.ministry > 0, o.cooldowns.law > 0, o.war.cooldownDays > 0].join('|');
+  return [o.phase, headline(o), o.timeline.upcoming[0]?.label, Math.floor(o.day / 15), o.cooldowns.ministry > 0, o.cooldowns.law > 0, o.war.cooldownDays > 0,
+    o.opposition ? o.moves.map((m) => `${m.id}${m.available}${m.cooldown}`).join() : ''].join('|');
 }
 
 let lastStageKind = '';
@@ -362,6 +394,7 @@ function newsHtml(o: Observation, enter: string): string {
     <div class="mast">${t('news.masthead')}</div>
     <h2>${esc(headline(o))}</h2>
     <ul class="ticker">${ticker.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+    ${o.opposition ? oppositionHelp(o) : ''}
     ${gov ? `<div class="quick">
       <button data-act="open" data-sec="parties">🤝 ${t('ui.qPromise')}</button>
       <button data-act="open" data-sec="ministries" ${o.cooldowns.ministry ? 'disabled' : ''}>🏛 ${t('ui.qMinistry')}</button>
@@ -371,11 +404,23 @@ function newsHtml(o: Observation, enter: string): string {
   </div>`;
 }
 
+/** opposition has no cards to swipe: say what to do and put the opposition moves right here */
+function oppositionHelp(o: Observation): string {
+  // the opposition's own moves (attack, poach, no-confidence) first, then whatever else is ready
+  const own = (id: string) => (id.startsWith('opp') || id === 'noconfidence' ? 0 : 1);
+  const moves = o.moves.filter((m) => !m.ending)
+    .sort((a, b) => own(a.id) - own(b.id) || Number(b.available) - Number(a.available)).slice(0, 4);
+  return `<p class="whatnow"><b>${esc(t('ui.whatNow'))}</b> ${esc(t('ui.whatNowOpp'))}</p>
+    <div class="quick">${moves.map((m) => `<button data-move="${m.id}" ${m.available ? '' : 'disabled'} title="${esc(m.desc)}">${esc(m.label)}${m.cooldown ? ` <small>${esc(t('ui.cooldown', { days: m.cooldown }))}</small>` : ''}</button>`).join('')}</div>`;
+}
+
 // ------------------------------------------------------------------ result line (cause → result)
 // ONE short line in a fixed slot between the top bar and the card: "Shas −8 · Approval +2 · Seats 63".
 // It never covers anything and never blocks the clock; several outcomes at once are queued and
 // each stays at least MIN_SHOW ms. The line stays (dimmed) until the next result replaces it.
 let seenSeq = 0;
+/** what an action did that has no numbers (an invite refused): shown in the result line of outcome `seq` */
+let actionNote: { seq: number; text: string } | null = null;
 const flashQueue: OutcomeView[] = [];
 let flashUntil = 0;
 const MIN_SHOW = 1600, MIN_SHOW_BIG = 3000;
@@ -402,7 +447,7 @@ function showResult(r: OutcomeView, o: Observation) {
   const sat = [...r.sat].sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 3)
     .map((x) => part(x.delta > 0, `${esc(short(x.party, x.name))} <b>${signed(x.delta)}</b>`));
   const meters = [...r.meters].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 2)
-    .map((x) => part(x.meter === 'trial' ? x.delta < 0 : x.delta > 0, `${esc(x.label)} <b>${signed(x.delta)}</b>`));
+    .map((x) => part(x.meter === 'trial' ? x.delta < 0 : x.delta > 0, `${esc(meterLabel(x.meter, x.label, x.delta))} <b>${signed(x.delta)}</b>`));
   const lj = [
     r.left.length ? part(false, esc(t('out.leftList', { parties: r.left.join(', ') }))) : '',
     r.joined.length ? part(true, esc(t('out.joinedList', { parties: r.joined.join(', ') }))) : '',
@@ -410,7 +455,9 @@ function showResult(r: OutcomeView, o: Observation) {
   const seats = r.seats.from !== r.seats.to ? [part(r.seats.to > r.seats.from, `<b>${esc(t('ui.resultSeats', { n: r.seats.to }))}</b>`)] : [];
   const fx = [...lj, ...sat, ...meters, ...seats];
   el.className = `resultline ${r.big ? 'big' : ''} k-${r.kind}`;
-  el.innerHTML = `<small class="cause">${esc(r.cause)}</small><span class="fxline">${fx.length ? fx.join('<i> · </i>') : esc(t('out.nothing'))}</span>`;
+  const note = actionNote && actionNote.seq === r.seq ? actionNote.text : '';
+  if (note) actionNote = null;
+  el.innerHTML = `<small class="cause">${esc(r.cause)}</small><span class="fxline">${note ? part(false, esc(note)) + (fx.length ? '<i> · </i>' : '') : ''}${fx.length ? fx.join('<i> · </i>') : note ? '' : esc(t('out.nothing'))}</span>`;
   el.title = [r.quip, r.reaction].filter(Boolean).join(' — ');
   if (!reduceMotion) { el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
   flashUntil = performance.now() + (r.big ? MIN_SHOW_BIG : MIN_SHOW);
@@ -447,7 +494,7 @@ function showPreview(dir: string | null, strength: number) {
   el.hidden = false;
   el.className = `swipelabel to-${dir} ${op.available ? '' : 'na'}`;
   el.style.opacity = String(Math.min(1, 0.5 + strength));
-  el.innerHTML = `<b>${ARROW[dir!]} ${esc(op.label)}</b><div class="fx">${op.preview.map((p) => `<span class="${p.up ? 'up' : 'down'}">${p.up ? '▲' : '▼'} ${esc(p.label)}</span>`).join('')}</div>`;
+  el.innerHTML = `<b>${ARROW[dir!]} ${esc(op.label)}</b><div class="fx">${op.preview.map((p) => `<span class="${p.up ? 'up' : 'down'}">${esc(chipText(p, ' '))}</span>`).join('')}</div>`;
 }
 
 function choose(dir: string) {
@@ -467,18 +514,28 @@ const swipe = initSwipe({
   canChoose: (dir) => !!game.observe(0).event?.options.find((x) => x.dir === dir && x.available),
   onPreview: showPreview,
   onChoose: (dir) => { choose(dir); },
+  onBlocked: (dir) => blocked(dir),
 });
+
+function blocked(dir: string) {
+  const card = document.getElementById('card');
+  if (card && !reduceMotion) { card.classList.remove('nope'); void card.offsetWidth; card.classList.add('nope'); }
+  buzz([20, 30, 20]);
+  const op = game.observe(0).event?.options.find((x) => x.dir === dir);
+  if (op) toast(`${op.label}: ${op.why || t('err.unavailable')}`);
+}
 
 // ------------------------------------------------------------------ drawer
 function renderParties(o: Observation) {
   const list = o.parties.filter((p) => p.seats > 0)
     .sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || b.seats - a.seats);
   const key = list.map((p) => [p.id, p.seats, p.inCoalition, p.wartime, p.threatening, p.mayLeave, p.trust.state, p.trust.waiting, p.ministries.length, p.trait?.id, p.lastChange?.day, Math.round(p.trend.perMonth), p.trend.reason].join(':')).join('|')
-    + `|${o.cooldowns.invite > 0}|${o.cooldowns.law > 0}|${o.phase}`;
+    + `|${o.cooldowns.invite > 0}|${o.cooldowns.law > 0}|${o.phase}|${pendingPromise ? pendingPromise.party + pendingPromise.promise + Math.floor(o.day) : ''}`;
   region('parties', key, () => list.map((p) => {
     const promises = promisesFor(game.state, p.id);
     const canAct = o.phase === 'governing';
-    const promiseSel = p.trust.state === 'neutral' && canAct
+    const pending = pendingPromise && pendingPromise.party === p.id && canAct && p.trust.state === 'neutral' ? promiseConfirm(o, p, pendingPromise.promise) : '';
+    const promiseSel = pending ? pending : p.trust.state === 'neutral' && canAct
       ? `<select data-promise="${p.id}" aria-label="${t('ui.promise')}"><option value="">${t('ui.promise')}</option>${promises.map((id) => `<option value="${id}">${esc(t(`promise.${id}`))}</option>`).join('')}</select>` : '';
     const deliver = (p.trust.state === 'believing' || p.trust.state === 'distrust') && p.trust.promiseId && canAct
       ? `<button data-deliver="${p.id}" data-pid="${p.trust.promiseId}" ${o.cooldowns.law > 0 ? 'disabled' : ''}>${t('ui.deliver')}: ${esc(t(`promise.${p.trust.promiseId}`))}</button>` : '';
@@ -507,6 +564,25 @@ function renderParties(o: Observation) {
     tr.textContent = state ? `${Math.round(p.satisfaction)}% · ${state}` : `${Math.round(p.satisfaction)}%`;
   }
   $('movesdot').hidden = !o.parties.some((p) => p.trust.waiting || p.trust.state === 'angry' || (p.inCoalition && p.threatening));
+}
+
+let pendingPromise: { party: string; promise: string } | null = null;
+
+/** what a promise costs before it is made: the boost now, how long they believe you, what delivering takes */
+function promiseConfirm(o: Observation, p: Observation['parties'][number], id: string): string {
+  const def = promiseById.get(id);
+  if (!def) return '';
+  const c = game.state.config;
+  const rotation = id === 'rotation';
+  const days = Math.round((rotation ? c.rotationBelieveDays : def.believeDays ?? c.promiseBelieveDays) * (p.trait?.id === 'patient' ? 1.5 : 1));
+  const boost = rotation ? c.rotationBoost : def.boost ?? c.promiseBoost;
+  const due = new Date(Date.parse(o.date) + days * 864e5).toISOString().slice(0, 10);
+  const how = def.deliveredBy === 'ministry' ? t('fx.ministry') : t(`remedy.${def.deliveredBy}`);
+  return `<div class="pconfirm" role="group">
+    <b>🤝 ${esc(t(`promise.${id}`))}</b>
+    <p>${esc(t('ui.promiseCost', { party: p.short || p.name, boost: ltr(`+${Math.round(boost)}`), date: due, days, how, distrust: Math.round(c.promiseDistrustDays) }))}</p>
+    <div class="pbtns"><button class="primary" data-pconfirm="${p.id}" data-pid="${id}">${t('ui.confirmPromise')}</button><button data-pcancel="1">${t('ui.cancel')}</button></div>
+  </div>`;
 }
 
 function renderMinistries(o: Observation) {
@@ -728,10 +804,9 @@ function render() {
   pumpToast();
 }
 
-// ------------------------------------------------------------------ inline hint, Friday edition (in the log), sound
+// ------------------------------------------------------------------ Friday edition (in the log), sound
 let cardKey = '';
 let overTracked = false;
-const advShown: Record<string, number> = {};
 let edition: EditionSnap | null = null;
 let nextEdition = 90;
 const editions: string[] = [];
@@ -739,13 +814,12 @@ const editions: string[] = [];
 function renderExtras(o: Observation) {
   const s = game.state;
   $('sound').textContent = soundOn() ? '🔊' : '🔇';
-  // a new card: sounds, analytics, a fresh inline hint (no popups; tutorial hints live in the intro)
+  // a new card: sounds, analytics (no popups, no tips; how to play lives in the intro)
   const k = s.event ? `${s.event.id}@${s.event.firedAt}` : '';
   if (k && k !== cardKey) {
     track('card_shown', { crisis_id: s.event!.id });
     if (s.event!.id === 'iran' || s.event!.id === 'houthis') play('siren');
     else if (s.event!.id === 'kaplan') play('drum');
-    showHint();
   }
   cardKey = k;
   if (o.status !== 'playing' && !overTracked) {
@@ -759,15 +833,6 @@ function renderExtras(o: Observation) {
     edition = editionSnap(s);
     nextEdition = s.day + 90;
   }
-}
-
-function showHint() {
-  const s = game.state;
-  const a = advice(s).find((x) => !x.id.startsWith('tut') && (advShown[x.id] === undefined || s.day - advShown[x.id] > 150));
-  const el = $('advline');
-  if (!a) { el.textContent = ''; return; }
-  advShown[a.id] = s.day;
-  el.innerHTML = `<span aria-hidden="true">🧑‍💼</span> ${esc(t(a.key, a.params))}`;
 }
 
 const METER_LABEL: Record<string, string> = { seats: 'ui.seats', approval: 'ui.approval', street: 'ui.street', trial: 'ui.trial', us: 'ui.us' };
@@ -789,6 +854,25 @@ function doAct(a: Action) {
   const r = game.act(a);
   if (!r.ok && r.error) toast(t(r.error));
   render();
+  return r;
+}
+
+/** invite: say who joined, or who refused and the likely reason (never "nothing changed") */
+function invite(id: string) {
+  const before = game.observe(0);
+  const p = before.parties.find((x) => x.id === id);
+  if (!p) return;
+  const seq = game.state.outcomeSeq;
+  const r = game.act({ type: 'invite', partyId: id });
+  if (!r.ok) { if (r.error) toast(t(r.error)); render(); return; }
+  const after = game.observe(0).parties.find((x) => x.id === id);
+  if (after?.inCoalition) { toast(`✅ ${t('ui.inviteYes', { party: p.name })}`); render(); return; }
+  const why = !p.willSitWithBibi ? 'bibi' : Math.abs(p.position - before.govPosition) > 4 ? 'far'
+    : p.satisfaction < 40 ? 'mood' : before.meters.approval < 40 ? 'polls' : 'luck';
+  const text = t('ui.inviteNo', { party: p.name, why: t(`ui.inviteWhy.${why}`) });
+  if (game.state.outcomeSeq > seq) actionNote = { seq: game.state.outcomeSeq, text };
+  toast(`✖ ${text}`);
+  render();
 }
 
 function restart(day: string | null = null) {
@@ -804,8 +888,8 @@ function restart(day: string | null = null) {
   cardKey = ''; overTracked = false; edition = null; nextEdition = 90;
   editions.length = 0;
   $('editions').innerHTML = '';
-  $('advline').textContent = '';
-  for (const k of Object.keys(advShown)) delete advShown[k];
+  pendingPromise = null;
+  actionNote = null;
   overWaiting = false;
   closeLayer();
   track('game_start', { lang: getLocale(), seed_type: daily ? 'daily' : 'random' });
@@ -819,7 +903,8 @@ app.addEventListener('click', (e) => {
   const b = (e.target as HTMLElement).closest('button');
   if (!b || b.disabled) return;
   const d = b.dataset;
-  if (d.dir === 'ignore') choose('ignore');
+  if (d.dir && d.dir !== 'ignore' && b.getAttribute('aria-disabled') === 'true') { if (!swipe.consumedClick()) blocked(d.dir); }
+  else if (d.dir === 'ignore') choose('ignore');
   else if (d.dir) { if (!swipe.consumedClick()) swipe.flyThenChoose(d.dir); }
   else if (d.act === 'open' && d.sec) openSection(d.sec);
   else if (d.act === 'tab' && d.tab) { setTab(d.tab); render(); }
@@ -845,7 +930,10 @@ app.addEventListener('click', (e) => {
     // a move played from the sheet: close it so the result line (and any card) is visible
     if (layer === 'sheet') closeLayer();
   }
-  else if (d.invite) doAct({ type: 'invite', partyId: d.invite });
+  else if (d.invite) invite(d.invite);
+  else if (d.pconfirm && d.pid) { pendingPromise = null; doAct({ type: 'promise', partyId: d.pconfirm, promiseId: d.pid }); }
+  else if (d.pcancel) { pendingPromise = null; render(); }
+  else if (d.act === 'trial') toast(t('ui.trialBadge', { n: Math.round(game.observe(0).meters.trial) }));
   else if (d.deliver && d.pid) doAct({ type: 'deliver', partyId: d.deliver, promiseId: d.pid });
 });
 
@@ -858,7 +946,8 @@ document.addEventListener('pointerdown', (e) => {
 
 app.addEventListener('change', (e) => {
   const s = e.target as HTMLSelectElement;
-  if (s.dataset.promise && s.value) doAct({ type: 'promise', partyId: s.dataset.promise, promiseId: s.value });
+  // no promise on the first (maybe accidental) pick: show what it costs and when it is due, then Confirm
+  if (s.dataset.promise && s.value) { pendingPromise = { party: s.dataset.promise, promise: s.value }; render(); }
   else if (s.dataset.ministry) {
     const holder = game.state.ministries.find((m) => m.id === s.dataset.ministry)?.holder;
     if (s.value !== holder) doAct({ type: 'giveMinistry', ministryId: s.dataset.ministry, partyId: s.value });
@@ -886,7 +975,7 @@ $('pause').addEventListener('click', () => {
 function frame(now: number) {
   const dt = Math.min(250, now - last);
   last = now;
-  if (!paused && !document.hidden && !game.over && layer !== 'intro') {
+  if (!paused && !document.hidden && !game.over && layer !== 'intro' && layer !== 'sheet') {
     const c = game.state.config;
     const scale = game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : c.uiIdleClockScale;
     if (scale > 0) game.advance(dt * scale * (game.state.recess && !game.state.event ? c.recessClockMult : 1));

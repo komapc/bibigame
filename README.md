@@ -13,25 +13,35 @@ given date), `?seed=N` for a fixed seed, `?lang=en|ru|he` for the language.
 
 ## Features
 
+- **Calm main screen** (phone first): one compact header row (date, ⚖ trial x/100 once the trial
+  runs, ? / sound / pause), seats and approval in big numbers, a thin seat bar and timeline, and ONE
+  status line: the next timeline event, or a single tappable warning ("⚠ RZ may leave → 56 seats" opens
+  the Parties tab; a meter in danger; the last-chance notice). Then the result line and the card, which
+  takes the rest of the height. No party chips, no tips. In opposition the big number is the rival
+  government's stability. Nothing on the page may be wider than the screen.
 - **Swipe cards**: left / right / up = up to three remedies, down = early elections, a separate
-  **Ignore** tap. Effect chips on each option; risky remedies show their odds; greyed options say why.
+  **Ignore** tap. Effect chips on each option (the trial reads "Trial slower" / "Trial faster"); risky
+  remedies show their odds; greyed options say why, and swiping or tapping one shakes the card and
+  toasts the reason.
 - **Intro screen** on the first visit (five lines on how to play, a big Start, EN/RU/HE switch); the
   ? button reopens it. Only one layer is open at a time (intro, the sheet or game over), plus at most
   one small toast.
 - **Cause → result**: a single result line above the card after every decision ("Shas −8 · Approval
   +2 · Seats 63", with the cause and a quip), drift lines explaining slow changes, a timeline (budget,
-  elections, war, promises, recess, next title).
+  elections, war, promises, recess; your title and the next one are in the Log tab).
 - **Randomness**: random start (moods, approval, 1–2 starting conditions), party-leader traits
   (patient / hothead / greedy / loyal / opportunist), ±25% outcome noise, risky remedies that can
   fail, wildcard news (good and bad), a Trump-mood random walk (😠…😍 next to the US meter), exit polls.
 - **Bottom tabs**: 🎲 Moves / 🤝 Parties / 📜 Log, three tabs of one sheet (the timeline opens the Log).
-  Between cards, The Daily Coalition offers quick Promise / Reshuffle / Pass a law / Start a war buttons.
+  The game clock stops while the sheet is open. Between cards, The Daily Coalition offers quick
+  Promise / Reshuffle / Pass a law / Start a war buttons; in opposition it says "What now?" and offers
+  the opposition moves. A promise is made only after a confirm step that shows the boost, how long they
+  believe you (the due date) and what delivering takes. Invite says who joined, or who refused and why.
 - **Moves** (🎲), **opposition** period after a lost election, **rotation** promises, special
   **endings** (Miami, plea bargain, rotation handover) and 22 titles.
 - **Knesset summer recess** (Aug–Sep): regular crises pause (wildcards still happen), the clock runs
   faster, shown on the timeline.
-- **Spin-doctor tips**: rule-based hints shown inline under the card (no popup, no repeats for a
-  while). **Friday edition**: every 3 game months a newspaper recap of what moved and why, filed in the
+- **Friday edition**: every 3 game months a newspaper recap of what moved and why, filed in the
   Log tab with a small toast (the clock keeps running).
 - **Share** on game over: WhatsApp first, the system share sheet when available, or copy; a short
   summary in the current language (reign, wars, title, ending, link; the date in daily mode).
@@ -70,7 +80,7 @@ src/i18n/en.ts           every user-facing string (add he.ts / ru.ts with the sa
 src/engine/              pure, seeded engine: game.ts (tick/actions), coalition.ts, elections.ts, rng.ts, types.ts
 src/api/game.ts          public API: createGame / observe / act / advance
 src/api/text.ts          text protocol: renderer + command parser (shared by CLI and HTTP)
-src/api/extras.ts        advisor hints + Friday edition (pure)
+src/api/extras.ts        advisor hints (bots / text mode only; not shown in the browser) + Friday edition (pure)
 src/api/share.ts         share text, wa.me link, daily seed (pure)
 src/bots/                bot strategies + headless runner
 src/ui/                  DOM layer (mobile-first), hemicycle SVG, swipe, fx.ts (sound/haptics), analytics.ts (GA4 + consent)
