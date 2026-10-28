@@ -127,7 +127,11 @@ function quipOf(o: Outcome): string {
   else if (o.cause.key === 'out.law') id = String(p.law);
   else if (o.cause.key === 'out.war') id = 'war';
   else if (o.cause.key === 'out.ministry') id = 'ministry';
-  else if (o.cause.key === 'out.deliver') id = 'deliverpremium';
+  else if (o.cause.key === 'out.deliver') {
+    // the drawer delivers the thing itself (no "loyalty fee"): quip of the delivered remedy
+    const by = PROMISES.find((x) => x.id === p.promise)?.deliveredBy;
+    id = by === 'ministry' || !by ? 'ministry' : by;
+  }
   if (!id) return '';
   const k = `quip.${id}.${n}`;
   const q = t(k);
@@ -303,6 +307,13 @@ export function preview(s: GameState, optionId: string): Preview[] {
   const effects: Effect[] = optionId === 'ignore'
     ? [crisis?.ignore ?? {}]
     : [remedyById.get(optionId)?.effect ?? {}, crisis?.extra?.[optionId] ?? {}];
+  // delivering on an angry card also costs whatever the delivered law/remedy costs: show it
+  if (optionId === 'deliverpremium' && subject) {
+    const pid = s.parties.find((x) => x.id === subject)?.trust.promiseId;
+    const by = PROMISES.find((x) => x.id === pid)?.deliveredBy;
+    const r = by && by !== 'ministry' ? remedyById.get(by) : undefined;
+    if (r) effects.push({ ...r.effect, special: undefined });
+  }
   for (const e of effects) {
     for (const k of ['approval', 'street', 'us', 'fiscal'] as const) if (e[k]) out.push({ label: t(`fx.${k}`), up: e[k]! > 0 });
     if (e.trial) out.push({ label: t('fx.trial'), up: e.trial < 0 });
@@ -325,7 +336,8 @@ export function preview(s: GameState, optionId: string): Preview[] {
     if (e.special && sp[e.special]) out.push({ label: t(sp[e.special][0]), up: sp[e.special][1] });
     if (e.special === 'war') out.push({ label: t('fx.fiscal'), up: false });
   }
-  return out;
+  const seen = new Set<string>();
+  return out.filter((x) => { const k = x.label + x.up; if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
 const DAY = 86_400_000;

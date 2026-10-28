@@ -85,6 +85,15 @@ export interface Config {
   /** partners get nervous when your approval is below this: −(line − approval) × pollPanicPerPoint sat/day */
   pollPanicBelow: number;
   pollPanicPerPoint: number;
+  /** cap on the poll-panic drain per partner (sat/day) */
+  pollPanicMaxPerDay: number;
+  /** Kaplan's weight multiplier from low street is capped here */
+  kaplanStreetMaxMult: number;
+  /** the same card never fires twice within this many days */
+  crisisCooldownDays: number;
+  goodNewsCooldownDays: number;
+  /** ceasefire/deal cards: during a war or this many days after it */
+  recentWarDays: number;
   /** repeated use of a remedy within remedyFatigueDays: its POSITIVE effects shrink by 1 / (1 + uses × remedyFatigue) */
   remedyFatigue: number;
   remedyFatigueDays: number;
@@ -222,6 +231,11 @@ export const DEFAULT_CONFIG: Config = {
   leaveBelow: 15,
   pollPanicBelow: 32,
   pollPanicPerPoint: 0.015,
+  pollPanicMaxPerDay: 0.13,
+  kaplanStreetMaxMult: 2,
+  crisisCooldownDays: 60,
+  goodNewsCooldownDays: 365,
+  recentWarDays: 90,
   remedyFatigue: 0.6,
   remedyFatigueDays: 365,
   fundsMinFiscal: 15,

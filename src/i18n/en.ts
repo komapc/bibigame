@@ -503,7 +503,7 @@ export const en: Record<string, string> = {
   'news.flavour.8': 'Shekel stable, nerves less so',
   'news.flavour.9': "Expert panel finds 'too many expert panels'",
   'over.voters.title': 'The voters said no',
-  'over.voters.text': 'After all those elections, the public finally picked someone else. They seem nervous about it too.',
+  'over.voters.text': 'The public finally picked someone else. They seem nervous about it too.',
   'over.deadlock.title': 'Nobody, not even you',
   'over.deadlock.text': 'The opposition scraped together 61 from parties that agree on nothing except you.',
   'over.indicted.title': 'Verdict day',
