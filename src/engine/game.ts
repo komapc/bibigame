@@ -281,6 +281,41 @@ export function remedyAvailable(s: GameState, id: string): boolean {
   return true;
 }
 
+/** slow killers get a log line when they cross a step (cause → effect for things that drift) */
+function driftNotes(s: GameState, trial0: number, street0: number) {
+  if (Math.floor(s.trial / 10) > Math.floor(trial0 / 10) && s.trial >= 40) {
+    log(s, 'log.driftTrial', { trial: Math.floor(s.trial / 10) * 10, n: Math.round(0.15 * s.trial) }, 'bad');
+  }
+  for (const line of [30, 15]) if (street0 >= line && s.street < line) log(s, 'log.driftStreet', { street: line }, 'bad');
+}
+
+/** why an option/move is unavailable (i18n key under why.*), or null when it is available */
+export function unavailableReason(s: GameState, id: string): { key: string; params?: Record<string, number> } | null {
+  const m = moveById.get(id);
+  if (m && remedyAvailable(s, id)) {
+    if (s.usedThisTerm.includes(id)) return { key: 'why.oncePerTerm' };
+    if (m.requires?.war && !s.war.active) return { key: 'why.needWar' };
+    if (m.requires?.minTrial !== undefined && s.trial < m.requires.minTrial) return { key: 'why.needTrial', params: { n: m.requires.minTrial } };
+    if (m.requires?.electionsWithinDays !== undefined && s.termEndsDay - s.day > m.requires.electionsWithinDays) return { key: 'why.tooEarly' };
+  }
+  if (remedyAvailable(s, id)) {
+    const days = moveCooldown(s, id);
+    return days > 0 ? { key: 'why.cooldown', params: { days } } : null;
+  }
+  const r = remedyById.get(id);
+  if (!r) return { key: 'why.na' };
+  if (id === 'war' && s.war.active) return { key: 'why.atWar' };
+  if (id === 'war') return { key: 'why.cooldown', params: { days: Math.ceil(s.war.cooldownDays) } };
+  if (r.context === 'tension' && !hasTension(s)) return { key: 'why.tension' };
+  if (r.once && s.usedOnce.includes(id)) return { key: 'why.once' };
+  if (r.permanent && s.lawsPassed.includes(id)) return { key: 'why.passed' };
+  if (r.travel && s.day < s.iccUntil) return { key: 'why.icc', params: { days: Math.ceil(s.iccUntil - s.day) } };
+  if (id === 'funds') return { key: 'why.fiscal' };
+  if (id === 'buytime') return { key: 'why.boughtTime' };
+  if (id === 'newministry') return { key: 'why.cap' };
+  return { key: 'why.na' };
+}
+
 /** opposition party an MK can be poached from (the biggest one with 2+ seats) */
 export function poachDonor(s: GameState): Party | undefined {
   return s.parties.filter((p) => !p.inCoalition && p.id !== s.base.pmParty && p.seats >= 2).sort((a, b) => b.seats - a.seats)[0];
@@ -322,10 +357,12 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
   if (e.rival && s.rival) s.rival.stability = clamp(s.rival.stability + e.rival, 0, 100);
   if (e.position) s.govPosition = clamp(s.govPosition + e.position, -10, 10);
   if (e.approval) s.approval = clamp(s.approval + e.approval, 0, 100);
+  const street0 = s.street, trial0 = s.trial;
   if (e.street && !(s.war.active && e.street < 0)) s.street = clamp(s.street + e.street, 0, 100);
   if (e.us) s.us = clamp(s.us + e.us, 0, 100);
   if (e.fiscal) s.fiscal = clamp(s.fiscal + e.fiscal, 0, 100);
   if (e.trial) s.trial = clamp(s.trial + e.trial, 0, 100);
+  driftNotes(s, trial0, street0);
   if (e.pauseTrialDays) {
     s.trialPausedUntil = Math.max(s.trialPausedUntil, s.day) + e.pauseTrialDays;
     s.openCases = s.openCases.map((d) => d + e.pauseTrialDays!);
@@ -601,6 +638,7 @@ function endWar(s: GameState) {
     }
   }
   log(s, 'log.warEnd', {}, 'info');
+  log(s, 'log.driftWarOver', { n: s.config.warApprovalBonusTarget }, 'bad');
 }
 
 function leave(s: GameState, p: Party, key = 'log.left') {
@@ -859,7 +897,9 @@ function checkCoalition(s: GameState, dt = 0) {
 function tickDay(s: GameState, dt: number) {
   const c = s.config;
   // meters (both phases)
+  const trial0 = s.trial, street0 = s.street;
   if (s.day >= s.trialPausedUntil) s.trial = clamp(s.trial + c.trialGrowthPerDay * dt, 0, 100);
+  driftNotes(s, trial0, street0);
   if (c.indictAt > 0 && s.trial >= c.indictAt) {
     const b = snap(s);
     log(s, 'log.indicted', {}, 'bad');
