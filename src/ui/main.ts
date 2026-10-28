@@ -5,6 +5,7 @@ import type { Action } from '../engine/types.ts';
 import { titleBoard } from '../api/text.ts';
 import { t } from '../i18n/index.ts';
 import { hemicycleSvg } from './hemicycle.ts';
+import { initSwipe } from './swipe.ts';
 
 const app = document.getElementById('app')!;
 let game: Game = createGame({ seed: Math.floor(Math.random() * 1e9) });
@@ -12,9 +13,11 @@ let paused = false;
 let last = performance.now();
 let lastTitles = 0;
 const keys: Record<string, string> = {};
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const pct = (v: number) => `${Math.max(0, Math.min(100, v)).toFixed(1)}%`;
+const ARROW: Record<string, string> = { left: '←', right: '→', up: '↑', down: '↓' };
 
 app.innerHTML = `
 <header class="top">
@@ -23,27 +26,33 @@ app.innerHTML = `
     <div id="date" class="date"></div>
     <button id="pause" class="icon" aria-label="${t('ui.pause')}">⏸</button>
   </div>
-  <div class="term"><div id="termbar" class="termfill"></div><span id="termtxt"></span></div>
+  <button id="timeline" class="timeline" aria-expanded="false" aria-label="${t('ui.timeline')}">
+    <div class="tl-track" id="tltrack"></div>
+    <div class="tl-caption" id="tlcap"></div>
+  </button>
+  <div id="history" class="history" hidden></div>
   <div class="seatbar" id="seatbar"></div>
   <div id="seattxt" class="seattxt"></div>
 </header>
 <main class="main">
-  <section class="card hud">
+  <section class="stage" id="stage"></section>
+  <section class="panel hud">
     <div id="hemi"></div>
     <div id="slider" class="slider"></div>
     <div id="meters" class="meters"></div>
     <div id="chips" class="chips"></div>
   </section>
-  <details class="card" open><summary>${t('ui.parties')}</summary><div id="parties" class="parties"></div></details>
-  <details class="card"><summary>${t('ui.ministries')}</summary><div id="ministries" class="ministries"></div></details>
-  <details class="card"><summary>${t('ui.laws')}</summary><div id="laws" class="laws"></div></details>
-  <details class="card" open><summary>${t('ui.log')}</summary><ol id="log" class="log"></ol></details>
-  <p class="hint">${t('ui.botHint')}</p>
+  <aside id="drawer" class="drawer" aria-label="${t('ui.moves')}">
+    <button class="drawer-close" data-act="drawer">▾ ${t('ui.closeSheet')}</button>
+    <button id="war" class="war" data-act="war"></button>
+    <details class="panel" open><summary>${t('ui.parties')}</summary><div id="parties" class="parties"></div></details>
+    <details class="panel"><summary>${t('ui.ministries')}</summary><div id="ministries" class="ministries"></div></details>
+    <details class="panel"><summary>${t('ui.laws')}</summary><div id="laws" class="laws"></div></details>
+    <details class="panel"><summary>${t('ui.log')}</summary><ol id="log" class="log"></ol></details>
+    <p class="bothint">${t('ui.botHint')}</p>
+  </aside>
 </main>
-<footer class="dock">
-  <div id="event" class="event"></div>
-  <div class="actions"><button id="war" class="war" data-act="war"></button></div>
-</footer>
+<nav class="bottombar"><button id="movesbtn" data-act="drawer" class="moves">☰ ${t('ui.moves')} <span id="movesdot" class="dot" hidden></span></button></nav>
 <div id="toast" class="toast" hidden></div>
 <div id="over" class="over" hidden></div>
 `;
@@ -56,18 +65,15 @@ function region(id: string, key: string, html: () => string) {
   $(id).innerHTML = html();
 }
 
-function partyName(o: Observation, id: string | null) {
-  return o.parties.find((p) => p.id === id)?.name ?? id ?? '—';
-}
+const partyName = (o: Observation, id: string | null) => o.parties.find((p) => p.id === id)?.name ?? id ?? '—';
 
+// ------------------------------------------------------------------ header
 function renderTop(o: Observation) {
   const best = o.titles.length ? o.titles[o.titles.length - 1] : null;
   const title = $('title');
   title.textContent = best ? best.name : t('ui.noTitle');
   title.title = best ? best.gloss : '';
   $('date').textContent = o.date;
-  ($('termbar') as HTMLElement).style.width = pct(o.termProgress * 100);
-  $('termtxt').textContent = `${t('ui.term')}: ${(o.pmDays / 365.25).toFixed(1)} / 4y`;
   const coal = o.parties.filter((p) => p.inCoalition && p.seats > 0).sort((a, b) => a.position - b.position);
   const opp = o.parties.filter((p) => !p.inCoalition && p.seats > 0).sort((a, b) => a.position - b.position);
   region('seatbar', [...coal, ...opp].map((p) => p.id + p.seats + p.inCoalition).join() + o.defectors, () =>
@@ -79,13 +85,50 @@ function renderTop(o: Observation) {
     : `${t('ui.seats')}: <b class="${ok ? 'good' : 'bad'}">${o.seats}</b>/120 · ${t('ui.majority')}${o.defectors ? ` · ${o.defectors} rogue` : ''}`;
 }
 
+const ICON: Record<string, string> = {
+  crisis: '', war: '⚔', election: '🗳', title: '👑', budget: '💰', case: '⚖', icc: '✈', promise: '🤝', distrust: '😠', goal: '🏁',
+};
+
+function renderTimeline(o: Observation) {
+  const tl = o.timeline;
+  const end = Math.max(tl.goalDay, tl.nowDay + 120);
+  const x = (d: number) => `${Math.max(0, Math.min(100, (d / end) * 100)).toFixed(2)}%`;
+  const key = [Math.floor(end / 30), tl.past.length, tl.upcoming.map((m) => m.kind + m.day).join(), tl.trust.map((r) => r.party + r.believeUntil).join()].join('|');
+  region('tltrack', key, () => {
+    const past = tl.past.map((m) => `<span class="tl-m past ${m.kind}" style="left:${x(m.day)}" title="${esc(m.date + ' ' + m.label)}">${ICON[m.kind] ?? ''}</span>`).join('');
+    const up = tl.upcoming.filter((m) => m.day <= end).map((m) => `<span class="tl-m up ${m.kind}" style="left:${x(m.day)}" title="${esc(m.date + ' ' + m.label)}">${ICON[m.kind] ?? '•'}</span>`).join('');
+    const trust = tl.trust.map((r, i) => `<span class="tl-trust believe" style="left:${x(r.from)};width:calc(${x(r.believeUntil)} - ${x(r.from)});background:${r.color};top:${22 + (i % 3) * 3}px"></span><span class="tl-trust distrust" style="left:${x(r.believeUntil)};width:calc(${x(r.distrustUntil)} - ${x(r.believeUntil)});top:${22 + (i % 3) * 3}px"></span>`).join('');
+    return `<div class="tl-line"><div class="tl-fill" id="tlfill"></div></div>${trust}${past}${up}<span class="tl-now" id="tlnow"></span>`;
+  });
+  const fill = document.getElementById('tlfill');
+  if (fill) fill.style.width = x(tl.nowDay);
+  const now = document.getElementById('tlnow');
+  if (now) now.style.left = x(tl.nowDay);
+  const next = tl.upcoming.find((m) => m.kind !== 'goal');
+  const parts = [`${(o.pmDays / 365.25).toFixed(1)}/4y`];
+  if (next) parts.push(`${next.label} ${next.day - tl.nowDay}d`);
+  if (tl.nextTitle) parts.push(`👑 ${t('tl.nextTitle', { title: tl.nextTitle.name, days: tl.nextTitle.inDays })}`);
+  $('tlcap').textContent = parts.join(' · ');
+  const hist = $('history');
+  if (!hist.hidden) {
+    region('history', String(game.state.log.length) + tl.upcoming.length, () => {
+      const full = game.observe(300);
+      return `<h3>${t('ui.timeline')}</h3><ul class="tl-up">${tl.upcoming.map((m) => `<li>${ICON[m.kind] ?? '•'} ${m.date} — ${esc(m.label)} (${m.day - tl.nowDay}d)</li>`).join('')}</ul>
+        <ol class="log">${[...full.log].reverse().map((e) => `<li class="${e.kind}"><time>d${e.day}</time> ${esc(e.text)}</li>`).join('')}</ol>`;
+    });
+  }
+}
+
+// ------------------------------------------------------------------ HUD
 function renderHud(o: Observation) {
   region('hemi', o.parties.map((p) => p.id + p.seats + p.inCoalition).join(), () => hemicycleSvg(o.parties));
   const coal = o.parties.filter((p) => p.inCoalition && p.seats > 0);
   region('slider', coal.map((p) => p.id).join() + o.govPosition, () => {
     const x = (v: number) => ((v + 10) / 20) * 100;
-    return `<div class="track">${coal.map((p) => `<span class="band" style="left:${x(Math.max(-10, p.position - p.tolerance))}%;width:${x(Math.min(10, p.position + p.tolerance)) - x(Math.max(-10, p.position - p.tolerance))}%;background:${p.color}"></span><span class="pdot" style="left:${x(p.position)}%;background:${p.color}" title="${esc(p.name)}"></span>`).join('')}
-      <span class="gov" style="left:${x(o.govPosition)}%" title="${t('ui.gov')}">▲</span></div>
+    return `<div class="track">${coal.map((p) => {
+      const lo = Math.max(-10, p.position - p.tolerance), hi = Math.min(10, p.position + p.tolerance);
+      return `<span class="band" style="left:${x(lo)}%;width:${x(hi) - x(lo)}%;background:${p.color}"></span><span class="pdot" style="left:${x(p.position)}%;background:${p.color}" title="${esc(p.name)}"></span>`;
+    }).join('')}<span class="gov" style="left:${x(o.govPosition)}%" title="${t('ui.gov')}">▲</span></div>
       <div class="ends"><span>${t('ui.left')}</span><span>${t('ui.gov')} ${o.govPosition}</span><span>${t('ui.right')}</span></div>`;
   });
   const m = o.meters;
@@ -104,27 +147,94 @@ function renderHud(o: Observation) {
   const chips: string[] = [];
   if (o.tension) chips.push(`<span class="chip warn">${t('ui.tension')}</span>`);
   if (o.iccDays) chips.push(`<span class="chip">${t('ui.icc', { days: o.iccDays })}</span>`);
-  if (!o.budget.passed) chips.push(`<span class="chip">Budget ${o.budget.dueYear} ✗</span>`);
+  if (!o.budget.passed) chips.push(`<span class="chip">💰 ${o.budget.dueYear} ✗</span>`);
   if (o.openCases) chips.push(`<span class="chip">⚖ ${o.openCases}</span>`);
   $('chips').innerHTML = chips.join('');
 }
 
+// ------------------------------------------------------------------ crisis card
+function renderStage(o: Observation) {
+  const ev = o.event;
+  const key = ev ? `${ev.id}|${game.state.event?.firedAt}|${ev.options.map((x) => x.available).join()}` : `none|${o.phase}`;
+  if (swipe.dragging()) return;
+  region('stage', key, () => {
+    if (!ev) {
+      return `<div class="swipecard calm"><h2>${o.phase === 'campaign' ? esc(t('ui.campaign', { days: o.phaseLeftDays })) : t('ui.quiet')}</h2><p>${t('ui.quietText')}</p></div>`;
+    }
+    const by: Record<string, (typeof ev.options)[number] | undefined> = {};
+    for (const op of ev.options) by[op.dir] = op;
+    const hint = (dir: string) => {
+      const op = by[dir];
+      if (!op) return `<span class="hint-${dir} hint empty"></span>`;
+      return `<button class="hint hint-${dir}" data-dir="${dir}" ${op.available ? '' : 'disabled'} title="${esc(op.desc)}"><span class="arrow">${ARROW[dir]}</span> ${esc(op.label)}</button>`;
+    };
+    const urgent = ev.id === 'angry';
+    return `<div id="card" class="swipecard ${urgent ? 'urgent' : ''}" tabindex="0" aria-label="${esc(ev.title)}">
+      ${hint('up')}
+      <div class="cbody">
+        <svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16" class="ring-bg"/><circle id="ring" cx="20" cy="20" r="16" class="ring-fg"/></svg>
+        <h2>${esc(ev.title)}${ev.subject ? ` <small>· ${esc(partyName(o, ev.subject))}</small>` : ''}</h2>
+        <p>${esc(ev.text)}</p>
+        <div id="swipelabel" class="swipelabel" hidden></div>
+      </div>
+      <div class="lr">${hint('left')}${hint('right')}</div>
+      ${hint('down')}
+    </div>
+    <p class="swipehint">${t('ui.swipeHint')}</p>`;
+  });
+  if (ev) {
+    const ring = document.getElementById('ring');
+    const total = ev.id === 'angry' ? game.state.config.urgentTimeoutDays : game.state.config.eventTimeoutDays;
+    if (ring) ring.style.strokeDashoffset = String(100.5 * (1 - ev.daysLeft / total));
+  }
+}
+
+function showPreview(dir: string | null, strength: number) {
+  const el = document.getElementById('swipelabel');
+  const ev = game.observe(0).event;
+  if (!el || !ev) return;
+  const op = dir ? ev.options.find((x) => x.dir === dir) : undefined;
+  if (!op || strength < 0.25) { el.hidden = true; return; }
+  el.hidden = false;
+  el.className = `swipelabel to-${dir} ${op.available ? '' : 'na'}`;
+  el.style.opacity = String(Math.min(1, 0.5 + strength));
+  el.innerHTML = `<b>${ARROW[dir!]} ${esc(op.label)}</b><div class="fx">${op.preview.map((p) => `<span class="${p.up ? 'up' : 'down'}">${p.up ? '▲' : '▼'} ${esc(p.label)}</span>`).join('')}</div>`;
+}
+
+function choose(dir: string) {
+  const ev = game.observe(0).event;
+  const op = ev?.options.find((x) => x.dir === dir);
+  if (!op || !op.available) return false;
+  doAct({ type: 'choose', optionId: op.id });
+  return true;
+}
+
+const swipe = initSwipe({
+  root: $('stage'),
+  reduceMotion,
+  canChoose: (dir) => !!game.observe(0).event?.options.find((x) => x.dir === dir && x.available),
+  onPreview: showPreview,
+  onChoose: (dir) => { choose(dir); },
+});
+
+// ------------------------------------------------------------------ drawer
 function renderParties(o: Observation) {
   const list = o.parties.filter((p) => p.seats > 0)
     .sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || b.seats - a.seats);
-  const key = list.map((p) => [p.id, p.seats, p.inCoalition, p.wartime, p.threatening, p.trust.state, p.ministries.length].join(':')).join('|')
+  const key = list.map((p) => [p.id, p.seats, p.inCoalition, p.wartime, p.threatening, p.trust.state, p.trust.waiting, p.ministries.length].join(':')).join('|')
     + `|${o.cooldowns.invite > 0}|${o.cooldowns.law > 0}|${o.phase}`;
   region('parties', key, () => list.map((p) => {
     const promises = promisesFor(game.state, p.id);
     const canAct = o.phase === 'governing';
     const promiseSel = p.trust.state === 'neutral' && canAct
       ? `<select data-promise="${p.id}" aria-label="${t('ui.promise')}"><option value="">${t('ui.promise')}</option>${promises.map((id) => `<option value="${id}">${esc(t(`promise.${id}`))}</option>`).join('')}</select>` : '';
-    const deliver = p.trust.state !== 'neutral' && p.trust.promiseId && canAct
+    const deliver = (p.trust.state === 'believing' || p.trust.state === 'distrust') && p.trust.promiseId && canAct
       ? `<button data-deliver="${p.id}" data-pid="${p.trust.promiseId}" ${o.cooldowns.law > 0 ? 'disabled' : ''}>${t('ui.deliver')}: ${esc(t(`promise.${p.trust.promiseId}`))}</button>` : '';
     const invite = !p.inCoalition && canAct
       ? `<button data-invite="${p.id}" ${o.cooldowns.invite > 0 ? 'disabled' : ''}>${t('ui.invite')}</button>` : '';
     const flags = [p.wartime && t('ui.wartime'), p.threatening && t('ui.threatening')].filter(Boolean).join(' · ');
-    return `<div class="party ${p.inCoalition ? 'in' : 'out'}" style="--c:${p.color}">
+    const cls = p.trust.state === 'angry' ? 'angry' : p.trust.waiting ? 'waiting' : '';
+    return `<div class="party ${p.inCoalition ? 'in' : 'out'} ${cls}" style="--c:${p.color}">
       <div class="phead"><b>${esc(p.name)}</b><span>${p.seats}</span></div>
       <div class="sat"><div data-sat="${p.id}"></div></div>
       <div class="pmeta"><span data-trust="${p.id}"></span>${flags ? `<span class="bad">${flags}</span>` : ''}<span>${p.ministries.length ? `🏛 ${p.ministries.length}` : ''}</span></div>
@@ -135,8 +245,11 @@ function renderParties(o: Observation) {
     const bar = app.querySelector<HTMLElement>(`[data-sat="${p.id}"]`);
     if (bar) { bar.style.width = pct(p.satisfaction); bar.className = p.satisfaction < 25 ? 'low' : ''; }
     const tr = app.querySelector<HTMLElement>(`[data-trust="${p.id}"]`);
-    if (tr) tr.textContent = p.trust.state === 'neutral' ? `${Math.round(p.satisfaction)}%` : `${Math.round(p.satisfaction)}% · ${t(`ui.trust.${p.trust.state}`, { days: p.trust.daysLeft })}`;
+    if (!tr) continue;
+    const state = p.trust.waiting ? t('ui.trust.waiting', { days: p.trust.daysLeft }) : t(`ui.trust.${p.trust.state}`, { days: p.trust.daysLeft });
+    tr.textContent = state ? `${Math.round(p.satisfaction)}% · ${state}` : `${Math.round(p.satisfaction)}%`;
   }
+  $('movesdot').hidden = !o.parties.some((p) => p.trust.waiting || p.trust.state === 'angry' || (p.inCoalition && p.threatening));
 }
 
 function renderMinistries(o: Observation) {
@@ -156,29 +269,13 @@ function renderLaws(o: Observation) {
     o.laws.map((l) => `<button data-law="${l.id}" ${ready ? '' : 'disabled'} title="${esc(t(`remedy.${l.id}.desc`))}">${esc(l.label)}</button>`).join(''));
 }
 
-function renderEvent(o: Observation) {
-  const ev = o.event;
-  const key = ev ? `${ev.id}|${game.state.event?.firedAt}|${ev.options.map((x) => x.available).join()}` : 'none';
-  region('event', key, () => {
-    if (!ev) return '';
-    return `<div class="evcard"><h2>${esc(ev.title)}</h2><p>${esc(ev.text)}${ev.subject ? ` <i>(${esc(partyName(o, ev.subject))})</i>` : ''}</p>
-      <div class="timer"><div id="evtimer"></div></div>
-      <div class="opts">${ev.options.map((op) => `<button data-opt="${op.id}" ${op.available ? '' : 'disabled'} title="${esc(t(`remedy.${op.id}.desc`))}">${esc(op.label)}</button>`).join('')}</div></div>`;
-  });
-  $('event').classList.toggle('open', !!ev);
-  if (ev) {
-    const bar = document.getElementById('evtimer');
-    if (bar) bar.style.width = pct((ev.daysLeft / game.state.config.eventTimeoutDays) * 100);
-  }
-}
-
 function renderWar(o: Observation) {
   const btn = $('war') as HTMLButtonElement;
   const can = o.phase === 'governing' && !o.war.active && o.war.cooldownDays === 0 && o.tension;
   btn.disabled = !can;
   btn.textContent = o.war.active ? t('ui.warActive', { days: o.war.daysLeft })
     : o.war.cooldownDays ? t('ui.warCooldown', { days: o.war.cooldownDays })
-    : `💥 ${t('ui.war')}${o.tension ? '' : ' (—)'}`;
+    : `💥 ${t('ui.war')}${o.tension ? '' : ` — ${t('ui.tension')} ✗`}`;
 }
 
 function renderLog() {
@@ -188,6 +285,7 @@ function renderLog() {
     [...o.log].reverse().map((e) => `<li class="${e.kind}"><time>d${e.day}</time> ${esc(e.text)}</li>`).join(''));
 }
 
+// ------------------------------------------------------------------ overlays
 function toast(msg: string) {
   const el = $('toast');
   el.textContent = msg;
@@ -212,11 +310,12 @@ function renderOver(o: Observation) {
 function render() {
   const o = game.observe();
   renderTop(o);
+  renderTimeline(o);
+  renderStage(o);
   renderHud(o);
   renderParties(o);
   renderMinistries(o);
   renderLaws(o);
-  renderEvent(o);
   renderWar(o);
   renderLog();
   if (o.titles.length > lastTitles) {
@@ -242,16 +341,24 @@ function restart() {
   render();
 }
 
+// ------------------------------------------------------------------ input
 app.addEventListener('click', (e) => {
   const b = (e.target as HTMLElement).closest('button');
   if (!b || b.disabled) return;
   const d = b.dataset;
-  if (d.opt) doAct({ type: 'choose', optionId: d.opt });
+  if (d.dir) { if (!swipe.consumedClick()) swipe.flyThenChoose(d.dir); }
   else if (d.act === 'war') doAct({ type: 'startWar' });
   else if (d.act === 'restart') restart();
+  else if (d.act === 'drawer') $('drawer').classList.toggle('open');
   else if (d.law) doAct({ type: 'passLaw', lawId: d.law });
   else if (d.invite) doAct({ type: 'invite', partyId: d.invite });
   else if (d.deliver && d.pid) doAct({ type: 'deliver', partyId: d.deliver, promiseId: d.pid });
+  else if (b.id === 'timeline') {
+    const h = $('history');
+    h.hidden = !h.hidden;
+    b.setAttribute('aria-expanded', String(!h.hidden));
+    keys.history = '';
+  }
 });
 
 app.addEventListener('change', (e) => {
@@ -262,6 +369,15 @@ app.addEventListener('change', (e) => {
     if (s.value !== holder) doAct({ type: 'giveMinistry', ministryId: s.dataset.ministry, partyId: s.value });
     keys.ministries = '';
   }
+});
+
+window.addEventListener('keydown', (e) => {
+  const tag = (e.target as HTMLElement).tagName;
+  if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA') return;
+  const dir = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as Record<string, string>)[e.key];
+  if (dir && game.state.event) { e.preventDefault(); swipe.flyThenChoose(dir); }
+  else if (e.key === ' ' && tag !== 'BUTTON') { e.preventDefault(); $('pause').click(); }
+  else if (e.key === 'Escape') $('drawer').classList.remove('open');
 });
 
 $('pause').addEventListener('click', () => {
