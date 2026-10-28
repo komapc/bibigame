@@ -960,7 +960,7 @@ export const en: Record<string, string> = {
   'intro.start': 'Start',
   'intro.resume': 'Back to the game',
   'intro.lang': 'Language',
-  'intro.satire': 'Satire. Party names are placeholders; nobody is quoted.',
+  'intro.satire': 'Satire. Real party names, invented events; nobody is quoted.',
   'ui.help': 'How to play',
   'ui.resultSeats': 'Seats {n}',
   'ui.tabLog': 'Log',
