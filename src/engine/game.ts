@@ -233,6 +233,24 @@ export const pmParty = (s: GameState) => s.parties.find((p) => p.id === s.base.p
 export const coalition = (s: GameState) => s.parties.filter((p) => p.inCoalition);
 export const partyById = (s: GameState, id: string) => s.parties.find((p) => p.id === id);
 
+/** Knesset summer recess (governing only): config.recessMonths from config.recessStartMonth */
+export function inRecess(s: GameState): boolean {
+  const c = s.config;
+  if (!c.recessMonths || s.phase !== 'governing') return false;
+  const m = dateOf(s).getUTCMonth();
+  return (m - c.recessStartMonth + 12) % 12 < c.recessMonths;
+}
+
+/** day numbers of the current (or next) recess: [start, end) */
+export function recessWindow(s: GameState): { start: number; end: number } {
+  const c = s.config;
+  const d = dateOf(s);
+  const at = (y: number, m: number) => Math.round((Date.UTC(y, m, 1) - Date.parse(c.startDate + 'T00:00:00Z')) / DAY_MS);
+  let y = d.getUTCFullYear();
+  if (at(y, c.recessStartMonth + c.recessMonths) <= Math.floor(s.day)) y++;
+  return { start: at(y, c.recessStartMonth), end: at(y, c.recessStartMonth + c.recessMonths) };
+}
+
 export function dateOf(s: GameState): Date {
   return new Date(Date.parse(s.config.startDate + 'T00:00:00Z') + Math.floor(s.day) * DAY_MS);
 }
@@ -284,6 +302,8 @@ export function crisisWeight(s: GameState, c: CrisisDef): number {
   if (req?.minTrial !== undefined && s.trial < req.minTrial) return 0;
   if (req?.warHistory && !s.war.active && s.stats.warsEnded === 0) return 0;
   const c0 = s.config;
+  // summer recess: the Knesset is at the beach; only wildcards (no-card news) still happen
+  if (!c.goodNews && s.recess) return 0;
   // no card twice within crisisCooldownDays (good news: within a year)
   const last = s.lastFired[c.id];
   if (last !== undefined && s.day - last < (c.goodNews ? c0.goodNewsCooldownDays : c0.crisisCooldownDays)) return 0;
@@ -1083,6 +1103,10 @@ function tickDay(s: GameState, dt: number) {
     callElections(s, 'budget');
     return;
   }
+
+  // Knesset summer recess
+  const rec = inRecess(s);
+  if (rec !== !!s.recess) { s.recess = rec; log(s, rec ? 'log.recessStart' : 'log.recessEnd', {}, 'event'); }
 
   // events
   if (s.event) {

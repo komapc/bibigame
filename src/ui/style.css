@@ -292,3 +292,7 @@ details[open] > summary::before { transform: rotate(90deg); }
 .share { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: #1d3550; color: inherit; text-decoration: none; font-weight: 600; padding: 8px 12px; }
 .share.wa { background: #1f7a3f; border-color: #25d366; }
 .dailybadge { color: var(--gold); font-weight: 600; }
+
+/* ---------- Knesset summer recess */
+.tl-m.recess { filter: saturate(1.4); }
+body.recess .tl-fill { background: linear-gradient(90deg, var(--accent), var(--warn)); }

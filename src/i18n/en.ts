@@ -221,6 +221,9 @@ export const en: Record<string, string> = {
   'tl.believes': '{party} believes you until',
   'tl.distrusts': '{party} distrusts you until',
   'tl.goal': '4-year goal',
+  'tl.recess': 'Knesset summer recess',
+  'tl.recessEnds': 'Recess ends',
+  'ui.recess': '🏖️ Summer recess: the Knesset is at the beach. Fewer crises, faster clock.',
   'tl.next': '{label} in {daysText}',
   'tl.nextTitle': '{title} in {daysText}',
 
@@ -710,6 +713,8 @@ export const en: Record<string, string> = {
   'log.poach': 'An MK from {party} crosses over to Likud.',
   'log.newMinistry': 'New ministry: {ministry}, for {party}.',
   'log.exileRival': 'A Likud rival is now an ambassador. Very far away.',
+  'log.recessStart': 'The Knesset leaves for its summer recess. MKs post from the beach; crises wait for autumn.',
+  'log.recessEnd': 'Recess is over. The Knesset is back, sunburnt and furious.',
   'log.primetimeUp': 'The 20:00 statement works: approval +{n}.',
   'log.primetimeDown': 'The 20:00 statement backfires: approval −{n}.',
   'log.postponed': 'Elections postponed by emergency law.',

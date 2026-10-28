@@ -30,6 +30,11 @@ export interface Config {
   pauseOnDecision: boolean;
   /** UI: clock speed multiplier when no card is pending (fast-forward between events) */
   uiIdleClockScale: number;
+  /** UI: the clock runs this many times faster during the Knesset summer recess */
+  recessClockMult: number;
+  /** Knesset summer recess: regular crises pause (wildcards still happen); 0-based month, length in months; 0 = off */
+  recessStartMonth: number;
+  recessMonths: number;
   /** party card shows "waiting…" this many days before a promise window ends */
   promiseWarnDays: number;
   /** "buy time" extends the believe window by this much (once per promise) */
@@ -206,6 +211,9 @@ export const DEFAULT_CONFIG: Config = {
   uiCardClockScale: 0.25,
   pauseOnDecision: true,
   uiIdleClockScale: 2.5,
+  recessClockMult: 2,
+  recessStartMonth: 7,
+  recessMonths: 2,
   promiseWarnDays: 14,
   buyTimeDays: 30,
 

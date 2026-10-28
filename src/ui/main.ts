@@ -189,7 +189,7 @@ function renderSupport(o: Observation, coal: Observation['parties']) {
 }
 
 const ICON: Record<string, string> = {
-  crisis: '', war: '⚔', election: '🗳', title: '👑', budget: '💰', case: '⚖', icc: '✈', promise: '🤝', distrust: '😠', goal: '🏁',
+  crisis: '', war: '⚔', election: '🗳', recess: '🏖', title: '👑', budget: '💰', case: '⚖', icc: '✈', promise: '🤝', distrust: '😠', goal: '🏁',
 };
 
 function renderTimeline(o: Observation) {
@@ -597,6 +597,8 @@ function render() {
   }
   lastTitles = o.titles.length;
   if (o.termReached && !keys.termToast) { keys.termToast = '1'; toast(t('ui.termReached')); }
+  if (o.recess !== (keys.recess === '1')) { keys.recess = o.recess ? '1' : ''; if (o.recess) toast(t('ui.recess')); }
+  document.body.classList.toggle('recess', o.recess);
   pumpOutcomes(o);
   renderOver(o);
   renderExtras(o);
@@ -776,7 +778,7 @@ function frame(now: number) {
   if (!paused && !document.hidden && !game.over) {
     const c = game.state.config;
     const scale = flashing() || fridayOpen() ? 0 : game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : c.uiIdleClockScale;
-    if (scale > 0) game.advance(dt * scale);
+    if (scale > 0) game.advance(dt * scale * (game.state.recess && !game.state.event ? c.recessClockMult : 1));
   }
   render();
   requestAnimationFrame(frame);

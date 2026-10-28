@@ -285,6 +285,8 @@ export interface GameState {
   termEndsDay: number;
   /** regional (Iran/Hezbollah) tension lasts until this day */
   tensionUntil: number;
+  /** the Knesset is on summer recess (set by the tick; logged on change) */
+  recess?: boolean;
   /** ICC warrant active until this day */
   iccUntil: number;
   /** once-per-game remedies already used */
