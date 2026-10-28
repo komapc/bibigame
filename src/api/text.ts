@@ -13,8 +13,8 @@ export type Command =
   | { kind: 'error'; message: string };
 
 export const HELP = `Commands (one per line):
-  <n>                          choose option n of the current crisis
-  choose <option>              choose an option by id (e.g. choose settle)
+  left | right | up | down     swipe the crisis card (also 1-4, or ← → ↑ ↓); down = call early elections
+  choose <option>              choose an option by id (e.g. choose settle); "choose ignore" lets it escalate
   promise <party> <promise>    make a promise (e.g. promise liberman constitution)
   deliver <party> <promise>    actually do it (uses the law cooldown)
   ministry <party> from <party>   give one of <from>'s ministries to <party>
@@ -45,13 +45,26 @@ export function renderText(o: Observation): string {
   L.push('PARTIES (id seats pos sat trust ministries):');
   const parties = [...o.parties].filter((p) => p.seats > 0).sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || b.seats - a.seats);
   for (const p of parties) {
-    const trust = p.trust.state === 'neutral' ? '-' : `${p.trust.state}:${p.trust.promiseId}:${p.trust.daysLeft}d`;
+    const trust = p.trust.state === 'neutral' ? '-' : `${p.trust.waiting ? 'WAITING' : p.trust.state}:${p.trust.promiseId}${p.trust.state === 'angry' ? '' : `:${p.trust.daysLeft}d`}`;
     const flags = [p.wartime && 'WARTIME', p.threatening && 'THREATENING', !p.inCoalition && !p.willSitWithBibi && 'boycotts-you'].filter(Boolean).join(' ');
     L.push(`  ${p.inCoalition ? 'C' : 'o'} ${p.id.padEnd(9)} ${String(p.seats).padStart(2)}  ${String(p.position).padStart(3)}  ${bar(p.satisfaction)} ${String(Math.round(p.satisfaction)).padStart(3)}  ${trust}  [${p.ministries.join(',')}] ${flags}`);
   }
+  const tl = o.timeline;
+  const span = Math.max(tl.goalDay, tl.nowDay + 30) - tl.startDay || 1;
+  const cells = 32;
+  const at = (d: number) => Math.min(cells - 1, Math.max(0, Math.round(((d - tl.startDay) / span) * (cells - 1))));
+  const strip: string[] = Array.from({ length: cells }, (_, i) => (i < at(tl.nowDay) ? '=' : '-'));
+  for (const m of tl.upcoming) if (m.kind !== 'goal') strip[at(m.day)] = m.kind === 'election' ? 'E' : m.kind === 'budget' ? 'B' : m.kind === 'promise' || m.kind === 'distrust' ? 'p' : strip[at(m.day)];
+  strip[at(tl.nowDay)] = '|';
+  L.push(`TIMELINE: start [${strip.join('')}] goal ${tl.goalDay > tl.nowDay ? `in ${tl.goalDay - tl.nowDay}d` : 'reached'}${tl.nextTitle ? ` | next title: ${tl.nextTitle.name} in ${tl.nextTitle.inDays}d` : ''}`);
+  if (tl.upcoming.length) L.push(`UPCOMING: ${tl.upcoming.slice(0, 6).map((m) => `${m.date} ${m.label} (${m.day - tl.nowDay}d)`).join('; ')}`);
   if (o.event) {
-    L.push(`CRISIS: ${o.event.title} — ${o.event.text}${o.event.subject ? ` (subject: ${o.event.subject})` : ''} [${o.event.daysLeft}d to respond; default: ignore]`);
-    o.event.options.forEach((op, i) => L.push(`  ${i + 1}. ${op.label} (${op.id})${op.available ? '' : ' [unavailable]'}`));
+    L.push(`CRISIS: ${o.event.title} — ${o.event.text}${o.event.subject ? ` (subject: ${o.event.subject})` : ''} [${o.event.daysLeft}d to respond; timeout = ${o.event.id === 'angry' ? 'refuse' : 'ignore, escalates'}]`);
+    const n: Record<string, number> = { left: 1, right: 2, up: 3, down: 4 };
+    for (const op of o.event.options) {
+      const fx = op.preview.map((p) => `${p.label}${p.up ? '+' : '-'}`).join(', ');
+      L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.available ? '' : ' [unavailable]'}${fx ? ` -> ${fx}` : ''}`);
+    }
   } else if (o.phase === 'governing') L.push('No crisis right now.');
   L.push(`LAWS: ${o.laws.map((l) => l.id).join(', ')}`);
   L.push(`PROMISES: ${o.promises.map((p) => `${p.id}->${p.to.join('/')}`).join(', ')}`);
@@ -80,9 +93,10 @@ export function parseCommand(g: Game, line: string): Command {
   const [cmd, ...rest] = words;
   const c = cmd.toLowerCase();
   const o = g.observe(0);
-  if (/^\d+$/.test(c)) {
-    const opt = o.event?.options[Number(c) - 1];
-    if (!opt) return { kind: 'error', message: 'No such option.' };
+  const dirOf: Record<string, string> = { '1': 'left', '2': 'right', '3': 'up', '4': 'down', '←': 'left', '→': 'right', '↑': 'up', '↓': 'down', left: 'left', right: 'right', up: 'up', down: 'down' };
+  if (dirOf[c]) {
+    const opt = o.event?.options.find((x) => x.dir === dirOf[c]);
+    if (!opt) return { kind: 'error', message: o.event ? 'No option on that side.' : 'No crisis right now.' };
     return { kind: 'action', action: { type: 'choose', optionId: opt.id } };
   }
   switch (c) {

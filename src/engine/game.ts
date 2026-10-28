@@ -70,6 +70,8 @@ export function createState(base: KnessetData, seed: number, config: Partial<Con
     cooldowns: { ministry: 0, law: 0, invite: 0 },
     budgetPassedYear: 0,
     lastBudgetNag: -999,
+    queue: [],
+    termEndsDay: cfg.knessetTermDays,
     tensionUntil: 180,
     iccUntil: 0,
     usedOnce: [],
@@ -140,6 +142,10 @@ export function remedyAvailable(s: GameState, id: string): boolean {
   if (r.once && s.usedOnce.includes(id)) return false;
   if (r.travel && s.day < s.iccUntil) return false;
   if (id === 'war') return !s.war.active && s.war.cooldownDays <= 0;
+  if (id === 'buytime') {
+    const p = s.event?.subject ? partyById(s, s.event.subject) : undefined;
+    return !!p && !p.trust.extended;
+  }
   if (id === 'fire') return coalition(s).some((p) => p.tags.includes('farright') && ministryCounts(s.ministries)[p.id]);
   return true;
 }
@@ -203,6 +209,36 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
         m.holder = s.base.pmParty;
         log(s, 'log.firedDefence', { party: holder.id }, 'info');
       }
+      break;
+    }
+    case 'deliverPromise': {
+      const p = subject ? partyById(s, subject) : undefined;
+      const def = p?.trust.promiseId ? promiseById.get(p.trust.promiseId) : undefined;
+      if (!p || !def || p.trust.state === 'neutral') break;
+      if (def.deliveredBy === 'ministry') {
+        const counts = ministryCounts(s.ministries);
+        const from = coalition(s).filter((x) => x.id !== p.id && (counts[x.id] ?? 0) > 0)
+          .sort((x, y) => (counts[y.id] ?? 0) - (counts[x.id] ?? 0))[0];
+        const m = from && s.ministries.find((x) => x.holder === from.id);
+        if (m) transferMinistry(s, m.id, p.id);
+      } else applyMove(s, def.deliveredBy, p.id);
+      p.trust = { state: 'neutral', promiseId: null, until: 0 };
+      break;
+    }
+    case 'buyTime': {
+      const p = subject ? partyById(s, subject) : undefined;
+      if (!p || p.trust.state !== 'angry') break;
+      p.trust = { state: 'believing', promiseId: p.trust.promiseId, until: s.day + s.config.buyTimeDays, extended: true };
+      p.satisfaction = clamp(p.satisfaction - 5, 0, 100);
+      log(s, 'log.buyTime', { party: p.id }, 'info');
+      break;
+    }
+    case 'refuse': {
+      const p = subject ? partyById(s, subject) : undefined;
+      if (!p || p.trust.state !== 'angry') break;
+      breakPromise(s, p);
+      log(s, 'log.refusedPromise', { party: p.id }, 'bad');
+      if (p.inCoalition) leave(s, p);
       break;
     }
     case 'elections': callElections(s, 'early'); break;
@@ -355,6 +391,7 @@ function resolveElection(s: GameState) {
   s.stats.electionsSurvived++;
   if (s.campaignPollSeats < 25) s.stats.comebacks++;
   s.refusedBy = [];
+  s.termEndsDay = s.day + c.knessetTermDays;
   s.approval = clamp(s.approval + 5, 0, 100);
   s.phase = 'governing';
   s.nextEventInDays = scheduleNext(s);
@@ -364,9 +401,17 @@ function resolveElection(s: GameState) {
 
 // ---------------------------------------------------------------- events
 
-function fireCrisis(s: GameState, c: CrisisDef) {
+function breakPromise(s: GameState, p: Party) {
+  p.trust = { state: 'distrust', promiseId: p.trust.promiseId, until: s.day + s.config.promiseDistrustDays };
+  p.satisfaction = clamp(p.satisfaction - s.config.promiseBrokenPenalty, 0, 100);
+  s.stats.brokenPromises++;
+  log(s, 'log.broken', { party: p.id }, 'bad');
+}
+
+function fireCrisis(s: GameState, c: CrisisDef, subjectOverride?: string | null) {
   let subject: string | null = null;
-  if (c.subjectMinistry) subject = s.ministries.find((m) => m.id === c.subjectMinistry)?.holder ?? null;
+  if (subjectOverride !== undefined) subject = subjectOverride;
+  else if (c.subjectMinistry) subject = s.ministries.find((m) => m.id === c.subjectMinistry)?.holder ?? null;
   else if (c.subjectTag === 'pm') subject = s.base.pmParty;
   else if (c.subjectTag === 'coalition') {
     const partners = coalition(s).filter((p) => p.id !== s.base.pmParty);
@@ -375,7 +420,7 @@ function fireCrisis(s: GameState, c: CrisisDef) {
     subject = coalition(s).filter((p) => matchesTag(p, c.subjectTag!))
       .sort((a, b) => a.satisfaction - b.satisfaction)[0]?.id ?? null;
   }
-  s.event = { id: c.id, subject, firedAt: s.day, leftDays: s.config.eventTimeoutDays };
+  s.event = { id: c.id, subject, firedAt: s.day, leftDays: c.urgent ? s.config.urgentTimeoutDays : s.config.eventTimeoutDays };
   if (c.onFire) applyEffect(s, c.onFire, subject);
   if (c.tension) s.tensionUntil = Math.max(s.tensionUntil, s.day + c.tension);
   if (c.icc) s.iccUntil = Math.max(s.iccUntil, s.day + c.icc);
@@ -387,11 +432,16 @@ function fireCrisis(s: GameState, c: CrisisDef) {
   log(s, 'log.crisis', { crisis: c.id, subject: subject ?? '' }, 'event');
 }
 
-export function eventOptions(s: GameState): { id: string; available: boolean }[] {
+export type Dir = 'left' | 'right' | 'up' | 'down';
+export const DIRS: Dir[] = ['left', 'right', 'up', 'down'];
+
+/** the current crisis card: ≤3 remedies on left/right/up, elections on down */
+export function eventOptions(s: GameState): { id: string; dir: Dir; available: boolean }[] {
   if (!s.event) return [];
   const c = crisisById.get(s.event.id)!;
-  const ids = c.remedies.includes('ignore') ? c.remedies : [...c.remedies, 'ignore'];
-  return ids.map((id) => ({ id, available: id === 'ignore' || remedyAvailable(s, id) }));
+  const opts = c.remedies.slice(0, 3).map((id, i) => ({ id, dir: DIRS[i], available: id === 'ignore' || remedyAvailable(s, id) }));
+  opts.push({ id: 'elections', dir: 'down', available: true });
+  return opts;
 }
 
 function resolveEvent(s: GameState, optionId: string) {
@@ -435,17 +485,18 @@ function tickDay(s: GameState, dt: number) {
   s.us += (55 - s.us) * c.meterRegression * dt;
   s.fiscal += (50 - s.fiscal) * c.meterRegression * dt;
   const target = 20 + 0.2 * s.street + 0.15 * s.us + 0.1 * s.fiscal - 0.15 * s.trial
-    + (s.war.active ? c.warApprovalBonusTarget : 0);
+    + (s.war.active ? c.warApprovalBonusTarget : 0) - c.fatiguePerYear * (s.pmDays / 365.25);
   s.approval = clamp(s.approval + (target - s.approval) * c.approvalRegression * dt, 0, 100);
   for (const k of Object.keys(s.pressure)) s.pressure[k] *= Math.max(0, 1 - c.pressureDecayPerDay * dt);
   s.openCases = s.openCases.filter((d) => d > s.day);
 
   for (const p of s.parties) {
     if (p.trust.state === 'believing' && s.day >= p.trust.until) {
-      p.trust = { state: 'distrust', promiseId: p.trust.promiseId, until: s.day + c.promiseDistrustDays };
-      p.satisfaction = clamp(p.satisfaction - c.promiseBrokenPenalty, 0, 100);
-      s.stats.brokenPromises++;
-      log(s, 'log.broken', { party: p.id }, 'bad');
+      if (p.seats > 0) {
+        // no silent switch: the party comes to collect (angry-reminder card)
+        p.trust = { ...p.trust, state: 'angry' };
+        s.queue.push({ id: 'angry', subject: p.id });
+      } else breakPromise(s, p);
     } else if (p.trust.state === 'distrust' && s.day >= p.trust.until) {
       p.trust = { state: 'neutral', promiseId: null, until: 0 };
     }
@@ -477,6 +528,7 @@ function tickDay(s: GameState, dt: number) {
     if (p.inCoalition && p.id !== s.base.pmParty) {
       const over = Math.max(0, Math.abs(s.govPosition - p.position) - p.tolerance);
       d -= over * c.driftPenalty;
+      d -= c.appetitePerDay;
       d += ((counts[p.id] ?? 0) - fairShare(p, s.parties, s.ministries.length)) * c.ministryFairness;
       d -= hateCount(p, coal) * c.hatePenalty;
     }
@@ -491,6 +543,8 @@ function tickDay(s: GameState, dt: number) {
     s.stats.bigCoalitionStreak += dt;
     s.stats.bigCoalitionBest = Math.max(s.stats.bigCoalitionBest, s.stats.bigCoalitionStreak);
   } else s.stats.bigCoalitionStreak = 0;
+
+  if (s.day >= s.termEndsDay) { callElections(s, 'scheduled'); return; }
 
   // budget: nag in Feb–Mar, automatic elections on 1 April without one
   const d = dateOf(s);
@@ -511,7 +565,11 @@ function tickDay(s: GameState, dt: number) {
   // events
   if (s.event) {
     s.event.leftDays -= dt;
-    if (s.event.leftDays <= 0) resolveEvent(s, 'ignore');
+    if (s.event.leftDays <= 0) resolveEvent(s, crisisById.get(s.event.id)?.defaultOption ?? 'ignore');
+  } else if (s.queue.length) {
+    const q = s.queue.shift()!;
+    const p = q.subject ? partyById(s, q.subject) : undefined;
+    if (!p || p.trust.state === 'angry') fireCrisis(s, crisisById.get(q.id)!, q.subject);
   } else {
     s.nextEventInDays -= dt;
     if (s.nextEventInDays <= 0) {
@@ -564,10 +622,13 @@ export function act(s: GameState, a: Action): ActionResult {
   switch (a.type) {
     case 'choose': {
       if (!s.event) return { ok: false, error: 'err.noEvent' };
-      const opt = eventOptions(s).find((o) => o.id === a.optionId);
+      const def = crisisById.get(s.event.id)?.defaultOption;
+      if (a.optionId === 'ignore' && def) { resolveEvent(s, def); return { ok: true }; }
+      const opt = a.optionId === 'ignore' ? { available: true }
+        : eventOptions(s).find((o) => o.id === a.optionId || o.dir === a.optionId);
       if (!opt) return { ok: false, error: 'err.badOption' };
       if (!opt.available) return { ok: false, error: 'err.unavailable' };
-      resolveEvent(s, a.optionId);
+      resolveEvent(s, a.optionId === 'ignore' ? 'ignore' : eventOptions(s).find((o) => o.id === a.optionId || o.dir === a.optionId)!.id);
       return { ok: true };
     }
     case 'giveMinistry': {

@@ -59,6 +59,19 @@ export const en: Record<string, string> = {
   'ui.icc': 'ICC warrant: {days}d',
   'ui.botHint': 'Bots: window.bibigame',
 
+  'crisis.angry.title': 'Angry reminder',
+  'crisis.angry.text': 'A partner remembers exactly what you promised, and when. Deliver, buy time, or say no — and watch them walk.',
+  'remedy.deliverpremium': 'Deliver now (at a premium)',
+  'remedy.deliverpremium.desc': 'Do what you promised, plus a little extra for the inconvenience.',
+  'remedy.buytime': 'Buy time (once)',
+  'remedy.buytime.desc': 'A small concession and a solemn "next month". Works exactly once.',
+  'remedy.refuse': 'Refuse',
+  'remedy.refuse.desc': 'There was never a promise. They leave, or vote against you.',
+  'fx.deliver': 'Promise delivered', 'fx.buyTime': 'One more month', 'fx.refuse': 'They walk out',
+  'ui.trust.angry': 'furious — answer them!',
+  'ui.trust.waiting': 'waiting… ({days}d)',
+  'log.buyTime': '{party} grudgingly gives you another month.',
+  'log.refusedPromise': '{party} hears "no". Loudly.',
   // --- crises (from the design graph)
   'crisis.leftist.title': '“You\'re a leftist!”',
   'crisis.leftist.text': 'The far-right partner learns you once shook hands with a centrist. Ultimatum expires Thursday.',
@@ -175,6 +188,32 @@ export const en: Record<string, string> = {
   'remedy.settlelaw': 'Outpost regularisation law',
   'remedy.settlelaw.desc': 'Retroactively, everything was always legal.',
 
+  // --- effect preview labels
+  'tag.farright': 'Far right', 'tag.haredi': 'Haredim', 'tag.centrist': 'Centre', 'tag.secular': 'Secular',
+  'tag.pm': 'Your party', 'tag.coalition': 'Partners', 'tag.opposition': 'Opposition', 'tag.all': 'Everyone',
+  'tag.left': 'Left', 'tag.arab': 'Arab parties', 'tag.right': 'Right',
+  'fx.approval': 'Approval', 'fx.street': 'Street calm', 'fx.us': 'US', 'fx.fiscal': 'Budget', 'fx.trial': 'Trial',
+  'fx.right': 'Shift right', 'fx.left': 'Shift left', 'fx.war': 'War', 'fx.endWar': 'Ends the war',
+  'fx.ministry': 'Ministry reshuffle', 'fx.elections': 'Elections', 'fx.budget': 'Budget passes',
+  'fx.quiet': 'Quiet for a while', 'fx.pause': 'Trial paused', 'fx.defector': 'Rogue MK', 'fx.fire': 'Someone gets fired',
+  'dir.left': '←', 'dir.right': '→', 'dir.up': '↑', 'dir.down': '↓',
+  'ui.moves': 'Moves',
+  'ui.quiet': 'No crisis. For now.',
+  'ui.quietText': 'Use the calm: keep promises, reshuffle ministries, pass a law.',
+  'ui.swipeHint': 'Swipe or use arrow keys',
+  'ui.timeline': 'Timeline',
+  // --- timeline
+  'tl.budget': 'Budget deadline {year}',
+  'tl.scheduled': 'Scheduled elections',
+  'tl.electionDay': 'Election day',
+  'tl.warEnds': 'War ends',
+  'tl.iccEnds': 'ICC warrant expires',
+  'tl.caseCloses': 'A case closes',
+  'tl.believes': '{party} believes you until',
+  'tl.distrusts': '{party} distrusts you until',
+  'tl.goal': '4-year goal',
+  'tl.nextTitle': '{title} in {days}d',
+
   // --- ministries
   'ministry.defense': 'Defence', 'ministry.finance': 'Finance', 'ministry.foreign': 'Foreign Affairs',
   'ministry.justice': 'Justice', 'ministry.security': 'National Security', 'ministry.interior': 'Interior',
@@ -215,6 +254,7 @@ export const en: Record<string, string> = {
   // --- election reasons
   'reason.collapse': 'the coalition fell below 61',
   'reason.budget': 'no budget by 31 March',
+  'reason.scheduled': 'the Knesset term is over',
   'reason.early': 'you called them',
   'reason.deadlock': 'nobody could form a government',
 

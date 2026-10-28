@@ -22,3 +22,4 @@ while (state.status === 'playing' && state.pmDays < 365 * 8) {
   state = await call('POST', `/games/${id}/advance`, { days: 5 });
 }
 console.log(`game ${id}: ${state.status}, ${(state.pmDays / 365.25).toFixed(1)} years as PM, ${state.elections} elections, titles: ${state.titles.map((t: { name: string }) => t.name).join(', ') || 'none'}`);
+export {};

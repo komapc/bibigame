@@ -126,12 +126,13 @@ export function greedy(lookaheadDays = 0, name = 'greedy'): Strategy {
       const worst = partners[0];
       // deliver promises that are about to expire (if not too costly)
       const horizon = Math.max(30, lookaheadDays);
-      const baseline = (() => { const c = g.clone(); c.advanceDays(horizon); return scoreState(c); })();
+      let base: number | undefined;
+      const baseline = () => (base ??= (() => { const c = g.clone(); c.advanceDays(horizon); return scoreState(c); })());
       if (o.cooldowns.law === 0) {
         for (const p of o.parties) {
           if (p.trust.state === 'believing' && p.trust.daysLeft < 30 && p.trust.promiseId) {
             const a: Action = { type: 'deliver', partyId: p.id, promiseId: p.trust.promiseId };
-            if (gainOf(g, a, horizon, baseline) > -10) { acts.push(a); break; }
+            if (gainOf(g, a, horizon, baseline()) > -10) { acts.push(a); break; }
           }
         }
       }
@@ -148,7 +149,7 @@ export function greedy(lookaheadDays = 0, name = 'greedy'): Strategy {
         let bestId: string | null = null;
         let bestGain = -Infinity;
         for (const id of ids) {
-          const gain = gainOf(g, { type: 'promise', partyId: worst.id, promiseId: id }, horizon, baseline);
+          const gain = gainOf(g, { type: 'promise', partyId: worst.id, promiseId: id }, horizon, baseline());
           if (gain > bestGain) { bestGain = gain; bestId = id; }
         }
         if (bestId && bestGain > 0) acts.push({ type: 'promise', partyId: worst.id, promiseId: bestId });
@@ -161,7 +162,7 @@ export function greedy(lookaheadDays = 0, name = 'greedy'): Strategy {
       }
       // emergency button when the coalition is about to break
       if (o.seats < o.majority + 2 && partners.some((p) => p.satisfaction < 10) && !o.war.active && o.war.cooldownDays === 0) {
-        if (gainOf(g, { type: 'startWar' }, horizon, baseline) > 0) acts.push({ type: 'startWar' });
+        if (gainOf(g, { type: 'startWar' }, horizon, baseline()) > 0) acts.push({ type: 'startWar' });
       }
       return acts;
     },

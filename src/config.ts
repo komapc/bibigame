@@ -16,6 +16,12 @@ export interface Config {
   eventIntervalDays: number;
   eventJitterDays: number;
   eventTimeoutDays: number;
+  /** timer for urgent cards (angry reminders) */
+  urgentTimeoutDays: number;
+  /** party card shows "waiting…" this many days before a promise window ends */
+  promiseWarnDays: number;
+  /** "buy time" extends the believe window by this much (once per promise) */
+  buyTimeDays: number;
 
   warDurationDays: number;
   warCooldownDays: number;
@@ -23,6 +29,10 @@ export interface Config {
   lawCooldownDays: number;
   inviteCooldownDays: number;
   campaignDays: number;
+  /** a Knesset term: scheduled elections this many days after the last ones */
+  knessetTermDays: number;
+  /** every partner's satisfaction drains this much per day (appetite) */
+  appetitePerDay: number;
   /** consecutive elections without a Bibi government before game over */
   maxFailedElections: number;
 
@@ -47,6 +57,8 @@ export interface Config {
   // --- meters ---
   /** approval pulls toward a target computed from street/us/fiscal/trial */
   approvalRegression: number;
+  /** approval target drops this much per year as PM (incumbency fatigue) */
+  fatiguePerYear: number;
   trialGrowthPerDay: number;
   meterRegression: number;
   /** seats the PM party gains per approval point above approvalNeutral at elections */
@@ -91,9 +103,12 @@ export const DEFAULT_CONFIG: Config = {
   restartTermOnElection: false,
   stopAtTerm: false,
 
-  eventIntervalDays: 25,
-  eventJitterDays: 10,
+  eventIntervalDays: 20,
+  eventJitterDays: 8,
   eventTimeoutDays: 45,
+  urgentTimeoutDays: 20,
+  promiseWarnDays: 14,
+  buyTimeDays: 30,
 
   warDurationDays: 90,
   warCooldownDays: 300,
@@ -101,29 +116,32 @@ export const DEFAULT_CONFIG: Config = {
   lawCooldownDays: 90,
   inviteCooldownDays: 90,
   campaignDays: 60,
-  maxFailedElections: 2,
+  knessetTermDays: 1461,
+  appetitePerDay: 0.04,
+  maxFailedElections: 1,
 
   majority: 61,
   totalSeats: 120,
   threshold: 4,
 
-  driftPenalty: 0.06,
+  driftPenalty: 0.08,
   ministryFairness: 0.03,
-  hatePenalty: 0.08,
-  satRegression: 0.004,
+  hatePenalty: 0.1,
+  satRegression: 0.002,
   satBaseline: 50,
   threatenBelow: 25,
   threatenResetAbove: 35,
 
   approvalRegression: 0.01,
+  fatiguePerYear: 1.5,
   trialGrowthPerDay: 0.03,
-  meterRegression: 0.004,
+  meterRegression: 0.002,
   approvalSeatFactor: 0.35,
   approvalNeutral: 45,
   electionNoise: 0.12,
   electionNoiseMin: 1,
 
-  backfirePressure: 1,
+  backfirePressure: 1.5,
   ignorePressure: 0.5,
   pressureDecayPerDay: 0.01,
 

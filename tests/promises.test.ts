@@ -9,7 +9,15 @@ describe('promises and trust', () => {
     const yb = () => g.state.parties.find((p) => p.id === 'yb')!;
     expect(yb().trust.state).toBe('believing');
     expect(g.act({ type: 'promise', partyId: 'yb', promiseId: 'funds' }).error).toBe('err.alreadyPromised');
-    g.advanceDays(c.promiseBelieveDays + 1);
+    g.advanceDays(c.promiseBelieveDays - c.promiseWarnDays + 1);
+    expect(g.observe().parties.find((p) => p.id === 'yb')!.trust.waiting).toBe(true);
+    g.advanceDays(c.promiseWarnDays);
+    expect(yb().trust.state).toBe('angry');
+    // the angry reminder fires once the card slot is free; timeout default = refuse
+    for (let i = 0; i < 200 && yb().trust.state === 'angry'; i++) {
+      if (g.state.event && g.state.event.id !== 'angry') g.act({ type: 'choose', optionId: 'ignore' });
+      g.advanceDays(1);
+    }
     expect(yb().trust.state).toBe('distrust');
     expect(g.state.stats.brokenPromises).toBe(1);
     expect(g.act({ type: 'promise', partyId: 'yb', promiseId: 'funds' }).error).toBe('err.distrust');
@@ -22,6 +30,28 @@ describe('promises and trust', () => {
     expect(g.act({ type: 'deliver', partyId: 'shas', promiseId: 'exemption' }).ok).toBe(true);
     const shas = g.state.parties.find((p) => p.id === 'shas')!;
     expect(shas.trust.state).toBe('neutral');
+    expect(g.state.stats.promisesKept).toBe(1);
+  });
+  it('angry reminder: buy time works once, deliver at a premium clears it', () => {
+    const g = createGame({ seed: 8 });
+    const c = g.state.config;
+    g.act({ type: 'promise', partyId: 'shas', promiseId: 'exemption' });
+    const shas = () => g.state.parties.find((p) => p.id === 'shas')!;
+    const waitAngry = () => {
+      for (let i = 0; i < 400 && g.state.event?.id !== 'angry'; i++) {
+        if (g.state.event) g.act({ type: 'choose', optionId: 'ignore' });
+        g.advanceDays(1);
+      }
+      expect(g.state.event?.id).toBe('angry');
+      expect(g.state.event!.leftDays).toBeLessThanOrEqual(c.urgentTimeoutDays);
+    };
+    waitAngry();
+    expect(g.act({ type: 'choose', optionId: 'buytime' }).ok).toBe(true);
+    expect(shas().trust.state).toBe('believing');
+    waitAngry();
+    expect(g.observe().event!.options.find((o) => o.id === 'buytime')!.available).toBe(false);
+    expect(g.act({ type: 'choose', optionId: 'left' }).ok).toBe(true); // deliver at a premium
+    expect(shas().trust.state).toBe('neutral');
     expect(g.state.stats.promisesKept).toBe(1);
   });
   it('rejects promises the party does not care about', () => {

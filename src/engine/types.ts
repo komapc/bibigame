@@ -30,13 +30,16 @@ export interface KnessetData {
   ministries: { id: string; holder: string | null }[];
 }
 
-export type TrustState = 'neutral' | 'believing' | 'distrust';
+/** angry = the believe window ran out, an angry-reminder card is pending */
+export type TrustState = 'neutral' | 'believing' | 'angry' | 'distrust';
 
 export interface Trust {
   state: TrustState;
   promiseId: string | null;
   /** game day the current state ends */
   until: number;
+  /** already bought time once for this promise */
+  extended?: boolean;
 }
 
 export interface Party extends PartyDef {
@@ -73,7 +76,7 @@ export interface Effect {
   quietDays?: number;
   sat?: { target: Target; delta: number }[];
   /** special mechanics */
-  special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'passBudget' | 'defector';
+  special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'buyTime' | 'refuse' | 'passBudget' | 'defector';
 }
 
 export interface RemedyDef {
@@ -100,7 +103,7 @@ export interface CrisisDef {
   onFire?: Effect;
   /** effect if ignored / timed out ("escalates") */
   ignore: Effect;
-  /** remedy ids offered (ignore is always added) */
+  /** ≤3 remedy ids offered as left/right/up ('ignore' allowed); down = elections */
   remedies: string[];
   /** per-remedy extra effect for this crisis */
   extra?: Record<string, Effect>;
@@ -120,6 +123,10 @@ export interface CrisisDef {
   };
   /** never fired by the random roll (scheduled by the engine) */
   scheduled?: boolean;
+  /** shorter timer, distinct look */
+  urgent?: boolean;
+  /** option applied on timeout (default 'ignore') */
+  defaultOption?: string;
 }
 
 export interface PromiseDef {
@@ -216,6 +223,10 @@ export interface GameState {
   /** last year whose budget was passed */
   budgetPassedYear: number;
   lastBudgetNag: number;
+  /** crises waiting to fire as soon as the card slot is free (e.g. angry reminders) */
+  queue: { id: string; subject: string | null }[];
+  /** scheduled elections on this day */
+  termEndsDay: number;
   /** regional (Iran/Hezbollah) tension lasts until this day */
   tensionUntil: number;
   /** ICC warrant active until this day */
