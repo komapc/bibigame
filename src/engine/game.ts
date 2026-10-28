@@ -353,17 +353,33 @@ function applyMove(s: GameState, moveId: string, subject: string | null, extra?:
   if (!r) return;
   if (r.once && !s.usedOnce.includes(moveId)) s.usedOnce.push(moveId);
   if (r.tension) s.tensionUntil = Math.max(s.tensionUntil, s.day + r.tension);
+  if (r.promise) makePromise(s, r.promise);
   applyEffect(s, r.effect, subject);
   if (extra) applyEffect(s, extra, subject);
   for (const b of r.backfires) s.pressure[b] = (s.pressure[b] ?? 0) + s.config.backfirePressure;
   deliverPromises(s, moveId, subject);
 }
 
+/** a promise remedy: every coalition party the promise targets now believes you (if it still can) */
+function makePromise(s: GameState, promiseId: string) {
+  const def = promiseById.get(promiseId);
+  if (!def) return;
+  for (const p of coalition(s)) {
+    if (p.id === s.base.pmParty && !def.to.includes('pm')) continue;
+    if (!def.to.some((tg) => tg === 'any' || matchesTag(p, tg))) continue;
+    if (p.trust.state === 'distrust') { log(s, 'log.notBelieved', { party: p.id }, 'bad'); continue; }
+    if (p.trust.state !== 'neutral') continue;
+    p.trust = { state: 'believing', promiseId: def.id, until: s.day + s.config.promiseBelieveDays };
+    p.satisfaction = clamp(p.satisfaction + s.config.promiseBoost, 0, 100);
+    log(s, 'log.promised', { party: p.id, promise: def.id }, 'info');
+  }
+}
+
 function deliverPromises(s: GameState, moveId: string, recipient: string | null) {
   for (const p of s.parties) {
     if (p.trust.state === 'neutral' || !p.trust.promiseId) continue;
     const def = promiseById.get(p.trust.promiseId);
-    if (!def || def.deliveredBy !== moveId) continue;
+    if (!def || (def.deliveredBy !== moveId && !def.alsoBy?.includes(moveId))) continue;
     if (moveId === 'ministry' && recipient !== p.id) continue;
     const wasBelieving = p.trust.state === 'believing';
     p.satisfaction = clamp(p.satisfaction + s.config.promiseDeliverBonus * (wasBelieving ? 1 : 0.5), 0, 100);
