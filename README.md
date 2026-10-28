@@ -15,17 +15,24 @@ given date), `?seed=N` for a fixed seed, `?lang=en|ru|he` for the language.
 
 - **Swipe cards**: left / right / up = up to three remedies, down = early elections, a separate
   **Ignore** tap. Effect chips on each option; risky remedies show their odds; greyed options say why.
-- **Cause → result** flash after every decision (meters, seats, a quip, a party's reaction), drift
-  lines explaining slow changes, a timeline (budget, elections, war, promises, recess, next title).
+- **Intro screen** on the first visit (five lines on how to play, a big Start, EN/RU/HE switch); the
+  ? button reopens it. Only one layer is open at a time (intro, the sheet or game over), plus at most
+  one small toast.
+- **Cause → result**: a single result line above the card after every decision ("Shas −8 · Approval
+  +2 · Seats 63", with the cause and a quip), drift lines explaining slow changes, a timeline (budget,
+  elections, war, promises, recess, next title).
 - **Randomness**: random start (moods, approval, 1–2 starting conditions), party-leader traits
   (patient / hothead / greedy / loyal / opportunist), ±25% outcome noise, risky remedies that can
   fail, wildcard news (good and bad), a Trump-mood random walk (😠…😍 next to the US meter), exit polls.
-- **Drawer moves** (🎲), **opposition** period after a lost election, **rotation** promises, special
+- **Bottom tabs**: 🎲 Moves / 🤝 Parties / 📜 Log, three tabs of one sheet (the timeline opens the Log).
+  Between cards, The Daily Coalition offers quick Promise / Reshuffle / Pass a law / Start a war buttons.
+- **Moves** (🎲), **opposition** period after a lost election, **rotation** promises, special
   **endings** (Miami, plea bargain, rotation handover) and 22 titles.
 - **Knesset summer recess** (Aug–Sep): regular crises pause (wildcards still happen), the clock runs
   faster, shown on the timeline.
-- **Spin-doctor advisor**: rule-based hints that double as the tutorial (dismissible, no repeats for a
-  while). **Friday edition**: every 3 game months a newspaper recap of what moved and why (clock paused).
+- **Spin-doctor tips**: rule-based hints shown inline under the card (no popup, no repeats for a
+  while). **Friday edition**: every 3 game months a newspaper recap of what moved and why, filed in the
+  Log tab with a small toast (the clock keeps running).
 - **Share** on game over: WhatsApp first, the system share sheet when available, or copy; a short
   summary in the current language (reign, wars, title, ending, link; the date in daily mode).
 - **Sound and haptics**: WebAudio effects (siren, drum, applause, cash register) and vibration; sound
@@ -56,7 +63,7 @@ Node ≥ 22.18 (runs `.ts` directly via type stripping; no build step for server
 src/config.ts            ALL tuning constants (rates, cooldowns, timings)
 src/data/knesset.json    parties + ministries (25th Knesset placeholder — swap for Oct 2026 results; seats must sum to 120)
 src/data/crises.ts       crisis → remedy → backfire graph (37 card crises, 15 no-card news/wildcards, 60 remedies, 6 start conditions)
-src/data/moves.ts        drawer moves (each reuses the remedy with the same id)
+src/data/moves.ts        moves (the 🎲 Moves tab) (each reuses the remedy with the same id)
 src/data/promises.ts     promises and what delivers them
 src/data/titles.ts       tenure + achievement titles (thresholds)
 src/i18n/en.ts           every user-facing string (add he.ts / ru.ts with the same keys)
@@ -94,7 +101,7 @@ tests/                   vitest
   Repeating a remedy within a year is less effective (`remedyFatigue`); `funds` is unavailable when the
   fiscal meter is low. Each remedy raises the probability of the crises it backfires into.
 - **Feedback**: every choice/timeout/walkout is an *outcome* record (cause → party/meter deltas, seats,
-  quip, party reaction) shown as a result flash in the UI and a `RESULT:` / `DRIFT:` block in text mode.
+  quip, party reaction) shown as the result line in the UI and a `RESULT:` / `DRIFT:` block in text mode.
   Party cards show the trend per month with its reason, "may leave" and "without X: N seats".
 - **War** (emergency button, needs tension): parties flagged `joinsWartime` join temporarily; approval
   rally, budget cost, cooldown.
@@ -109,7 +116,7 @@ tests/                   vitest
   shown as a risk % during the campaign), then noise around base seats, 4-seat threshold, largest
   remainder, automatic formation. Game over reasons: `voters`, `deadlock` (failed formation),
   `indicted` (trial meter reaches `indictAt`); poll panic accelerates partner drain at low approval.
-- **Moves** (`src/data/moves.ts`, the 🎲 Moves panel): drawer actions that reuse the remedy with the
+- **Moves** (`src/data/moves.ts`, the 🎲 Moves tab): actions that reuse the remedy with the
   same id (effects, fatigue, quips). Governing: poach an MK, new ministry, exile a rival to the UN,
   20:00 statement, Trump-for-Nobel (once), cottage-cheese VAT, Wing of Zion (once), blame the Attorney
   General, the "life itself" speech (pivot to Iran: a domestic card on the table drops out of the
@@ -177,7 +184,7 @@ ministry <party> <ministry>  e.g. ministry shas finance
 invite <party>
 law <law>                    exempt | reform | constitution | settlelaw
 war
-move <id>                    a drawer move, e.g. move primetime (list under MOVES:)
+move <id>                    a move, e.g. move primetime (list under MOVES:)
 wait [N|Nd|Nm]               let time pass; stops early when a crisis fires (default: up to 30d)
 look | help
 ```
