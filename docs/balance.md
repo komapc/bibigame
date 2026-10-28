@@ -16,6 +16,8 @@ was effectively an oracle and never lost).
 | promise-spammer | promises everything to everyone, never delivers |
 | greedy | picks the card option with the best immediate score; ministries to the unhappiest partner, cheap promises, delivers before expiry, invites when the majority is thin |
 | lookahead | greedy, but scores options by the mean of 4 blind 30-day rollouts; skips snap elections unless the majority is already gone |
+| card-only-trial-aware | human proxy: no drawer, no rollouts; picks the option with the best immediate coalition mood + approval − trial, always delivers on angry cards |
+| **card-only-hud-aware** | **primary "decent human" target**: like trial-aware but reads every meter (approval, street, fiscal, US, trial, budget) and avoids leaving a partner below 20 |
 
 ## Targets (from the brief)
 
@@ -121,3 +123,60 @@ Bots (`src/bots/strategies.ts`):
 - Lookahead averages 4 rollouts (one sample of a random future was mostly noise and it scored worse
   than greedy, 3%) and doesn't gamble on snap elections while it still holds a majority (4 samples
   can't price a ~25% loss roll).
+
+## Round 3 (2026-10-28): the human-proxy target
+
+The independent review (`docs/review-2026-10-28.md` in the review worktree) showed that greedy/lookahead
+(engine rollouts) are not human proxies: a HUD-reading card-only bot reached the term 98% on the pre-v2
+main and **3%** on v2. The target is now **card-only-hud-aware 30–60%**; greedy/lookahead are reported
+but no longer tuned for.
+
+What moved it (all in PR #7 + this PR; no knob had to change further):
+
+| change | where |
+|---|---|
+| Kaplan's low-street multiplier capped at ×2 (was ×4 at street 0) | `kaplanStreetMaxMult` 2 |
+| same card not within 60 days; good news not within a year | `crisisCooldownDays` 60, `goodNewsCooldownDays` 365 |
+| poll-panic drain per partner capped at 0.13/day (≈ 4/month; was ≈ 9/month at approval 12) | `pollPanicMaxPerDay` 0.13 |
+| passed laws stay passed (draft/Route 4/High Court cards stop asking) | `permanent` remedies |
+| a lost election sends you to the opposition first (second loss = game over) | `maxElectionLosses` 2 (moves PR) |
+
+### Before / after (40 seeds, 20-year cap)
+
+| strategy | v2 (review) term / median y | now term / median y | lost to voters / deadlock / indicted (now) |
+|---|---|---|---|
+| never-act | 0% / 1.5 | 0% / 1.7 | 27 / 5 / 8 |
+| random | 0% / 0.7 | 0% / 1.3 | 34 / 5 / 1 |
+| always-war | 0% / 0.9 | 0% / 1.1 | 18 / 6 / 16 |
+| promise-spammer | 0% / 0.6 | 0% / 1.2 | 27 / 7 / 6 |
+| card-only-trial-aware | 0% / 1.5 | 13% / 2.9 | 34 / 6 / 0 |
+| **card-only-hud-aware** | **3% / 2.8** | **45% / 3.9** | 36 / 4 / 0 |
+| greedy (rollouts) | 33% / 3.8 | 98% / 5.3 | 30 / 2 / 8 |
+| lookahead (rollouts) | 43% / 3.8 | (run pending, see PR) | |
+
+Random's median rose 0.7 → 1.3 y because a lost election is no longer the end (opposition period);
+it still never reaches the term and loses every game.
+
+### Sensitivity (card-only bots, 30 seeds × 8 years; ±8 pp is noise)
+
+| change from current | hud-aware term / median y | trial-aware term / median y |
+|---|---|---|
+| current | 47% / 4.0 | 17% / 2.9 |
+| `pollPanicMaxPerDay` 0.08 | 93% / 4.3 | 33% / 3.5 |
+| `pollPanicMaxPerDay` 0.11 | 63% / 4.3 | 23% / 3.1 |
+| `pollPanicMaxPerDay` 0.15 | 37% / 3.8 | 3% / 2.8 |
+| `pollPanicBelow` 30 (from 32) | 53% / 4.1 | 27% / 3.1 |
+| `pollPanicBelow` 28 | 80% / 4.3 | 33% / 3.4 |
+| `meterRegression` 0.003 (from 0.002) | 67% / 4.3 | 20% / 3.3 |
+| `meterRegression` 0.004 | 70% / 4.3 | 40% / 3.8 |
+| `crisisCooldownDays` 30 | 57% / 4.2 | 17% / 3.2 |
+| `kaplanStreetMaxMult` 3 | 60% / 4.5 | 30% / 3.5 |
+
+No single step of a knob jumps more than ~25 pp. The panic cap is the most sensitive lever (0.11–0.15
+spans 63% → 37%), so it sits in the middle of that range. The reviewer's suggested
+`meterRegression` 0.004–0.005 + `pollPanicBelow` 28–30 overshoots now that the cap/cooldowns are in
+(70–80%), so those stay at 0.002 / 32.
+
+The rollout bots are far above the old 30–60% band (greedy 98%): with the opposition second chance and
+the drawer moves they play an engine-perfect game no human can (they clone the state and simulate
+each option). They are kept as an upper bound and a regression alarm, not as a tuning target.

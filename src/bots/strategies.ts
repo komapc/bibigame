@@ -216,11 +216,59 @@ export function greedy(lookaheadDays = 0, name = 'greedy', rollouts = 1): Strate
   };
 }
 
+
+/** card-only human proxies (no rollouts, no drawer): they read the HUD and the immediate result of
+ *  each option, like a careful player. card-only-hud-aware is the primary "decent human" target. */
+function cardOnly(name: string, value: (g: Game, c: Game) => number): Strategy {
+  return {
+    name,
+    decide(g, o) {
+      if (!o.event || o.phase !== 'governing') return [];
+      if (o.event.id === 'angry' && o.event.options.some((x) => x.id === 'deliverpremium' && x.available)) return [{ type: 'choose', optionId: 'deliverpremium' }];
+      let best: string | null = null;
+      let bs = -Infinity;
+      for (const op of o.event.options) {
+        if (!op.available || op.id === 'elections') continue;
+        const c = g.clone();
+        if (!c.act({ type: 'choose', optionId: op.id }).ok) continue;
+        const v = (c.state.phase !== 'governing' ? -1000 : 0) + value(g, c);
+        if (v > bs) { bs = v; best = op.id; }
+      }
+      return best ? [{ type: 'choose', optionId: best }] : [];
+    },
+  };
+}
+
+const coalSat = (s: Game['state']) => s.parties.filter((p) => p.inCoalition).reduce((n, p) => n + p.satisfaction * p.seats, 0);
+
+export const cardOnlyTrialAware = cardOnly('card-only-trial-aware', (g, c) => {
+  const s = c.state, s0 = g.state;
+  if (s0.event?.id === 'budget' && s.budgetPassedYear > s0.budgetPassedYear) return 1e3;
+  return (coalSat(s) - coalSat(s0)) / 10 + (s.approval - s0.approval) - 2 * (s.trial - s0.trial) + (s.trialPausedUntil > s0.trialPausedUntil ? 5 : 0);
+});
+
+export const cardOnlyHudAware = cardOnly('card-only-hud-aware', (g, c) => {
+  const s = c.state, s0 = g.state;
+  const pm = s.base.pmParty;
+  const partners = s.parties.filter((p) => p.inCoalition && p.id !== pm);
+  const coalMin = partners.length ? Math.min(...partners.map((p) => p.satisfaction)) : 100;
+  let v = s.parties.filter((p) => p.inCoalition).reduce((n, p) => {
+    const before = s0.parties.find((q) => q.id === p.id)!.satisfaction;
+    return n + (Math.min(p.satisfaction, 70) - Math.min(before, 70)) * p.seats;
+  }, 0) / 10;
+  v += 1.5 * (s.approval - s0.approval) + 0.3 * (s.street - s0.street) + 0.3 * (s.fiscal - s0.fiscal) + 0.2 * (s.us - s0.us)
+    - 2 * (s.trial - s0.trial) + (s.trialPausedUntil > s0.trialPausedUntil ? 6 : 0) + (s.budgetPassedYear > s0.budgetPassedYear ? 20 : 0);
+  if (coalMin < 20) v -= 30;
+  return v;
+});
+
 export const STRATEGIES: Record<string, (seed: number) => Strategy> = {
   'never-act': () => neverAct,
   random: (seed) => randomBot(seed),
   'always-war': () => alwaysWar,
   'promise-spammer': () => promiseSpammer,
+  'card-only-trial-aware': () => cardOnlyTrialAware,
+  'card-only-hud-aware': () => cardOnlyHudAware,
   greedy: () => greedy(0, 'greedy'),
   lookahead: () => greedy(30, 'lookahead', 4),
 };

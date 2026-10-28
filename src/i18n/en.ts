@@ -726,4 +726,23 @@ export const en: Record<string, string> = {
   'ui.rival': 'Rival government stability: {n}%',
   'ui.lastChance': 'One more lost election and it is over.',
   'news.opposition': 'IN OPPOSITION: the rival government is at {n}% stability — topple it, then win the election',
+  // why an option is unavailable
+  'why.na': 'not now',
+  'why.cooldown': 'ready in {daysText}',
+  'why.atWar': 'already at war',
+  'why.tension': 'needs tension with Iran/Hezbollah',
+  'why.once': 'once per game: used',
+  'why.passed': 'already law',
+  'why.icc': 'ICC warrant: no trips for {daysText}',
+  'why.fiscal': 'the treasury is empty',
+  'why.boughtTime': 'you already bought time once',
+  'why.cap': 'no more ministries to invent',
+  'why.oncePerTerm': 'once per election: used',
+  'why.needWar': 'only during a war',
+  'why.needTrial': 'needs a trial meter of {n}+',
+  'why.tooEarly': 'elections are more than a year away',
+  // slow killers, explained in the log
+  'log.driftWarOver': 'The rally effect is fading: the approval target drops by {n} without a war.',
+  'log.driftTrial': 'Trial at {trial}: it now drags approval down by about {n}.',
+  'log.driftStreet': 'Street calm under {street}: Kaplan protests will come more often.',
 };

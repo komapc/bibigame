@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, budgetDueYear, loseChance, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
+  act, budgetDueYear, unavailableReason, loseChance, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
@@ -68,7 +68,7 @@ export interface Observation {
   event: null | {
     id: string; title: string; text: string; subject: string | null; daysLeft: number;
     /** left / right / up = remedies, down = early elections; timeout = ignore */
-    options: { id: string; dir: string; label: string; desc: string; available: boolean; preview: Preview[] }[];
+    options: { id: string; dir: string; label: string; desc: string; available: boolean; preview: Preview[]; why: string }[];
   };
   war: { active: boolean; daysLeft: number; cooldownDays: number };
   /** Iran/Hezbollah tension: enables war, beepers, Fordow */
@@ -79,7 +79,7 @@ export interface Observation {
   cooldowns: { ministry: number; law: number; invite: number };
   laws: { id: string; label: string }[];
   /** drawer moves for the current phase (src/data/moves.ts); `ending` ones end the game */
-  moves: { id: string; label: string; desc: string; available: boolean; cooldown: number; ending: boolean; preview: Preview[] }[];
+  moves: { id: string; label: string; desc: string; available: boolean; cooldown: number; ending: boolean; preview: Preview[]; why: string }[];
   /** in opposition: the rival government's stability (falls at 0) and days until it must call elections */
   opposition: { stability: number; daysLeft: number } | null;
   /** elections lost so far; at maxElectionLosses the game is over */
@@ -237,6 +237,7 @@ export function observe(s: GameState, logTail = 12): Observation {
       daysLeft: Math.max(0, Math.ceil(s.event.leftDays)),
       options: eventOptions(s).map((o) => ({
         ...o, label: t(`remedy.${o.id}`), desc: t(`remedy.${o.id}.desc`), preview: preview(s, o.id),
+        why: o.available ? '' : whyText(s, o.id),
       })),
     },
     war: { active: s.war.active, daysLeft: Math.ceil(s.war.leftDays), cooldownDays: Math.ceil(s.war.cooldownDays) },
@@ -248,7 +249,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     },
     laws: LAWS.map((id) => ({ id, label: t(`remedy.${id}`) })),
     moves: MOVES.filter((m) => m.phases.includes(s.phase)).map((m) => ({
-      id: m.id, label: t(`remedy.${m.id}`), desc: t(`remedy.${m.id}.desc`), available: moveAvailable(s, m.id),
+      id: m.id, label: t(`remedy.${m.id}`), desc: t(`remedy.${m.id}.desc`), available: moveAvailable(s, m.id), why: moveAvailable(s, m.id) ? '' : whyText(s, m.id),
       cooldown: moveCooldown(s, m.id), ending: !!m.ending, preview: preview(s, m.id),
     })),
     opposition: s.phase === 'opposition' && s.rival
@@ -292,6 +293,11 @@ const tagLabel = (s: GameState, target: string, subject: string | null): string 
   if (p) return pname(s, p.id);
   return t(`tag.${target}`);
 };
+
+function whyText(s: GameState, id: string): string {
+  const r = unavailableReason(s, id);
+  return r ? t(r.key, r.params) : t('why.na');
+}
 
 /** qualitative effect preview of an option (no numbers): who/what goes up or down */
 export function preview(s: GameState, optionId: string): Preview[] {

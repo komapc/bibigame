@@ -257,7 +257,11 @@ function renderStage(o: Observation) {
     const hint = (dir: string) => {
       const op = by[dir];
       if (!op) return `<span class="hint-${dir} hint empty"></span>`;
-      return `<button class="hint hint-${dir}" data-dir="${dir}" ${op.available ? '' : 'disabled'} title="${esc(op.desc)}"><span class="arrow">${ARROW[dir]}</span> ${esc(op.label)}</button>`;
+      // effect chips right on the card (no need to drag to see them; the engine computes op.preview)
+      const chips = op.available
+        ? `<span class="fx mini">${op.preview.slice(0, 4).map((p) => `<span class="${p.up ? 'up' : 'down'}">${p.up ? '▲' : '▼'}${esc(p.label)}</span>`).join('')}</span>`
+        : `<span class="why">${esc(op.why)}</span>`;
+      return `<button class="hint hint-${dir}" data-dir="${dir}" ${op.available ? '' : 'disabled'} title="${esc(op.desc)}"><span class="arrow">${ARROW[dir]}</span> ${esc(op.label)}${chips}</button>`;
     };
     const urgent = ev.id === 'angry';
     const ign = ev.options.find((x) => x.dir === 'ignore');
@@ -476,7 +480,7 @@ function renderLaws(o: Observation) {
 
 function renderMoves(o: Observation) {
   region('moves', o.phase + o.moves.map((m) => `${m.id}${m.available}${m.cooldown}`).join(), () => {
-    const btn = (m: Observation['moves'][number]) => `<button data-move="${m.id}" class="${m.ending ? 'exit' : ''}" ${m.available ? '' : 'disabled'} title="${esc(m.desc)}">${esc(m.label)}${m.cooldown ? ` <small>${esc(t('ui.cooldown', { days: m.cooldown }))}</small>` : ''}<small class="mdesc">${esc(m.desc)}</small></button>`;
+    const btn = (m: Observation['moves'][number]) => `<button data-move="${m.id}" class="${m.ending ? 'exit' : ''}" ${m.available ? '' : 'disabled'} title="${esc(m.desc)}">${esc(m.label)}${m.cooldown ? ` <small>${esc(t('ui.cooldown', { days: m.cooldown }))}</small>` : !m.available && m.why ? ` <small>${esc(m.why)}</small>` : ''}<small class="mdesc">${esc(m.desc)}</small></button>`;
     const main = o.moves.filter((m) => !m.ending), exits = o.moves.filter((m) => m.ending);
     return (o.opposition ? `<p class="sub">${esc(t('ui.rival', { n: o.opposition.stability }))}</p>` : '')
       + main.map(btn).join('') + (exits.length ? `<p class="sub">${t('ui.exits')}</p>${exits.map(btn).join('')}` : '');

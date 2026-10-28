@@ -71,11 +71,11 @@ export function renderText(o: Observation): string {
     const n: Record<string, number> = { left: 1, right: 2, up: 3, down: 4, ignore: 0 };
     for (const op of o.event.options) {
       const fx = op.preview.map((p) => `${p.label}${p.up ? '+' : '-'}`).join(', ');
-      L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.available ? '' : ' [unavailable]'}${fx ? ` -> ${fx}` : ''}`);
+      L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.available ? '' : ` [unavailable: ${op.why}]`}${fx ? ` -> ${fx}` : ''}`);
     }
   } else if (o.phase === 'governing') L.push('No crisis right now.');
   L.push(`LAWS: ${o.laws.map((l) => l.id).join(', ')}`);
-  if (o.moves.length) L.push(`MOVES: ${o.moves.map((m) => `${m.id}${m.available ? '' : m.cooldown ? ` (${m.cooldown}d)` : ' (n/a)'}${m.ending ? ' [ENDS GAME]' : ''}`).join(', ')}`);
+  if (o.moves.length) L.push(`MOVES: ${o.moves.map((m) => `${m.id}${m.available ? '' : m.cooldown ? ` (${m.cooldown}d)` : ` (n/a: ${m.why})`}${m.ending ? ' [ENDS GAME]' : ''}`).join(', ')}`);
   L.push(`PROMISES: ${o.promises.map((p) => `${p.id}->${p.to.join('/')}`).join(', ')}`);
   L.push(`TITLES: ${o.titles.length ? o.titles.map((x) => `${x.name} (${x.gloss})`).join('; ') : 'none yet'}`);
   if (o.log.length) {
