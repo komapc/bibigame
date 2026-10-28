@@ -1,5 +1,6 @@
 // Plain-text protocol for LLM agents / terminal play. Shared by the CLI and the
 // HTTP server (POST /games/:id/text). Turn-based: time only moves on `wait`.
+import { advice } from './extras.ts';
 import type { Action } from '../engine/types.ts';
 import { TITLES } from '../data/titles.ts';
 import { t } from '../i18n/index.ts';
@@ -200,6 +201,8 @@ export function runText(g: Game, line: string): { reply: string; ok: boolean } {
       .map((p) => ({ p, d: Math.round(p.satisfaction - sat0[p.id]) })).filter((x) => x.d !== 0);
     if (drift.length) lines.push(`DRIFT: ${drift.map(({ p, d }) => `${p.id} ${d > 0 ? '+' : ''}${d} (${p.trend.reason})`).join('; ')}`);
   }
+  const adv = advice(g.state)[0];
+  if (adv) lines.push(`ADVISOR: ${t(adv.key, adv.params)}`);
   if (head) lines.unshift(head);
   return { reply: (lines.length ? lines.join('\n') + '\n' : '') + renderText(o), ok };
 }

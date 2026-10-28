@@ -6,6 +6,9 @@ import { titleBoard } from '../api/text.ts';
 import { LANGS, getLocale, isLang, isRtl, loadLocale, partyChip, setLocale, t, type Lang } from '../i18n/index.ts';
 import { hemicycleSvg } from './hemicycle.ts';
 import { initSwipe } from './swipe.ts';
+import { buzz, play, setSound, soundOn } from './fx.ts';
+import { initConsent, track } from './analytics.ts';
+import { advice, editionSnap, fridayEdition, type EditionSnap } from '../api/extras.ts';
 
 // ---- language: saved choice → browser language → English
 const LANG_KEY = 'bibigame.lang';
@@ -46,6 +49,7 @@ app.innerHTML = `
     <div class="who"><b>${t('ui.player')}</b> <span id="title" class="badge"></span></div>
     <div class="langs" role="group" aria-label="Language">${LANGS.map((l) => `<button data-lang="${l.code}" aria-pressed="${l.code === getLocale()}" lang="${l.code}">${l.label}</button>`).join('')}</div>
     <div id="date" class="date"></div>
+    <button id="sound" class="icon" data-act="sound" aria-label="${t('ui.sound')}"></button>
     <button id="pause" class="icon" aria-label="${t('ui.pause')}">⏸</button>
   </div>
   <button id="timeline" class="timeline" aria-expanded="false" aria-label="${t('ui.timeline')}">
@@ -83,6 +87,8 @@ app.innerHTML = `
 </main>
 <nav class="bottombar"><button id="movesbtn" data-act="drawer" class="moves">☰ ${t('ui.moves')} <span id="movesdot" class="dot" hidden></span></button></nav>
 <div id="toast" class="toast" hidden></div>
+<div id="advisor" class="advisor" hidden role="status"></div>
+<div id="friday" class="friday" hidden></div>
 <div id="result" class="result" hidden role="status" aria-live="polite"></div>
 <div id="over" class="over" hidden></div>
 `;
@@ -375,6 +381,8 @@ function showFlash(r: OutcomeView) {
   el.innerHTML = `<h3>${esc(r.cause)}</h3>${quip}${seats}${lj}<div class="fxrow">${sat}${meters}</div>${react}${risks}${nothing}<small class="sub">${t('ui.resultTap')}</small>`;
   el.hidden = false;
   flashUntil = performance.now() + (r.big ? 5000 : 2800);
+  if (r.left.length) buzz([60, 30, 60]);
+  else if (r.seats.to < r.seats.from || r.cause.startsWith(t('out.badNews', { crisis: '' }).trim())) buzz([30, 40, 30]);
   // floating deltas on the HUD meters + pulse on party cards
   const idx: Record<string, number> = { approval: 0, street: 1, us: 2, fiscal: 3, trial: 4 };
   for (const m of r.meters) floatOn(document.getElementById(`mv${idx[m.meter]}`), m.delta, m.meter === 'trial');
@@ -411,6 +419,9 @@ function choose(dir: string) {
   const ev = game.observe(0).event;
   const op = ev?.options.find((x) => x.dir === dir);
   if (!op || !op.available) return false;
+  buzz(15);
+  track('choice', { crisis_id: ev!.id, option_id: op.id, dir });
+  if (op.id === 'funds' || op.id === 'deliverpremium') play('cash');
   doAct({ type: 'choose', optionId: op.id });
   return true;
 }
@@ -543,12 +554,83 @@ function render() {
   if (o.titles.length > lastTitles) {
     const nt = o.titles[o.titles.length - 1];
     toast(`👑 ${t('ui.newTitle', { title: nt.name })} — ${nt.gloss}`);
+    play('applause');
+    track('title_earned', { title_id: game.state.titles[game.state.titles.length - 1] });
   }
   lastTitles = o.titles.length;
   if (o.termReached && !keys.termToast) { keys.termToast = '1'; toast(t('ui.termReached')); }
   pumpOutcomes(o);
   renderOver(o);
+  renderExtras(o);
 }
+
+// ------------------------------------------------------------------ advisor, Friday edition, sound
+let cardKey = '';
+let cardsSeen = 0;
+let overTracked = false;
+const advShown: Record<string, number> = {};
+let advUntil = 0;
+let edition: EditionSnap | null = null;
+let nextEdition = 90;
+const fridayOpen = () => !$('friday').hidden;
+
+function renderExtras(o: Observation) {
+  const s = game.state;
+  $('sound').textContent = soundOn() ? '🔊' : '🔇';
+  // a new card: count it, sounds, analytics
+  const k = s.event ? `${s.event.id}@${s.event.firedAt}` : '';
+  if (k && k !== cardKey) {
+    cardsSeen++;
+    track('card_shown', { crisis_id: s.event!.id });
+    if (s.event!.id === 'iran' || s.event!.id === 'houthis') play('siren');
+    else if (s.event!.id === 'kaplan') play('drum');
+    if (cardsSeen === 1 || cardsSeen % 3 === 0) showAdvice();
+  }
+  cardKey = k;
+  if (advUntil && performance.now() > advUntil) hideAdvice();
+  if (o.status !== 'playing' && !overTracked) {
+    overTracked = true;
+    track('game_over', { reason: o.lostReason ?? o.status, days: Math.floor(o.pmDays), titles_count: o.titles.length });
+  }
+  // quarterly Friday edition (clock paused while it is open)
+  edition ??= editionSnap(s);
+  if (s.day >= nextEdition && !s.event && !flashing() && s.phase === 'governing' && o.status === 'playing' && !fridayOpen()) {
+    showFriday(fridayEdition(s, edition));
+    edition = editionSnap(s);
+    nextEdition = s.day + 90;
+  }
+}
+
+function showAdvice() {
+  const s = game.state;
+  const a = advice(s).find((x) => advShown[x.id] === undefined || s.day - advShown[x.id] > 150);
+  if (!a) return;
+  advShown[a.id] = s.day;
+  const el = $('advisor');
+  el.innerHTML = `<b>🧑‍💼 ${t('adv.who')}</b> <span>${esc(t(a.key, a.params))}</span><button class="icon" data-act="advisor" aria-label="${t('ui.close')}">✕</button>`;
+  el.hidden = false;
+  advUntil = performance.now() + 9000;
+}
+function hideAdvice() { $('advisor').hidden = true; advUntil = 0; }
+
+const METER_LABEL: Record<string, string> = { seats: 'ui.seats', approval: 'ui.approval', street: 'ui.street', trial: 'ui.trial', us: 'ui.us' };
+function showFriday(ed: ReturnType<typeof fridayEdition>) {
+  const el = $('friday');
+  const sign = (n: number) => ltr(n > 0 ? `+${n}` : `${n}`);
+  const items = ed.items.length
+    ? ed.items.map((x) => {
+      const good = x.meter === 'trial' ? x.delta < 0 : x.delta > 0;
+      return `<li class="${good ? 'good' : 'bad'}"><b>${esc(t(METER_LABEL[x.meter]))} ${sign(x.delta)}</b>${x.because ? ` — ${esc(x.because)}` : ''}</li>`;
+    }).join('')
+    : `<li>${esc(t('friday.quiet'))}</li>`;
+  el.innerHTML = `<div class="paper" role="dialog" aria-label="${esc(t('friday.masthead'))}">
+    <div class="mast">${esc(t('friday.masthead'))}<small>${esc(o0Date())}</small></div>
+    <h3>${esc(t(`friday.joke.${ed.joke}`))}</h3>
+    <ul>${items}</ul>
+    <button class="primary" data-act="friday">${t('friday.close')}</button></div>`;
+  el.hidden = false;
+}
+const o0Date = () => game.observe(0).date;
 
 function doAct(a: Action) {
   const r = game.act(a);
@@ -565,6 +647,11 @@ function restart() {
   flashQueue.length = 0;
   hideFlash();
   $('over').hidden = true;
+  cardKey = ''; cardsSeen = 0; overTracked = false; edition = null; nextEdition = 90;
+  for (const k of Object.keys(advShown)) delete advShown[k];
+  hideAdvice();
+  $('friday').hidden = true;
+  track('game_start', { lang: getLocale(), seed_type: 'random' });
   render();
 }
 
@@ -593,6 +680,9 @@ app.addEventListener('click', (e) => {
   }
   else if (d.act === 'war') doAct({ type: 'startWar' });
   else if (d.act === 'restart') restart();
+  else if (d.act === 'sound') { setSound(!soundOn()); if (soundOn()) play('cash'); render(); }
+  else if (d.act === 'advisor') hideAdvice();
+  else if (d.act === 'friday') $('friday').hidden = true;
   else if (d.act === 'drawer') $('drawer').classList.toggle('open');
   else if (d.law) doAct({ type: 'passLaw', lawId: d.law });
   else if (d.move) {
@@ -642,7 +732,7 @@ function frame(now: number) {
   last = now;
   if (!paused && !document.hidden && !game.over) {
     const c = game.state.config;
-    const scale = flashing() ? 0 : game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : c.uiIdleClockScale;
+    const scale = flashing() || fridayOpen() ? 0 : game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : c.uiIdleClockScale;
     if (scale > 0) game.advance(dt * scale);
   }
   render();
@@ -650,6 +740,11 @@ function frame(now: number) {
 }
 render();
 requestAnimationFrame(frame);
+initConsent();
+track('game_start', { lang: getLocale(), seed_type: new URLSearchParams(location.search).has('seed') ? 'fixed' : 'random' });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && game.state.event && !game.over) track('quit_on_card', { crisis_id: game.state.event.id });
+});
 
 // In-page bot hook: window.bibigame.game.act({...}) / .observe()
 declare global { interface Window { bibigame: unknown } }
