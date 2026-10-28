@@ -47,6 +47,8 @@ export type Trait = 'patient' | 'hothead' | 'greedy' | 'loyal' | 'opportunist';
 export interface Party extends PartyDef {
   /** party leader's trait this game (random per game; undefined = none) */
   trait?: Trait;
+  /** per-game fuzz on config.leaveBelow (randomStart), so hovering just above the line isn't safe */
+  leaveOffset?: number;
   /** joined only for the duration of a war */
   wartime: boolean;
   /** has publicly threatened to quit (hysteresis flag) */
@@ -68,6 +70,8 @@ export interface Effect {
   approval?: number;
   /** street calm (low = protests) */
   street?: number;
+  /** street hit lands even during a war (normally the war mutes protests) */
+  streetInWar?: boolean;
   /** US support */
   us?: number;
   /** fiscal health */
@@ -321,6 +325,8 @@ export interface GameState {
   moveReadyAt: Record<string, number>;
   /** once-per-term moves already used this term */
   usedThisTerm: string[];
+  /** emergency postponements of elections this game (each one after the first costs more) */
+  postponements?: number;
   /** random starting conditions this game */
   startConditions: string[];
   /** Trump's mood, −2 (furious) .. +2 (adoring); a random walk with 3 a.m. swings */

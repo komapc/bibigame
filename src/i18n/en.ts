@@ -713,6 +713,7 @@ export const en: Record<string, string> = {
   'log.primetimeUp': 'The 20:00 statement works: approval +{n}.',
   'log.primetimeDown': 'The 20:00 statement backfires: approval −{n}.',
   'log.postponed': 'Elections postponed by emergency law.',
+  'log.postponedAgain': 'Elections postponed again (time #{n}). Even your own voters are counting.',
   'log.merger': 'The far right runs as one joint list.',
   'log.gevalt': 'Gevalt! Your base is mobilised for election day.',
   'log.spoiler': 'A spoiler party splits the opposition vote.',

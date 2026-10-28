@@ -209,6 +209,7 @@ function randomizeStart(s: GameState) {
     applyEffect(s, sc.effect, null);
     log(s, `log.start.${sc.id}`, {}, 'event');
   }
+  for (const p of s.parties) if (p.id !== s.base.pmParty) p.leaveOffset = spread(c.leaveFuzz);
 }
 
 /** ±outcomeNoise on the numbers of an effect (same choice, not always the same result) */
@@ -404,7 +405,7 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
   if (e.position) s.govPosition = clamp(s.govPosition + e.position, -10, 10);
   if (e.approval) s.approval = clamp(s.approval + e.approval, 0, 100);
   const street0 = s.street, trial0 = s.trial;
-  if (e.street && !(s.war.active && e.street < 0)) s.street = clamp(s.street + e.street, 0, 100);
+  if (e.street && !(s.war.active && e.street < 0 && !e.streetInWar)) s.street = clamp(s.street + e.street, 0, 100);
   if (e.us) s.us = clamp(s.us + e.us, 0, 100);
   if (e.fiscal) s.fiscal = clamp(s.fiscal + e.fiscal, 0, 100);
   if (e.trial) s.trial = clamp(s.trial + e.trial, 0, 100);
@@ -520,8 +521,16 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
       break;
     }
     case 'postponeElections':
+    {
       s.termEndsDay = Math.max(s.termEndsDay, s.day) + c.postponeDays;
-      log(s, 'log.postponed', {}, 'bad');
+      // once per term (moves.ts), but a habit gets noticed: each repeat in a game costs more
+      const n = s.postponements = (s.postponements ?? 0) + 1;
+      if (n > 1) {
+        s.approval = clamp(s.approval - c.postponeRepeatApproval * (n - 1), 0, 100);
+        s.street = clamp(s.street - c.postponeRepeatStreet * (n - 1), 0, 100);
+        log(s, 'log.postponedAgain', { n }, 'bad');
+      } else log(s, 'log.postponed', {}, 'bad');
+    }
       break;
     case 'merger': s.campaignFx.merger = true; log(s, 'log.merger', {}, 'info'); break;
     case 'gevalt': s.campaignFx.gevalt = true; log(s, 'log.gevalt', {}, 'info'); break;
@@ -958,7 +967,7 @@ function checkCoalition(s: GameState, dt = 0) {
   for (const p of coalition(s)) {
     if (p.id === s.base.pmParty) continue;
     if (p.satisfaction <= 0) { leave(s, p); continue; }
-    if (dt && p.satisfaction < c.leaveBelow && rngOf(s).next() < c.leaveChancePerDay * (p.trait === 'loyal' ? 0.5 : 1) * dt) { leave(s, p); continue; }
+    if (dt && p.satisfaction < c.leaveBelow + (p.leaveOffset ?? 0) && rngOf(s).next() < c.leaveChancePerDay * (p.trait === 'loyal' ? 0.5 : 1) * dt) { leave(s, p); continue; }
     if (!p.threatening && p.satisfaction < c.threatenBelow) {
       p.threatening = true;
       log(s, 'log.threat', { party: p.id }, 'bad');

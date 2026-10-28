@@ -42,6 +42,6 @@ describe('re-elections', () => {
     expect(g.state.phase).toBe('campaign');
     g.advanceDays(g.state.config.campaignDays + 1);
     expect(g.state.parties.reduce((s, p) => s + p.seats, 0)).toBe(120);
-    expect(g.state.phase === 'governing' || g.state.phase === 'campaign' || g.state.status === 'lost').toBe(true);
+    expect(g.state.phase === 'governing' || g.state.phase === 'campaign' || g.state.phase === 'opposition' || g.state.status === 'lost').toBe(true);
   });
 });

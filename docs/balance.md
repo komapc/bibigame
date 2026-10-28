@@ -200,3 +200,30 @@ outweighed good ones). Softened: pardon odds 60% → 75%, bad wildcard weights 1
 | hud-aware with `outcomeNoise=0, randomStart=false` | 63% | 4.2 (3.5–4.5) | 30 / 5 / 5 |
 
 Randomness costs a careful player ~10 pp; the run-to-run spread (p25–p75) widens slightly.
+
+## Round 5 (2026-10-28): exploit fixes
+
+- **Forever war vs elections.** Postponing elections was already once per term (and needs a war and
+  elections within a year), so a war loop cannot dodge elections indefinitely: the term ends at most
+  365 days late. Two holes closed: the postponement's street −20 was muted by the very war it needs
+  (`streetInWar` now lets it land), and every repeat in a later term costs extra
+  (`postponeRepeatApproval` 6, `postponeRepeatStreet` 15 per repeat).
+- **Promise of a constitution** was nearly free (haredi −5, far right −2, no backfire). Now haredi −8,
+  far right −3 and it raises Shabbat-crisis pressure (visible backfire chip).
+- **Fuzzy leave line.** With `randomStart`, each partner's leave threshold moves by up to ±`leaveFuzz` (3)
+  points per game, so hovering exactly above 15 is no longer safe.
+
+The new random draw shifts every seed's stream, so the 40-game numbers moved by noise alone
+(hud-aware 30–45% across reruns); this round uses 80 seeds.
+
+| strategy (80 seeds × 20y) | term | median y (p25–p75) | lost to voters / deadlock / indicted |
+|---|---|---|---|
+| never-act | 0% | 1.5 (1.2–1.7) | 42 / 12 / 26 |
+| random | 0% | 1.2 (0.9–1.5) | 72 / 6 / 2 |
+| always-war | 0% | 1.1 (0.7–1.4) | 36 / 11 / 33 |
+| promise-spammer | 0% | 1.0 (0.7–1.2) | 51 / 13 / 16 |
+| card-only-trial-aware | 20% | 3.0 (2.4–3.7) | 60 / 15 / 5 |
+| **card-only-hud-aware** | **41%** | 3.9 (3.2–4.3) | 61 / 9 / 10 |
+
+Constitution-promise sensitivity (hud-aware, 80 seeds): haredi −10 / far right −5 / approval −1 → 38%;
+the shipped −8 / −3 → 41%. `leaveFuzz` 0 / 3 / 4 at 40 seeds: 38% / 45% / 30% (inside the noise).
