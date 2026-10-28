@@ -42,7 +42,11 @@ export interface Trust {
   extended?: boolean;
 }
 
+export type Trait = 'patient' | 'hothead' | 'greedy' | 'loyal' | 'opportunist';
+
 export interface Party extends PartyDef {
+  /** party leader's trait this game (random per game; undefined = none) */
+  trait?: Trait;
   /** joined only for the duration of a war */
   wartime: boolean;
   /** has publicly threatened to quit (hysteresis flag) */
@@ -101,6 +105,8 @@ export interface RemedyDef {
   /** a PROMISE remedy: makes this promise to every coalition party it targets (they believe you
    *  for promiseBelieveDays); the remedy's own effect is the immediate reaction of everyone else */
   promise?: string;
+  /** a gamble: succeeds with `chance` (shown as odds); otherwise `fail` applies instead of `effect` */
+  risk?: { chance: number; fail: Effect };
   /** a law that stays law once passed: hidden afterwards (and cards demanding it stop) */
   permanent?: boolean;
 }
@@ -142,6 +148,8 @@ export interface CrisisDef {
   defaultOption?: string;
   /** good-news event: no card; onFire applies and a result flash/headline shows it */
   goodNews?: boolean;
+  /** with goodNews: a bad-news wildcard (no card either; shown as bad news) */
+  badNews?: boolean;
 }
 
 export interface PromiseDef {
@@ -313,6 +321,10 @@ export interface GameState {
   moveReadyAt: Record<string, number>;
   /** once-per-term moves already used this term */
   usedThisTerm: string[];
+  /** random starting conditions this game */
+  startConditions: string[];
+  /** Trump's mood, −2 (furious) .. +2 (adoring); a random walk with 3 a.m. swings */
+  trumpMood: number;
 }
 
 export type Action =

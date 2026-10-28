@@ -1,14 +1,14 @@
 // Core engine: state creation, time stepping, actions. Pure TS — no DOM,
 // no Math.random, no Date.now. All randomness flows through state.rngState.
 import type { Ministry,
-  Action, ActionResult, Config, CrisisDef, Effect, GameState, KnessetData, LogEntry, Outcome, Party,
+  Action, ActionResult, Config, CrisisDef, Effect, GameState, KnessetData, LogEntry, Outcome, Party, Trait,
 } from './types.ts';
 import { makeRng, pickWeighted, type Rng } from './rng.ts';
 import {
   allocateMinistries, coalitionSeats, fairShare, formGovernment, hateCount, matchesTag, ministryCounts,
 } from './coalition.ts';
 import { runElection } from './elections.ts';
-import { CRISES, LAWS, crisisById, remedyById } from '../data/crises.ts';
+import { CRISES, LAWS, START_CONDITIONS, crisisById, remedyById } from '../data/crises.ts';
 import { promiseById } from '../data/promises.ts';
 import { NEW_MINISTRIES, moveById } from '../data/moves.ts';
 import { TITLES } from '../data/titles.ts';
@@ -71,10 +71,14 @@ function record(s: GameState, kind: Outcome['kind'], cause: Outcome['cause'], b:
   if (s.outcomes.length > 40) s.outcomes.splice(0, s.outcomes.length - 40);
 }
 
+/** causes of the outcomes being recorded (a risky remedy marks its cause as failed) */
+const causeStack: Outcome['cause'][] = [];
+
 function withOutcome<T>(s: GameState, kind: Outcome['kind'], cause: Outcome['cause'], fn: () => T): T {
   const b = snap(s);
   wrapDepth++;
-  try { return fn(); } finally { wrapDepth--; record(s, kind, cause, b); }
+  causeStack.push(cause);
+  try { return fn(); } finally { wrapDepth--; causeStack.pop(); record(s, kind, cause, b); }
 }
 
 /** why a party's satisfaction drifts each day (sum = actual daily drift; nothing thresholded) */
@@ -90,9 +94,10 @@ export function satDrivers(
     out.push({ key: s.govPosition > p.position ? 'drift.tooRight' : 'drift.tooLeft', perDay: -over * c.driftPenalty });
     out.push({ key: 'drift.appetite', perDay: -appetite(s) });
     const fair = (ctx.counts[p.id] ?? 0) - fairShare(p, s.parties, s.ministries.length);
-    out.push({ key: fair > 0 ? 'drift.ministriesPlus' : 'drift.ministriesMinus', perDay: fair * c.ministryFairness });
+    out.push({ key: fair > 0 ? 'drift.ministriesPlus' : 'drift.ministriesMinus', perDay: fair * c.ministryFairness * (p.trait === 'greedy' ? 2 : 1) });
     out.push({ key: 'drift.hate', perDay: -hateCount(p, ctx.coal) * c.hatePenalty });
-    out.push({ key: 'drift.polls', perDay: -Math.min(c.pollPanicMaxPerDay, Math.max(0, c.pollPanicBelow - s.approval) * c.pollPanicPerPoint) });
+    const panic = p.trait === 'loyal' ? 0.5 : p.trait === 'opportunist' ? 2 : 1;
+    out.push({ key: 'drift.polls', perDay: -panic * Math.min(c.pollPanicMaxPerDay, Math.max(0, c.pollPanicBelow - s.approval) * c.pollPanicPerPoint) });
   }
   if (p.trust.state === 'believing') out.push({ key: 'drift.believe', perDay: c.believeDriftPerDay });
   if (p.trust.state === 'distrust') out.push({ key: 'drift.distrust', perDay: -c.distrustDriftPerDay });
@@ -174,11 +179,52 @@ export function createState(base: KnessetData, seed: number, config: Partial<Con
     campaignFx: { merger: false, spoiler: false, gevalt: false },
     moveReadyAt: {},
     usedThisTerm: [],
+    startConditions: [],
+    trumpMood: 0,
   };
   s.nextEventInDays = scheduleNext(s);
   log(s, 'log.start', { seats: seatsOf(s) }, 'info');
+  if (cfg.randomStart) randomizeStart(s);
   return s;
 }
+
+const TRAITS: Trait[] = ['patient', 'hothead', 'greedy', 'loyal', 'opportunist'];
+
+/** every game starts a little differently: moods, polls, leader traits, 1–2 starting conditions */
+function randomizeStart(s: GameState) {
+  const c = s.config;
+  const rng = rngOf(s);
+  const spread = (n: number) => Math.round((rng.next() * 2 - 1) * n);
+  for (const p of s.parties) {
+    p.satisfaction = clamp(p.satisfaction + spread(c.startMoodSpread), 5, 95);
+    if (p.id !== s.base.pmParty && rng.next() < c.traitChance) p.trait = TRAITS[Math.floor(rng.next() * TRAITS.length)];
+  }
+  s.approval = clamp(s.approval + spread(c.startApprovalSpread), 0, 100);
+  s.trumpMood = Math.round((rng.next() * 2 - 1) * 10) / 10;
+  const pool = [...START_CONDITIONS];
+  const n = rng.next() < 0.5 ? 1 : 2;
+  for (let i = 0; i < n && pool.length; i++) {
+    const sc = pool.splice(Math.floor(rng.next() * pool.length), 1)[0];
+    s.startConditions.push(sc.id);
+    applyEffect(s, sc.effect, null);
+    log(s, `log.start.${sc.id}`, {}, 'event');
+  }
+}
+
+/** ±outcomeNoise on the numbers of an effect (same choice, not always the same result) */
+function jitter(s: GameState, e: Effect): Effect {
+  const n = s.config.outcomeNoise;
+  if (!n) return e;
+  const rng = rngOf(s);
+  const k = () => 1 + n * (rng.next() * 2 - 1);
+  const out: Effect = { ...e };
+  for (const key of ['approval', 'street', 'us', 'fiscal', 'trial', 'rival'] as const) if (e[key]) out[key] = e[key]! * k();
+  if (e.sat) out.sat = e.sat.map((x) => ({ ...x, delta: x.delta * k() }));
+  return out;
+}
+
+export const TRUMP_EMOJI = ['😠', '🙁', '😐', '🙂', '😍'];
+export const trumpFace = (s: GameState) => TRUMP_EMOJI[Math.round(clamp(s.trumpMood ?? 0, -2, 2)) + 2];
 
 // ---------------------------------------------------------------- queries
 
@@ -369,7 +415,7 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
   }
   if (e.quietDays) s.nextEventInDays += e.quietDays;
   for (const { target, delta } of e.sat ?? []) {
-    for (const p of resolveTargets(s, target, subject)) p.satisfaction = clamp(p.satisfaction + delta, 0, 100);
+    for (const p of resolveTargets(s, target, subject)) p.satisfaction = clamp(p.satisfaction + delta * (p.trait === 'hothead' ? 1.4 : 1), 0, 100);
   }
   switch (e.special) {
     case 'war': startWar(s); break;
@@ -541,8 +587,19 @@ function applyMove(s: GameState, moveId: string, subject: string | null, extra?:
   const k = 1 / (1 + uses.length * s.config.remedyFatigue);
   uses.push(s.day);
   s.remedyUses[moveId] = uses;
-  applyEffect(s, k < 1 ? dampen(r.effect, k) : r.effect, subject);
-  if (extra) applyEffect(s, extra, subject);
+  // a gamble: roll the shown odds; on a miss the fail effect replaces the effect
+  let eff = r.effect;
+  if (r.risk) {
+    const ok = rngOf(s).next() < r.risk.chance;
+    if (!ok) {
+      eff = r.risk.fail;
+      const cause = causeStack[causeStack.length - 1];
+      if (cause) cause.params = { ...cause.params, fail: 1 };
+      log(s, 'log.riskFailed', { remedy: moveId }, 'bad');
+    }
+  }
+  applyEffect(s, jitter(s, k < 1 ? dampen(eff, k) : eff), subject);
+  if (extra && eff === r.effect) applyEffect(s, jitter(s, extra), subject);
   for (const b of r.backfires) s.pressure[b] = (s.pressure[b] ?? 0) + s.config.backfirePressure;
   deliverPromises(s, moveId, subject);
 }
@@ -556,7 +613,7 @@ function makePromise(s: GameState, promiseId: string) {
     if (!def.to.some((tg) => tg === 'any' || matchesTag(p, tg))) continue;
     if (p.trust.state === 'distrust') { log(s, 'log.notBelieved', { party: p.id }, 'bad'); continue; }
     if (p.trust.state !== 'neutral') continue;
-    p.trust = { state: 'believing', promiseId: def.id, until: s.day + s.config.promiseBelieveDays };
+    p.trust = { state: 'believing', promiseId: def.id, until: s.day + s.config.promiseBelieveDays * (p.trait === 'patient' ? 1.5 : 1) };
     p.satisfaction = clamp(p.satisfaction + s.config.promiseBoost, 0, 100);
     log(s, 'log.promised', { party: p.id, promise: def.id }, 'info');
   }
@@ -692,6 +749,20 @@ function resolveElection(s: GameState) {
   else record(s, 'elections', { key: 'out.elections.deadlock', params: { poll: s.campaignPollSeats } }, b);
 }
 
+/** election night: the exit poll first (a few seats off), then the real count; a party that was in
+ *  the exit poll but missed the threshold is the night's big swing */
+function exitPoll(s: GameState) {
+  const rng = rngOf(s);
+  const th = s.config.threshold;
+  const poll = s.parties.map((p) => {
+    let n = p.seats ? Math.max(0, p.seats + Math.round((rng.next() * 2 - 1) * 2.4)) : rng.next() < 0.3 && p.id !== s.base.pmParty ? th : 0;
+    if (n > 0 && n < th) n = th;
+    return { p, n };
+  }).filter((x) => x.n > 0);
+  log(s, 'log.exitPoll', { results: poll.map((x) => `${x.p.short} ${x.n}`).join(', ') }, 'event');
+  for (const x of poll) if (x.p.seats === 0) log(s, 'log.thresholdDrama', { party: x.p.id }, 'event');
+}
+
 function resolveElectionInner(s: GameState) {
   const c = s.config;
   const fx = s.campaignFx ?? { merger: false, spoiler: false, gevalt: false };
@@ -722,11 +793,13 @@ function resolveElectionInner(s: GameState) {
       donor.seats--;
       rival.seats++;
     }
+    exitPoll(s);
     log(s, 'log.results', { results: s.parties.filter((p) => p.seats > 0).map((p) => `${p.short} ${p.seats}`).join(', ') }, 'event');
     log(s, 'log.votersLost', {}, 'bad');
     enterOpposition(s, 'voters');
     return;
   }
+  exitPoll(s);
   const ids = formGovernment(s.parties, s.base.pmParty, c.majority);
   log(s, 'log.results', { results: s.parties.filter((p) => p.seats > 0).map((p) => `${p.short} ${p.seats}`).join(', ') }, 'event');
   if (!ids) {
@@ -885,13 +958,26 @@ function checkCoalition(s: GameState, dt = 0) {
   for (const p of coalition(s)) {
     if (p.id === s.base.pmParty) continue;
     if (p.satisfaction <= 0) { leave(s, p); continue; }
-    if (dt && p.satisfaction < c.leaveBelow && rngOf(s).next() < c.leaveChancePerDay * dt) { leave(s, p); continue; }
+    if (dt && p.satisfaction < c.leaveBelow && rngOf(s).next() < c.leaveChancePerDay * (p.trait === 'loyal' ? 0.5 : 1) * dt) { leave(s, p); continue; }
     if (!p.threatening && p.satisfaction < c.threatenBelow) {
       p.threatening = true;
       log(s, 'log.threat', { party: p.id }, 'bad');
     } else if (p.threatening && p.satisfaction > c.threatenResetAbove) p.threatening = false;
   }
   if (seatsOf(s) < c.majority) callElections(s, 'collapse');
+}
+
+function trumpTick(s: GameState, dt: number) {
+  if (!dt) return;
+  const c = s.config;
+  const rng = rngOf(s);
+  s.trumpMood = clamp((s.trumpMood ?? 0) + (rng.next() * 2 - 1) * c.trumpWalk * Math.sqrt(dt) - 0.01 * (s.trumpMood ?? 0) * dt, -2, 2);
+  if (rng.next() < c.trumpSwingPerDay * dt) {
+    const up = rng.next() < 0.5;
+    s.trumpMood = up ? 2 : -2;
+    s.us = clamp(s.us + (up ? 8 : -8), 0, 100);
+    log(s, up ? 'log.trumpPostUp' : 'log.trumpPostDown', {}, up ? 'good' : 'bad');
+  }
 }
 
 function tickDay(s: GameState, dt: number) {
@@ -908,7 +994,8 @@ function tickDay(s: GameState, dt: number) {
     return;
   }
   if (!s.war.active) s.street += (60 - s.street) * c.meterRegression * dt;
-  s.us += (55 - s.us) * c.meterRegression * dt;
+  s.us += (55 + c.trumpUsPull * (s.trumpMood ?? 0) - s.us) * c.meterRegression * dt;
+  trumpTick(s, dt);
   s.fiscal += (50 - s.fiscal) * c.meterRegression * dt;
   const target = 20 + 0.2 * s.street + 0.15 * s.us + 0.1 * s.fiscal - 0.15 * s.trial
     + (s.war.active ? c.warApprovalBonusTarget : 0) - c.fatiguePerYear * (s.pmDays / 365.25)
@@ -1013,8 +1100,8 @@ function tickDay(s: GameState, dt: number) {
       const c2 = pickWeighted(rng, CRISES.map((x) => ({ item: x, weight: crisisWeight(s, x) })));
       if (c2?.goodNews) {
         s.lastFired[c2.id] = s.day;
-        withOutcome(s, 'news', { key: 'out.goodNews', params: { crisis: c2.id } }, () => { if (c2.onFire) applyEffect(s, c2.onFire, null); });
-        log(s, 'log.goodNews', { crisis: c2.id }, 'good');
+        withOutcome(s, 'news', { key: c2.badNews ? 'out.badNews' : 'out.goodNews', params: { crisis: c2.id } }, () => { if (c2.onFire) applyEffect(s, c2.onFire, null); });
+        log(s, c2.badNews ? 'log.badNews' : 'log.goodNews', { crisis: c2.id }, c2.badNews ? 'bad' : 'good');
         s.nextEventInDays = scheduleNext(s);
       } else if (c2) fireCrisis(s, c2);
       else s.nextEventInDays = scheduleNext(s);
@@ -1179,7 +1266,7 @@ function actInner(s: GameState, a: Action): ActionResult {
         if (!p.inCoalition || p.id === s.base.pmParty || p.seats < (def.minSeats ?? 0)) return { ok: false, error: 'err.wrongParty' };
         if (s.parties.some((x) => x.trust.promiseId === 'rotation' && (x.trust.state === 'believing' || x.trust.state === 'angry'))) return { ok: false, error: 'err.oneRotation' };
       }
-      p.trust = { state: 'believing', promiseId: def.id, until: s.day + (rotation ? c.rotationBelieveDays : def.believeDays ?? c.promiseBelieveDays) };
+      p.trust = { state: 'believing', promiseId: def.id, until: s.day + (rotation ? c.rotationBelieveDays : def.believeDays ?? c.promiseBelieveDays) * (p.trait === 'patient' ? 1.5 : 1) };
       p.satisfaction = clamp(p.satisfaction + (rotation ? c.rotationBoost : def.boost ?? c.promiseBoost), 0, 100);
       log(s, 'log.promised', { party: p.id, promise: def.id }, 'info');
       return { ok: true };

@@ -87,6 +87,18 @@ export interface Config {
   pollPanicPerPoint: number;
   /** cap on the poll-panic drain per partner (sat/day) */
   pollPanicMaxPerDay: number;
+  /** remedy effects get ±this share of noise (0 = deterministic numbers) */
+  outcomeNoise: number;
+  /** random starting moods, approval, starting conditions and leader traits */
+  randomStart: boolean;
+  startMoodSpread: number;
+  startApprovalSpread: number;
+  /** share of parties whose leader gets a trait */
+  traitChance: number;
+  /** Trump mood: daily random walk step, chance per day of a 3 a.m. swing, US-meter pull per mood point */
+  trumpWalk: number;
+  trumpSwingPerDay: number;
+  trumpUsPull: number;
   /** Kaplan's weight multiplier from low street is capped here */
   kaplanStreetMaxMult: number;
   /** the same card never fires twice within this many days */
@@ -232,6 +244,14 @@ export const DEFAULT_CONFIG: Config = {
   pollPanicBelow: 32,
   pollPanicPerPoint: 0.015,
   pollPanicMaxPerDay: 0.13,
+  outcomeNoise: 0.25,
+  randomStart: true,
+  startMoodSpread: 10,
+  startApprovalSpread: 4,
+  traitChance: 0.7,
+  trumpWalk: 0.08,
+  trumpSwingPerDay: 1 / 150,
+  trumpUsPull: 4,
   kaplanStreetMaxMult: 2,
   crisisCooldownDays: 60,
   goodNewsCooldownDays: 365,

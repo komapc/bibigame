@@ -45,14 +45,15 @@ export function renderText(o: Observation): string {
   if (o.phase === 'campaign') L.push(`ELECTION CAMPAIGN: ${o.phaseLeftDays}d to election day (election #${o.elections}); chance the voters throw you out: ${Math.round(o.electionRisk * 100)}%`);
   L.push(`Coalition: ${o.seats}/120 (need ${o.majority})${o.defectors ? `, ${o.defectors} rogue MKs` : ''} | gov position ${o.govPosition} (-10 left .. +10 right)`);
   const m = o.meters;
-  L.push(`Approval ${m.approval} | street calm ${m.street} | US ${m.us} | budget health ${m.fiscal} | trial ${m.trial} | open cases ${o.openCases}`);
+  if (o.startConditions.length && o.day < 60) L.push(`Start: ${o.startConditions.map((x) => x.label).join('; ')}`);
+  L.push(`Approval ${m.approval} | street calm ${m.street} | US ${m.us} (Trump ${o.trump.face} ${o.trump.mood}) | budget health ${m.fiscal} | trial ${m.trial} | open cases ${o.openCases}`);
   L.push(`Budget ${o.budget.dueYear}: ${o.budget.passed ? 'passed' : 'NOT passed (due 31 March)'}`);
   L.push(`War: ${o.war.active ? `ACTIVE ${o.war.daysLeft}d left` : o.war.cooldownDays ? `cooldown ${o.war.cooldownDays}d` : 'ready'} | cooldowns: ministry ${o.cooldowns.ministry}d, law ${o.cooldowns.law}d, invite ${o.cooldowns.invite}d`);
   L.push('PARTIES (id seats pos sat trust ministries trend):');
   const parties = [...o.parties].filter((p) => p.seats > 0).sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || b.seats - a.seats);
   for (const p of parties) {
     const trust = p.trust.state === 'neutral' ? '-' : `${p.trust.waiting ? 'WAITING' : p.trust.state}:${p.trust.promiseId}${p.trust.state === 'angry' ? '' : `:${p.trust.daysLeft}d`}`;
-    const flags = [p.wartime && 'WARTIME', p.threatening && 'THREATENING', !p.inCoalition && !p.willSitWithBibi && 'boycotts-you'].filter(Boolean).join(' ');
+    const flags = [p.trait && `trait:${p.trait.id}`, p.wartime && 'WARTIME', p.threatening && 'THREATENING', !p.inCoalition && !p.willSitWithBibi && 'boycotts-you'].filter(Boolean).join(' ');
     const tr = p.inCoalition && Math.abs(p.trend.perMonth) >= 0.5 ? ` ${p.trend.perMonth > 0 ? '↑+' : '↓'}${p.trend.perMonth}/mo (${p.trend.reason})` : '';
     const danger = p.mayLeave ? ` MAY LEAVE (without them: ${p.seatsWithout})` : '';
     L.push(`  ${p.inCoalition ? 'C' : 'o'} ${p.id.padEnd(9)} ${String(p.seats).padStart(2)}  ${String(p.position).padStart(3)}  ${bar(p.satisfaction)} ${String(Math.round(p.satisfaction)).padStart(3)}  ${trust}  [${p.ministries.join(',')}] ${flags}${tr}${danger}`);
@@ -71,7 +72,7 @@ export function renderText(o: Observation): string {
     const n: Record<string, number> = { left: 1, right: 2, up: 3, down: 4, ignore: 0 };
     for (const op of o.event.options) {
       const fx = op.preview.map((p) => `${p.label}${p.up ? '+' : '-'}`).join(', ');
-      L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.available ? '' : ` [unavailable: ${op.why}]`}${fx ? ` -> ${fx}` : ''}`);
+      L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.odds !== null ? ` [${op.odds}% odds]` : ''}${op.available ? '' : ` [unavailable: ${op.why}]`}${fx ? ` -> ${fx}` : ''}`);
     }
   } else if (o.phase === 'governing') L.push('No crisis right now.');
   L.push(`LAWS: ${o.laws.map((l) => l.id).join(', ')}`);

@@ -180,3 +180,23 @@ spans 63% → 37%), so it sits in the middle of that range. The reviewer's sugge
 The rollout bots are far above the old 30–60% band (greedy 98%): with the opposition second chance and
 the drawer moves they play an engine-perfect game no human can (they clone the state and simulate
 each option). They are kept as an upper bound and a regression alarm, not as a tuning target.
+
+## Round 4 (2026-10-28): random factors
+
+Risky remedies (odds shown on the card), ±25% outcome noise, random starts (moods ±10, approval ±4,
+leader traits, 1–2 starting conditions), wildcard news, Trump mood random walk, exit poll.
+First pass took the human proxy from 45% to 25% (pardon failing 40% → indictments; bad wildcards
+outweighed good ones). Softened: pardon odds 60% → 75%, bad wildcard weights 1.04 → 0.73 total,
+"trial resumes" start +8 → +5.
+
+| strategy (40 seeds × 20y) | term | median y (p25–p75) | lost to voters / deadlock / indicted |
+|---|---|---|---|
+| never-act | 0% | 1.5 (1.3–1.7) | 22 / 6 / 12 |
+| random | 0% | 1.2 (1.0–1.8) | 37 / 1 / 2 |
+| always-war | 0% | 1.2 (0.9–1.5) | 17 / 2 / 21 |
+| promise-spammer | 0% | 1.0 (0.6–1.3) | 29 / 6 / 5 |
+| card-only-trial-aware | 13% | 3.0 (2.4–3.3) | 30 / 10 / 0 |
+| **card-only-hud-aware** | **53%** | 4.2 (3.5–4.8) | 31 / 4 / 5 |
+| hud-aware with `outcomeNoise=0, randomStart=false` | 63% | 4.2 (3.5–4.5) | 30 / 5 / 5 |
+
+Randomness costs a careful player ~10 pp; the run-to-run spread (p25–p75) widens slightly.
