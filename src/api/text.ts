@@ -13,6 +13,11 @@ export type Command =
   | { kind: 'look' }
   | { kind: 'error'; message: string };
 
+/** the same "how to play" lines as the intro screen, in the current language */
+export function intro(): string {
+  return ['intro.you', 'intro.cards', 'intro.price', 'intro.promises', 'intro.goal'].map((k) => `• ${t(k)}`).join('\n');
+}
+
 export const HELP = `Commands (one per line):
   left | right | up | down     swipe the crisis card (also 1-4, or ← → ↑ ↓); down = call early elections
   ignore | 0                   ignore the crisis (it escalates; not on urgent cards — there it means refuse)
@@ -167,7 +172,7 @@ export function runText(g: Game, line: string): { reply: string; ok: boolean } {
   let head = '';
   let ok = true;
   switch (cmd.kind) {
-    case 'help': return { reply: HELP, ok: true };
+    case 'help': return { reply: `${intro()}\n\n${HELP}`, ok: true };
     case 'look': break;
     case 'error': head = `ERROR: ${cmd.message}`; ok = false; break;
     case 'action': {
