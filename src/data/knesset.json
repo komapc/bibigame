@@ -1,0 +1,39 @@
+{
+  "_note": "PLACEHOLDER: 25th Knesset (elected Nov 2022), initial coalition. Replace with the 27 Oct 2026 election results when available. Seats must sum to 120. position: -10 (left) .. +10 (right). tolerance: how far the government may drift from this party's position before it gets unhappy. Also used as the base distribution for re-elections.",
+  "pmParty": "likud",
+  "startPosition": 6,
+  "parties": [
+    { "id": "hadash", "name": "Hadash–Ta'al", "short": "HDT", "color": "#2e7d32", "seats": 5, "position": -8, "tolerance": 3, "satisfaction": 50, "inCoalition": false, "willSitWithBibi": false, "joinsWartime": false, "tags": ["left", "arab"], "hates": ["farright"], "aliases": ["odeh", "tibi"] },
+    { "id": "labor", "name": "Labor", "short": "LAB", "color": "#c62828", "seats": 4, "position": -6, "tolerance": 3, "satisfaction": 50, "inCoalition": false, "willSitWithBibi": false, "joinsWartime": false, "tags": ["left"], "hates": ["farright"], "aliases": ["democrats", "golan"] },
+    { "id": "raam", "name": "Ra'am", "short": "RAM", "color": "#66bb6a", "seats": 5, "position": -3, "tolerance": 6, "satisfaction": 50, "inCoalition": false, "willSitWithBibi": true, "joinsWartime": false, "tags": ["arab"], "hates": ["farright"], "aliases": ["abbas"] },
+    { "id": "yeshatid", "name": "Yesh Atid", "short": "YA", "color": "#0288d1", "seats": 24, "position": -2, "tolerance": 3, "satisfaction": 50, "inCoalition": false, "willSitWithBibi": false, "joinsWartime": false, "tags": ["centrist", "secular"], "hates": ["haredi", "farright"], "aliases": ["lapid"] },
+    { "id": "natunity", "name": "National Unity", "short": "NU", "color": "#1565c0", "seats": 12, "position": 1, "tolerance": 4, "satisfaction": 50, "inCoalition": false, "willSitWithBibi": true, "joinsWartime": true, "tags": ["centrist"], "hates": ["farright"], "aliases": ["gantz"] },
+    { "id": "yb", "name": "Yisrael Beiteinu", "short": "YB", "color": "#00897b", "seats": 6, "position": 4, "tolerance": 4, "satisfaction": 50, "inCoalition": false, "willSitWithBibi": false, "joinsWartime": false, "tags": ["right", "secular"], "hates": ["haredi"], "aliases": ["liberman", "lieberman"] },
+    { "id": "likud", "name": "Likud", "short": "LKD", "color": "#1e88e5", "seats": 32, "position": 5, "tolerance": 7, "satisfaction": 80, "inCoalition": true, "willSitWithBibi": true, "joinsWartime": true, "tags": ["right", "pm"], "hates": [], "aliases": ["bibi"] },
+    { "id": "shas", "name": "Shas", "short": "SHS", "color": "#212121", "seats": 11, "position": 6, "tolerance": 5, "satisfaction": 65, "inCoalition": true, "willSitWithBibi": true, "joinsWartime": false, "tags": ["right", "haredi"], "hates": [], "aliases": ["deri"] },
+    { "id": "utj", "name": "United Torah Judaism", "short": "UTJ", "color": "#424242", "seats": 7, "position": 6, "tolerance": 5, "satisfaction": 60, "inCoalition": true, "willSitWithBibi": true, "joinsWartime": false, "tags": ["right", "haredi"], "hates": [], "aliases": ["gafni", "goldknopf"] },
+    { "id": "rz", "name": "Religious Zionism", "short": "RZ", "color": "#f9a825", "seats": 7, "position": 8, "tolerance": 3, "satisfaction": 60, "inCoalition": true, "willSitWithBibi": true, "joinsWartime": false, "tags": ["right", "farright"], "hates": ["arab", "left"], "aliases": ["smotrich"] },
+    { "id": "otzma", "name": "Otzma Yehudit", "short": "OY", "color": "#ef6c00", "seats": 6, "position": 9, "tolerance": 2.5, "satisfaction": 55, "inCoalition": true, "willSitWithBibi": true, "joinsWartime": false, "tags": ["right", "farright"], "hates": ["arab", "left", "centrist"], "aliases": ["bengvir", "ben-gvir"] },
+    { "id": "noam", "name": "Noam", "short": "NOM", "color": "#8d6e63", "seats": 1, "position": 9, "tolerance": 3, "satisfaction": 60, "inCoalition": true, "willSitWithBibi": true, "joinsWartime": false, "tags": ["right", "farright"], "hates": ["left"], "aliases": ["maoz"] }
+  ],
+  "ministries": [
+    { "id": "defense", "holder": "likud" },
+    { "id": "finance", "holder": "rz" },
+    { "id": "foreign", "holder": "likud" },
+    { "id": "justice", "holder": "likud" },
+    { "id": "security", "holder": "otzma" },
+    { "id": "interior", "holder": "shas" },
+    { "id": "health", "holder": "shas" },
+    { "id": "religious", "holder": "shas" },
+    { "id": "housing", "holder": "utj" },
+    { "id": "education", "holder": "likud" },
+    { "id": "transport", "holder": "likud" },
+    { "id": "settlements", "holder": "rz" },
+    { "id": "heritage", "holder": "otzma" },
+    { "id": "negev", "holder": "otzma" },
+    { "id": "economy", "holder": "likud" },
+    { "id": "welfare", "holder": "shas" },
+    { "id": "jerusalem", "holder": "utj" },
+    { "id": "identity", "holder": "noam" }
+  ]
+}
