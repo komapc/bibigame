@@ -2,7 +2,7 @@
 import type { Ministry, Party, PartyDef } from './types.ts';
 
 export function coalitionSeats(parties: PartyDef[], defectors = 0): number {
-  return parties.filter((p) => p.inCoalition).reduce((s, p) => s + p.seats, 0) - defectors;
+  return Math.max(0, parties.filter((p) => p.inCoalition).reduce((s, p) => s + p.seats, 0) - defectors);
 }
 
 export function hasMajority(parties: PartyDef[], majority = 61, defectors = 0): boolean {

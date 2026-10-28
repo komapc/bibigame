@@ -1,6 +1,6 @@
 // Core engine: state creation, time stepping, actions. Pure TS — no DOM,
 // no Math.random, no Date.now. All randomness flows through state.rngState.
-import type {
+import type { Ministry,
   Action, ActionResult, Config, CrisisDef, Effect, GameState, KnessetData, LogEntry, Outcome, Party,
 } from './types.ts';
 import { makeRng, pickWeighted, type Rng } from './rng.ts';
@@ -92,7 +92,7 @@ export function satDrivers(
     const fair = (ctx.counts[p.id] ?? 0) - fairShare(p, s.parties, s.ministries.length);
     out.push({ key: fair > 0 ? 'drift.ministriesPlus' : 'drift.ministriesMinus', perDay: fair * c.ministryFairness });
     out.push({ key: 'drift.hate', perDay: -hateCount(p, ctx.coal) * c.hatePenalty });
-    out.push({ key: 'drift.polls', perDay: -Math.max(0, c.pollPanicBelow - s.approval) * c.pollPanicPerPoint });
+    out.push({ key: 'drift.polls', perDay: -Math.min(c.pollPanicMaxPerDay, Math.max(0, c.pollPanicBelow - s.approval) * c.pollPanicPerPoint) });
   }
   if (p.trust.state === 'believing') out.push({ key: 'drift.believe', perDay: c.believeDriftPerDay });
   if (p.trust.state === 'distrust') out.push({ key: 'drift.distrust', perDay: -c.distrustDriftPerDay });
@@ -151,6 +151,9 @@ export function createState(base: KnessetData, seed: number, config: Partial<Con
     tensionUntil: 180,
     iccUntil: 0,
     usedOnce: [],
+    lawsPassed: [],
+    lastFired: {},
+    lastWarEnd: -9999,
     elections: 0,
     failedElections: 0,
     stats: {
@@ -234,14 +237,25 @@ export function crisisWeight(s: GameState, c: CrisisDef): number {
   if (req?.maxFiscal !== undefined && s.fiscal > req.maxFiscal) return 0;
   if (req?.minTrial !== undefined && s.trial < req.minTrial) return 0;
   if (req?.warHistory && !s.war.active && s.stats.warsEnded === 0) return 0;
+  const c0 = s.config;
+  // no card twice within crisisCooldownDays (good news: within a year)
+  const last = s.lastFired[c.id];
+  if (last !== undefined && s.day - last < (c.goodNews ? c0.goodNewsCooldownDays : c0.crisisCooldownDays)) return 0;
+  if (req?.notPassed && s.lawsPassed.includes(req.notPassed)) return 0;
+  if (req?.recentWar && !s.war.active && s.day - s.lastWarEnd > c0.recentWarDays) return 0;
   let w = c.weight * (1 + (s.pressure[c.id] ?? 0));
   switch (c.id) {
-    case 'kaplan': w *= 1 + Math.max(0, 60 - s.street) / 20; break;
+    case 'kaplan': w *= Math.min(c0.kaplanStreetMaxMult, 1 + Math.max(0, 60 - s.street) / 20); break;
     case 'case': w *= 0.5 + s.trial / 50; break;
     case 'trump': w *= 1 + Math.max(0, 50 - s.us) / 25; break;
     case 'rebel': w *= 1 + Math.max(0, 60 - pmParty(s).satisfaction) / 20; break;
     case 'deal': w *= s.war.active ? 3 : 1; break;
-    case 'budget': if (s.budgetPassedYear >= budgetDueYear(s)) return 0; break;
+    case 'budget': {
+      // the "31 March" card only in budget season (December–March)
+      const m = dateOf(s).getUTCMonth();
+      if (s.budgetPassedYear >= budgetDueYear(s) || (m > 2 && m < 11)) return 0;
+      break;
+    }
   }
   return w;
 }
@@ -254,6 +268,7 @@ export function remedyAvailable(s: GameState, id: string): boolean {
   if (!r) return false;
   if (r.context === 'tension' && !hasTension(s)) return false;
   if (r.once && s.usedOnce.includes(id)) return false;
+  if (r.permanent && s.lawsPassed.includes(id)) return false;
   if (r.travel && s.day < s.iccUntil) return false;
   if (id === 'war') return !s.war.active && s.war.cooldownDays <= 0;
   if (id === 'buytime') {
@@ -327,10 +342,7 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
       const to = (subject && partyById(s, subject)?.inCoalition ? partyById(s, subject) : null)
         ?? [...coal].filter((p) => p.id !== s.base.pmParty).sort((a, b) => a.satisfaction - b.satisfaction)[0];
       if (!to) break;
-      const counts = ministryCounts(s.ministries);
-      const from = [...coal].filter((p) => p.id !== to.id && (counts[p.id] ?? 0) > 0)
-        .sort((a, b) => (counts[b.id] ?? 0) - (counts[a.id] ?? 0))[0];
-      const m = from && s.ministries.find((x) => x.holder === from.id);
+      const m = ministryFor(s, to);
       if (m) transferMinistry(s, m.id, to.id);
       break;
     }
@@ -356,30 +368,31 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
       const p = subject ? partyById(s, subject) : undefined;
       const def = p?.trust.promiseId ? promiseById.get(p.trust.promiseId) : undefined;
       if (!p || !def || p.trust.state === 'neutral') break;
+      const group = promiseGroup(s, p);
       if (def.deliveredBy === 'ministry') {
-        const counts = ministryCounts(s.ministries);
-        const from = coalition(s).filter((x) => x.id !== p.id && (counts[x.id] ?? 0) > 0)
-          .sort((x, y) => (counts[y.id] ?? 0) - (counts[x.id] ?? 0))[0];
-        const m = from && s.ministries.find((x) => x.holder === from.id);
-        if (m) transferMinistry(s, m.id, p.id);
+        for (const x of group) { const m = ministryFor(s, x); if (m) transferMinistry(s, m.id, x.id); }
       } else applyMove(s, def.deliveredBy, p.id);
-      p.trust = { state: 'neutral', promiseId: null, until: 0 };
+      for (const x of group) x.trust = { state: 'neutral', promiseId: null, until: 0 };
       break;
     }
     case 'buyTime': {
       const p = subject ? partyById(s, subject) : undefined;
       if (!p || p.trust.state !== 'angry') break;
-      p.trust = { state: 'believing', promiseId: p.trust.promiseId, until: s.day + s.config.buyTimeDays, extended: true };
-      p.satisfaction = clamp(p.satisfaction - 5, 0, 100);
-      log(s, 'log.buyTime', { party: p.id }, 'info');
+      for (const x of promiseGroup(s, p)) {
+        x.trust = { state: 'believing', promiseId: x.trust.promiseId, until: s.day + s.config.buyTimeDays, extended: true };
+        x.satisfaction = clamp(x.satisfaction - 5, 0, 100);
+        log(s, 'log.buyTime', { party: x.id }, 'info');
+      }
       break;
     }
     case 'refuse': {
       const p = subject ? partyById(s, subject) : undefined;
       if (!p || p.trust.state !== 'angry') break;
-      breakPromise(s, p);
-      log(s, 'log.refusedPromise', { party: p.id }, 'bad');
-      if (p.inCoalition) leave(s, p);
+      for (const x of promiseGroup(s, p)) {
+        breakPromise(s, x);
+        log(s, 'log.refusedPromise', { party: x.id }, 'bad');
+        if (x.inCoalition) leave(s, x);
+      }
       break;
     }
     case 'elections': callElections(s, 'early'); break;
@@ -483,6 +496,7 @@ function applyMove(s: GameState, moveId: string, subject: string | null, extra?:
   const r = remedyById.get(moveId);
   if (!r) return;
   if (r.once && !s.usedOnce.includes(moveId)) s.usedOnce.push(moveId);
+  if (r.permanent && !s.lawsPassed.includes(moveId)) s.lawsPassed.push(moveId);
   if (r.tension) s.tensionUntil = Math.max(s.tensionUntil, s.day + r.tension);
   if (r.promise) makePromise(s, r.promise);
   // diminishing returns: the public (and partners) have seen this trick recently
@@ -525,6 +539,21 @@ function deliverPromises(s: GameState, moveId: string, recipient: string | null)
   }
 }
 
+/** which ministry a card/promise hands to `to`: a free one first, then one of your own (never Defence),
+ *  then (only for a partner, never for your own party) one from the partner holding the most */
+export function ministryFor(s: GameState, to: Party): Ministry | undefined {
+  const free = s.ministries.find((m) => !m.holder || !partyById(s, m.holder)?.inCoalition);
+  if (free) return free;
+  if (to.id === s.base.pmParty) return undefined;
+  const pm = s.base.pmParty;
+  const own = [...s.ministries].reverse().find((m) => m.holder === pm && m.id !== 'defense');
+  if (own) return own;
+  const counts = ministryCounts(s.ministries);
+  const from = coalition(s).filter((x) => x.id !== to.id && x.id !== pm && (counts[x.id] ?? 0) > 1)
+    .sort((x, y) => (counts[y.id] ?? 0) - (counts[x.id] ?? 0))[0];
+  return from && [...s.ministries].reverse().find((m) => m.holder === from.id && m.id !== 'defense');
+}
+
 function transferMinistry(s: GameState, ministryId: string, toId: string) {
   const m = s.ministries.find((x) => x.id === ministryId)!;
   const from = m.holder ? partyById(s, m.holder) : undefined;
@@ -563,6 +592,7 @@ function endWar(s: GameState) {
   s.war.active = false;
   s.war.leftDays = 0;
   s.stats.warsEnded++;
+  s.lastWarEnd = s.day;
   s.approval = clamp(s.approval + s.config.warEndApproval, 0, 100);
   for (const p of s.parties) {
     if (p.wartime) {
@@ -646,6 +676,14 @@ function resolveElectionInner(s: GameState) {
   for (const p of s.parties) { p.seats = seats[p.id] ?? 0; p.inCoalition = false; p.wartime = false; p.threatening = false; }
   // the voters may simply be done with you (approval, cases, election fatigue)
   if (rngOf(s).next() < lossRoll) {
+    // the count has to agree with the verdict: late ballots swing seats until your bloc is short of a majority
+    const rival = s.parties.filter((p) => !p.willSitWithBibi && p.seats > 0).sort((a, b) => b.seats - a.seats)[0];
+    for (let i = 0; rival && i < c.totalSeats && formGovernment(s.parties, s.base.pmParty, c.majority); i++) {
+      const ids = formGovernment(s.parties, s.base.pmParty, c.majority)!;
+      const donor = s.parties.filter((p) => ids.includes(p.id) && p.seats > 0).sort((a, b) => b.seats - a.seats)[0];
+      donor.seats--;
+      rival.seats++;
+    }
     log(s, 'log.results', { results: s.parties.filter((p) => p.seats > 0).map((p) => `${p.short} ${p.seats}`).join(', ') }, 'event');
     log(s, 'log.votersLost', {}, 'bad');
     enterOpposition(s, 'voters');
@@ -720,6 +758,12 @@ function enterOpposition(s: GameState, why: 'voters' | 'deadlock') {
 
 // ---------------------------------------------------------------- events
 
+/** parties holding the same promise from the same moment (one angry card speaks for all of them) */
+function promiseGroup(s: GameState, p: Party): Party[] {
+  return s.parties.filter((x) => x === p || (x.inCoalition && x.trust.state === p.trust.state && x.trust.promiseId === p.trust.promiseId
+    && x.trust.until === p.trust.until && !!p.trust.promiseId));
+}
+
 function breakPromise(s: GameState, p: Party) {
   p.trust = { state: 'distrust', promiseId: p.trust.promiseId, until: s.day + s.config.promiseDistrustDays };
   p.satisfaction = clamp(p.satisfaction - s.config.promiseBrokenPenalty, 0, 100);
@@ -739,6 +783,7 @@ function fireCrisis(s: GameState, c: CrisisDef, subjectOverride?: string | null)
     subject = coalition(s).filter((p) => matchesTag(p, c.subjectTag!))
       .sort((a, b) => a.satisfaction - b.satisfaction)[0]?.id ?? null;
   }
+  s.lastFired[c.id] = s.day;
   s.event = { id: c.id, subject, firedAt: s.day, leftDays: c.urgent ? s.config.urgentTimeoutDays : s.config.eventTimeoutDays };
   if (c.onFire) applyEffect(s, c.onFire, subject);
   if (c.tension) s.tensionUntil = Math.max(s.tensionUntil, s.day + c.tension);
@@ -835,13 +880,19 @@ function tickDay(s: GameState, dt: number) {
   for (const p of s.parties) {
     if (p.trust.state === 'believing' && s.day >= p.trust.until) {
       const card = (p.trust.promiseId && promiseById.get(p.trust.promiseId)?.card) || 'angry';
-      if (card === 'rotation' && !p.inCoalition) {
-        p.trust = { state: 'neutral', promiseId: null, until: 0 }; // they left: no rotation to claim
-      } else if (p.seats > 0) {
-        // no silent switch: the party comes to collect (angry-reminder / rotation card)
+      if (p.id === s.base.pmParty || card === 'rotation' && !p.inCoalition) {
+        p.trust = { state: 'neutral', promiseId: null, until: 0 }; // nobody comes to collect
+      } else if (!p.inCoalition || p.seats <= 0) {
+        breakPromise(s, p); // outside the coalition: no card, they just stop believing you
+      } else {
+        // no silent switch: the party comes to collect (angry-reminder / rotation card); one card per promise
         p.trust = { ...p.trust, state: 'angry' };
-        s.queue.push({ id: card, subject: p.id });
-      } else breakPromise(s, p);
+        const queued = s.queue.some((q) => {
+          const o = q.subject ? partyById(s, q.subject) : undefined;
+          return q.id === card && !!o && o !== p && promiseGroup(s, o).includes(p);
+        });
+        if (!queued) s.queue.push({ id: card, subject: p.id });
+      }
     } else if (p.trust.state === 'distrust' && s.day >= p.trust.until) {
       p.trust = { state: 'neutral', promiseId: null, until: 0 };
     }
@@ -913,13 +964,15 @@ function tickDay(s: GameState, dt: number) {
   } else if (s.queue.length) {
     const q = s.queue.shift()!;
     const p = q.subject ? partyById(s, q.subject) : undefined;
-    if (!p || p.trust.state === 'angry') fireCrisis(s, crisisById.get(q.id)!, q.subject);
+    if (p && !p.inCoalition) { if (p.trust.state === 'angry') breakPromise(s, p); }
+    else if (!p || p.trust.state === 'angry') fireCrisis(s, crisisById.get(q.id)!, q.subject);
   } else {
     s.nextEventInDays -= dt;
     if (s.nextEventInDays <= 0) {
       const rng = rngOf(s);
       const c2 = pickWeighted(rng, CRISES.map((x) => ({ item: x, weight: crisisWeight(s, x) })));
       if (c2?.goodNews) {
+        s.lastFired[c2.id] = s.day;
         withOutcome(s, 'news', { key: 'out.goodNews', params: { crisis: c2.id } }, () => { if (c2.onFire) applyEffect(s, c2.onFire, null); });
         log(s, 'log.goodNews', { crisis: c2.id }, 'good');
         s.nextEventInDays = scheduleNext(s);

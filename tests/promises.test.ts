@@ -12,12 +12,7 @@ describe('promises and trust', () => {
     g.advanceDays(c.promiseBelieveDays - c.promiseWarnDays + 1);
     expect(g.observe().parties.find((p) => p.id === 'yb')!.trust.waiting).toBe(true);
     g.advanceDays(c.promiseWarnDays);
-    expect(yb().trust.state).toBe('angry');
-    // the angry reminder fires once the card slot is free; timeout default = refuse
-    for (let i = 0; i < 200 && yb().trust.state === 'angry'; i++) {
-      if (g.state.event && g.state.event.id !== 'angry') g.act({ type: 'choose', optionId: 'ignore' });
-      g.advanceDays(1);
-    }
+    // yb is in the opposition: no reminder card, they simply stop believing you
     expect(yb().trust.state).toBe('distrust');
     expect(g.state.stats.brokenPromises).toBe(1);
     expect(g.act({ type: 'promise', partyId: 'yb', promiseId: 'funds' }).error).toBe('err.distrust');

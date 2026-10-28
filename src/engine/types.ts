@@ -101,6 +101,8 @@ export interface RemedyDef {
   /** a PROMISE remedy: makes this promise to every coalition party it targets (they believe you
    *  for promiseBelieveDays); the remedy's own effect is the immediate reaction of everyone else */
   promise?: string;
+  /** a law that stays law once passed: hidden afterwards (and cards demanding it stop) */
+  permanent?: boolean;
 }
 
 export interface CrisisDef {
@@ -127,6 +129,10 @@ export interface CrisisDef {
   requires?: {
     coalitionTag?: string; maxApproval?: number; noWar?: boolean; maxFiscal?: number;
     minTrial?: number; warHistory?: boolean;
+    /** not once this permanent law has passed */
+    notPassed?: string;
+    /** only during a war or within config.recentWarDays after one */
+    recentWar?: boolean;
   };
   /** never fired by the random roll (scheduled by the engine) */
   scheduled?: boolean;
@@ -275,6 +281,12 @@ export interface GameState {
   iccUntil: number;
   /** once-per-game remedies already used */
   usedOnce: string[];
+  /** permanent laws already passed */
+  lawsPassed: string[];
+  /** crisis id → game day it last fired (per-card cooldown) */
+  lastFired: Record<string, number>;
+  /** game day the last war ended */
+  lastWarEnd: number;
   elections: number;
   failedElections: number;
   stats: Stats;
