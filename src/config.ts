@@ -37,8 +37,6 @@ export interface Config {
   recessMonths: number;
   /** party card shows "waiting…" this many days before a promise window ends */
   promiseWarnDays: number;
-  /** "buy time" extends the believe window by this much (once per promise) */
-  buyTimeDays: number;
 
   warDurationDays: number;
   warCooldownDays: number;
@@ -240,7 +238,6 @@ export const DEFAULT_CONFIG: Config = {
   recessStartMonth: 7,
   recessMonths: 2,
   promiseWarnDays: 14,
-  buyTimeDays: 30,
 
   warDurationDays: 90,
   warCooldownDays: 300,

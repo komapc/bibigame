@@ -15,8 +15,9 @@ describe('ignore is a separate option, swipes are real remedies', () => {
     const g = createGame({ seed: 5 });
     untilEvent(g);
     const opts = g.observe().event!.options;
-    expect(opts.filter((o) => ['left', 'right', 'up'].includes(o.dir)).every((o) => o.id !== 'ignore')).toBe(true);
-    expect(opts.find((o) => o.dir === 'down')!.id).toBe('elections');
+    expect(opts.filter((o) => ['left', 'right'].includes(o.dir)).every((o) => o.id !== 'ignore')).toBe(true);
+    expect(opts.map((o) => o.dir).every((d) => ['left', 'right', 'ignore'].includes(d))).toBe(true);
+    for (const c of CRISES) expect(c.remedies.length, c.id).toBeLessThanOrEqual(2);
     expect(opts.find((o) => o.dir === 'ignore')!.id).toBe('ignore');
   });
 });

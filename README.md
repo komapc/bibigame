@@ -19,8 +19,8 @@ given date), `?seed=N` for a fixed seed, `?lang=en|ru|he` for the language.
   the Parties tab; a meter in danger; the last-chance notice). Then the result line and the card, which
   takes the rest of the height. No party chips, no tips. In opposition the big number is the rival
   government's stability. Nothing on the page may be wider than the screen.
-- **Swipe cards**: left / right / up = up to three remedies, down = early elections, a separate
-  **Ignore** tap. Effect chips on each option (the trial reads "Trial slower" / "Trial faster"); risky
+- **Swipe cards**: left / right = two remedies, a separate **Ignore** tap and, when a war can
+  start, a **Start a war** tap. Early elections are a move in the drawer. Effect chips on each option (the trial reads "Trial slower" / "Trial faster"); risky
   remedies show their odds; greyed options say why, and swiping or tapping one shakes the card and
   toasts the reason.
 - **Intro screen** on the first visit (five lines on how to play, a big Start, EN/RU/HE switch); the
@@ -107,8 +107,8 @@ tests/                   vitest
 - **Ministries**: fixed list; giving one to a party takes it from another (who gets angry). Partners
   also compare their ministries with their fair share by seats.
 - **Crises**: every ~20 game days, faster each year, sometimes in clusters; the same card not within
-  60 days (good news: a year). Card = up to 3 remedies
-  (swipe left/right/up) + early elections (down), plus a separate **Ignore** tap (Space / `0`;
+  60 days (good news: a year). Card = 2 remedies
+  (swipe left/right), plus a separate **Ignore** tap and a **Start a war** tap when a war can start (Space / `0`;
   not on urgent cards). Ignoring escalates. Timeouts (`eventTimeoutDays`/`urgentTimeoutDays`) apply to
   bots/text mode; the UI shows an answer budget instead. Many remedies come as a pair:
   **promise** it (cheap now, must be delivered later) or **do** it (costly now).

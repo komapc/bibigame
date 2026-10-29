@@ -19,7 +19,7 @@ export function intro(): string {
 }
 
 export const HELP = `Commands (one per line):
-  left | right | up | down     swipe the crisis card (also 1-4, or ← → ↑ ↓); down = call early elections
+  left | right                 swipe the crisis card (also 1-2, or ← →); early elections: move elections
   ignore | 0                   ignore the crisis (it escalates; not on urgent cards — there it means refuse)
   choose <option>              choose an option by id (e.g. choose settle)
   promise <party> <promise>    make a promise (e.g. promise liberman constitution)
@@ -116,7 +116,7 @@ export function parseCommand(g: Game, line: string): Command {
   const [cmd, ...rest] = words;
   const c = cmd.toLowerCase();
   const o = g.observe(0);
-  const dirOf: Record<string, string> = { '0': 'ignore', ignore: 'ignore', '1': 'left', '2': 'right', '3': 'up', '4': 'down', '←': 'left', '→': 'right', '↑': 'up', '↓': 'down', left: 'left', right: 'right', up: 'up', down: 'down' };
+  const dirOf: Record<string, string> = { '0': 'ignore', ignore: 'ignore', '1': 'left', '2': 'right', '←': 'left', '→': 'right', left: 'left', right: 'right' };
   if (dirOf[c]) {
     const opt = o.event?.options.find((x) => x.dir === dirOf[c]);
     if (!opt && dirOf[c] === 'ignore' && o.event) return { kind: 'action', action: { type: 'choose', optionId: 'ignore' } };

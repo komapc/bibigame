@@ -102,8 +102,8 @@ describe('late game', () => {
     expect(opp.every((c) => crisisWeight(s, c) > 0)).toBe(true);
     expect(CRISES.filter((c) => !c.requires?.opposition && !c.goodNews).every((c) => crisisWeight(s, c) === 0)).toBe(true);
     s.event = { id: 'oppdefector', subject: null, firedAt: s.day, leftDays: 10 };
-    expect(eventOptions(s).find((o) => o.id === 'elections')!.available).toBe(false);
-    expect(g.act({ type: 'choose', optionId: 'elections' }).ok).toBe(false);
+    expect(eventOptions(s).find((o) => o.id === 'elections')).toBeUndefined();
+    expect(g.act({ type: 'move', moveId: 'elections' }).ok).toBe(false);
     const r0 = s.rival!.stability;
     expect(g.act({ type: 'choose', optionId: 'oppwelcome' }).ok).toBe(true);
     expect(s.rival!.stability).toBeLessThan(r0);

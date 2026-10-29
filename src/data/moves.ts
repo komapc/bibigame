@@ -19,6 +19,8 @@ export const MOVES: MoveDef[] = [
   { id: 'electionbudget', phases: ['governing'], oncePerTerm: true, requires: { electionsWithinDays: 180 } },
   { id: 'groundgame', phases: ['governing'], oncePerTerm: true, requires: { electionsWithinDays: 180 } },
   { id: 'primetime', phases: ['governing', 'campaign', 'opposition'], cooldownDays: 60 },
+  // early elections: used to be the swipe down on every card
+  { id: 'elections', phases: ['governing'] },
   // campaign (once per election)
   { id: 'merger', phases: ['campaign'], oncePerTerm: true },
   { id: 'spoiler', phases: ['campaign'], oncePerTerm: true },

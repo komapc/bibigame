@@ -38,8 +38,6 @@ export interface Trust {
   promiseId: string | null;
   /** game day the current state ends */
   until: number;
-  /** already bought time once for this promise */
-  extended?: boolean;
 }
 
 export type Trait = 'patient' | 'hothead' | 'greedy' | 'loyal' | 'opportunist';
@@ -88,7 +86,7 @@ export interface Effect {
   /** opposition only: the rival government's stability */
   rival?: number;
   /** special mechanics */
-  special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'buyTime' | 'refuse' | 'passBudget' | 'defector' | 'groundGame'
+  special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'refuse' | 'passBudget' | 'defector' | 'groundGame'
     | 'poach' | 'newMinistry' | 'merger' | 'spoiler' | 'gevalt' | 'exileRival' | 'primetime' | 'postponeElections'
     | 'plea' | 'miami' | 'handover' | 'breakRotation' | 'noConfidence' | 'oppPoach' | 'pivot' | 'securityDetail';
 }

@@ -49,7 +49,7 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
 const ltr = (x: string) => `\u2066${x}\u2069`;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const pct = (v: number) => `${Math.max(0, Math.min(100, v)).toFixed(1)}%`;
-const ARROW: Record<string, string> = { left: '←', right: '→', up: '↑', down: '↓' };
+const ARROW: Record<string, string> = { left: '←', right: '→' };
 
 // Layout (phone first): top bar (seats big + approval, timeline) → one result line → the card.
 // Everything else lives in ONE bottom sheet behind three tabs. Layers: at most one of
@@ -311,7 +311,7 @@ function arrivalHtml(a: OutcomeView | null): string {
 
 function renderStage(o: Observation) {
   const ev = o.event;
-  const key = ev ? `${ev.id}|${game.state.event?.firedAt}|${ev.options.map((x) => x.available).join()}` : `none|${newsKey(o)}`;
+  const key = ev ? `${ev.id}|${game.state.event?.firedAt}|${ev.options.map((x) => x.available).join()}|${canWar(o)}` : `none|${newsKey(o)}`;
   if (swipe.dragging()) return;
   const kind = ev ? `card:${game.state.event?.firedAt}` : 'news';
   region('stage', key, () => {
@@ -334,7 +334,6 @@ function renderStage(o: Observation) {
     const ign = ev.options.find((x) => x.dir === 'ignore');
     const ignFx = ign ? ign.preview.filter((p) => !p.up).map((p) => (p.meter === 'trial' ? t('ui.trialFaster') : p.label)).slice(0, 3).join(', ') : '';
     return `<div id="card" class="swipecard ${enter} ${urgent ? 'urgent' : ''}" tabindex="0" aria-label="${esc(ev.title)}">
-      ${hint('up')}
       <div class="cbody">
         <svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16" class="ring-bg"/><circle id="ring" cx="20" cy="20" r="16" class="ring-fg"/></svg>
         <h2>${esc(ev.title)}${ev.subject ? ` <small>· ${esc(partyName(o, ev.subject))}</small>` : ''}</h2>
@@ -343,9 +342,11 @@ function renderStage(o: Observation) {
         <div id="swipelabel" class="swipelabel" hidden></div>
       </div>
       <div class="lr">${hint('left')}${hint('right')}</div>
-      ${hint('down')}
     </div>
-    ${ign ? `<button class="ignorebtn" data-dir="ignore"><b>${t('ui.ignore')}</b> <small>${esc(t('ui.ignoreFx', { fx: ignFx || t('out.escalates') }))}</small> <kbd>0</kbd></button>` : ''}`;
+    <div class="underbtns">
+      ${ign ? `<button class="ignorebtn" data-dir="ignore"><b>${t('ui.ignore')}</b> <small>${esc(t('ui.ignoreFx', { fx: ignFx || t('out.escalates') }))}</small> <kbd>0</kbd></button>` : ''}
+      ${canWar(o) ? `<button class="ignorebtn warbtn" data-act="war"><b>💥 ${t('ui.war')}</b></button>` : ''}
+    </div>`;
   });
   if (ev) {
     const ring = document.getElementById('ring');
@@ -619,10 +620,12 @@ function renderMoves(o: Observation) {
   });
 }
 
+/** war can start now: shown under the crisis card and enabled in the moves panel */
+const canWar = (o: Observation) => o.phase === 'governing' && !o.war.active && o.war.cooldownDays === 0 && o.tension;
+
 function renderWar(o: Observation) {
   const btn = $('war') as HTMLButtonElement;
-  const can = o.phase === 'governing' && !o.war.active && o.war.cooldownDays === 0 && o.tension;
-  btn.disabled = !can;
+  btn.disabled = !canWar(o);
   btn.textContent = o.war.active ? t('ui.warActive', { days: o.war.daysLeft })
     : o.war.cooldownDays ? t('ui.warCooldown', { days: o.war.cooldownDays })
     : `💥 ${t('ui.war')}${o.tension ? '' : ` — ${t('ui.tension')} ✗`}`;
@@ -968,7 +971,7 @@ window.addEventListener('keydown', (e) => {
   if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA') return;
   if (e.key === 'Escape') { if (layer === 'sheet' || layer === 'intro') { if (layer === 'intro') startFromIntro(); else closeLayer(); } return; }
   if (layer) return; // cards only take keys when no layer is open
-  const dir = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as Record<string, string>)[e.key];
+  const dir = ({ ArrowLeft: 'left', ArrowRight: 'right' } as Record<string, string>)[e.key];
   if (dir && game.state.event) { e.preventDefault(); swipe.flyThenChoose(dir); }
   else if ((e.key === '0' || e.key === ' ') && game.state.event && game.observe(0).event?.options.some((x) => x.dir === 'ignore')) { e.preventDefault(); choose('ignore'); }
   else if (e.key === ' ' && tag !== 'BUTTON') { e.preventDefault(); $('pause').click(); }

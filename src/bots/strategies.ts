@@ -116,8 +116,6 @@ function bestOption(g: Game, o: Observation, rolloutDays: number, n: number): st
   let bestScore = -Infinity;
   for (const opt of o.event.options) {
     if (!opt.available) continue;
-    // a handful of rollouts can't price a ~25% election-loss roll: only gamble on snap elections when the majority is already gone
-    if (rolloutDays && opt.id === 'elections' && o.seats >= o.majority) continue;
     const a: Action = { type: 'choose', optionId: opt.id };
     const sc = rolloutDays ? rolloutScore(g, a, rolloutDays, n) : rolloutScore(g, a, 0, 1);
     if (sc > bestScore) { bestScore = sc; best = opt.id; }
@@ -202,6 +200,8 @@ export function greedy(lookaheadDays = 0, name = 'greedy', rollouts = 1): Strate
         let bestMoveGain = 8;
         for (const m of o.moves) {
           if (!m.available || m.ending) continue;
+          // a handful of rollouts can't price a ~25% election-loss roll: only gamble on snap elections when the majority is already gone
+          if (m.id === 'elections' && o.seats >= o.majority) continue;
           const gain = gainOf(g, { type: 'move', moveId: m.id }, horizon, baseline(), rollouts);
           if (gain > bestMoveGain) { bestMoveGain = gain; bestMove = m.id; }
         }
@@ -242,7 +242,7 @@ function cardOnly(name: string, value: (g: Game, c: Game) => number): Strategy {
       let best: string | null = null;
       let bs = -Infinity;
       for (const op of o.event.options) {
-        if (!op.available || op.id === 'elections') continue;
+        if (!op.available) continue;
         const c = g.clone();
         if (!c.act({ type: 'choose', optionId: op.id }).ok) continue;
         const v = (c.state.phase !== 'governing' ? -1000 : 0) + value(g, c);

@@ -136,3 +136,11 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 
 ## #28 Rewritten rogue-MK, polls and defence-minister cards
 - New texts for the rogue backbencher and the defence minister on live TV; the polls card keeps only its "party that does not exist yet" text.
+
+## #29 Two options per card
+- Every crisis card has exactly two remedies, ← and → (for example, the angry card offers "deliver at a premium" and "refuse"). Vertical swipes and ↑/↓ keys do nothing.
+- Under the card: **Ignore**, and **💥 Start a war** when a war can start (governing, tension, no war, no cooldown).
+- Early elections moved from the swipe down to a drawer move (`move elections`).
+- "Buy time" removed (option, config `buyTimeDays`, strings).
+- "VAT off cottage cheese" is no longer offered on cards; it stays as a move with its cooldown.
+- **Breaking for bots / text protocol**: options have `dir` left / right / ignore only; `up`, `down`, `3`, `4` are gone; `choose elections` → `move elections`.

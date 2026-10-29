@@ -27,7 +27,7 @@ describe('promises and trust', () => {
     expect(shas.trust.state).toBe('neutral');
     expect(g.state.stats.promisesKept).toBe(1);
   });
-  it('angry reminder: buy time works once, deliver at a premium clears it', () => {
+  it('angry reminder: deliver at a premium or refuse; deliver clears it', () => {
     // isolate the mechanic: no random crises; pass the budget when it nags
     const g = createGame({ seed: 8, config: { eventIntervalDays: 100000, eventJitterDays: 0, clusterChance: 0 } });
     const c = g.state.config;
@@ -43,10 +43,7 @@ describe('promises and trust', () => {
     };
     waitAngry();
     expect(g.observe().event!.text).toMatch(/^You promised a draft exemption\./); // the card speaks about this very promise
-    expect(g.act({ type: 'choose', optionId: 'buytime' }).ok).toBe(true);
-    expect(shas().trust.state).toBe('believing');
-    waitAngry();
-    expect(g.observe().event!.options.find((o) => o.id === 'buytime')).toBeUndefined(); // spent: dropped from the card
+    expect(g.observe().event!.options.filter((o) => o.dir !== 'ignore').map((o) => o.id)).toEqual(['deliverpremium', 'refuse']);
     expect(g.act({ type: 'choose', optionId: 'left' }).ok).toBe(true); // deliver at a premium
     expect(shas().trust.state).toBe('neutral');
     expect(g.state.stats.promisesKept).toBe(1);
@@ -58,15 +55,11 @@ describe('promises and trust', () => {
 });
 
 describe('promise-or-do remedies', () => {
-  it('Promise a settlement: far right believes, centrists drop now; Build delivers', () => {
+  it('Promise a settlement: far right believes; the card\'s Build delivers it', () => {
     const g = createGame({ seed: 3 });
-    const sat = (id: string) => g.state.parties.find((p) => p.id === id)!.satisfaction;
-    const ya0 = sat('yeshatid');
-    g.state.event = { id: 'leftist', subject: 'otzma', firedAt: 0, leftDays: 20 };
-    expect(g.act({ type: 'choose', optionId: 'promsettle' }).ok).toBe(true);
+    expect(g.act({ type: 'promise', partyId: 'otzma', promiseId: 'settlement' }).ok).toBe(true);
     const otzma = g.state.parties.find((p) => p.id === 'otzma')!;
     expect(otzma.trust).toMatchObject({ state: 'believing', promiseId: 'settlement' });
-    expect(sat('yeshatid')).toBeLessThan(ya0);
     g.state.event = { id: 'leftist', subject: 'otzma', firedAt: g.state.day, leftDays: 20 };
     expect(g.act({ type: 'choose', optionId: 'settle' }).ok).toBe(true);
     expect(otzma.trust.state).toBe('neutral');

@@ -1,7 +1,7 @@
 // Swipe gesture for the crisis card: drag → preview the side, release past the
 // threshold → fly off and choose, otherwise snap back. Pointer events cover
 // touch + mouse; arrow keys / edge buttons call flyThenChoose directly.
-export type Dir = 'left' | 'right' | 'up' | 'down';
+export type Dir = 'left' | 'right';
 
 interface Opts {
   root: HTMLElement;
@@ -14,11 +14,11 @@ interface Opts {
 }
 
 const TH_X = 110;
-const TH_Y = 90;
 
+// horizontal only: a mostly vertical drag never chooses
 function dirOf(dx: number, dy: number): { dir: Dir; strength: number } {
-  if (Math.abs(dx) >= Math.abs(dy)) return { dir: dx < 0 ? 'left' : 'right', strength: Math.abs(dx) / TH_X };
-  return { dir: dy < 0 ? 'up' : 'down', strength: Math.abs(dy) / TH_Y };
+  const strength = Math.abs(dx) >= Math.abs(dy) ? Math.abs(dx) / TH_X : 0;
+  return { dir: dx < 0 ? 'left' : 'right', strength };
 }
 
 export function initSwipe(o: Opts) {
@@ -41,7 +41,7 @@ export function initSwipe(o: Opts) {
     if (!el || o.reduceMotion) { o.onChoose(d); return; }
     busy = true;
     o.onPreview(d, 1);
-    const far = { left: [-600, 40], right: [600, 40], up: [0, -700], down: [0, 700] }[d];
+    const far = { left: [-600, 40], right: [600, 40] }[d];
     setT(el, far[0], far[1], true);
     el.style.opacity = '0';
     window.setTimeout(() => { busy = false; o.onChoose(d); }, 180);
