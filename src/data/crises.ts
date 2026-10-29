@@ -251,7 +251,8 @@ export const CRISES: CrisisDef[] = [
     remedies: ['saudi', 'attackad', 'deepstate'],
     ignore: { fiscal: -8, approval: -3 } },
   { id: 'budget', weight: 0.6, repeats: true,
-    remedies: ['funds', 'exempt'],
+    // a ministry always works, so the budget can always pass
+    remedies: ['ministry', 'funds', 'exempt'],
     extra: { funds: { special: 'passBudget' }, exempt: { special: 'passBudget' }, ministry: { special: 'passBudget' } },
     ignore: { approval: -2, fiscal: -5 } },
   // --- family

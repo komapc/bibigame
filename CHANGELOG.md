@@ -161,3 +161,7 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - A spent once-only remedy (beepers, Fordow, Saudi, Nobel) no longer leaves a card with Ignore only: the next remedy in the card's list takes its side.
 - The angry card no longer mentions "buy time".
 - Balance harness: `always-left` and `always-right` strategies.
+
+## #35 Budget can always pass; meters recover faster
+- The budget card's first option is a ministry (always available). A permanent law already passed counts as spent, so a backup remedy takes its side. Before, an empty treasury plus a passed exemption left no way to pass the budget.
+- `meterRegression` 0.002 → 0.004: street, US and fiscal recover twice as fast. Smart play pays again (see docs/balance.md, round 9).

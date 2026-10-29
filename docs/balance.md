@@ -318,3 +318,29 @@ hud-aware 43% → 46%, inside the band, with no extra tuning. Indictments almost
 bots (15 → 1 for hud-aware), because pausing the trial now actually stops it. Losses move to the voters.
 Trial-aware falls (20% → 11%) since its trial-only scoring no longer needs to fight the pause.
 The card bots never use moves, so the two election levers are not measured here; they can only help.
+
+## Round 9 (2026-10-29): two options per card, budget fix, faster meter recovery
+
+After #29 (two options per card) smart play barely beat random: greedy 2.7 years vs random 2.1.
+Two causes:
+
+- **Budget**: the budget card offered coalition funds (unavailable on an empty treasury) and the draft
+  exemption (gone once passed). Greedy failed the budget in 27 of 30 games, which meant automatic
+  elections on 1 April. Fix: a ministry is the first option (always available); a permanent law already
+  passed counts as spent, so the next remedy in the list takes its side.
+- **Death spiral**: every remedy costs street or fiscal, and `meterRegression` 0.002 brought them back
+  too slowly (about a year to half way). Greedy's street fell 46 → 5 and fiscal 28 → 9 in three years,
+  dragging the approval target from 35 to 15; poll collapse ended the game.
+  `meterRegression` 0.002 → **0.004**.
+
+Seeds 1..30, cap 12 game years (term reached / median years as PM):
+
+| strategy | before (budget fixed only) | 0.004 (chosen) | 0.006 |
+|---|---|---|---|
+| random | 0% / 2.0 | 0% / 2.3 | 0% / 2.4 |
+| always-right | 10% / 2.8 | 27% / 3.3 | 27% / 3.5 |
+| greedy | 7% / 3.2 | 43% / 3.6 | 70% / 4.2 |
+| lookahead | 30% / 3.5 | 53% / 4.3 | 77% / 4.3 |
+
+0.006 makes the term too easy for a careful player; 0.004 keeps clear steps between random, one-side,
+greedy and lookahead.

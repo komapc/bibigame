@@ -31,3 +31,16 @@ describe('backup remedies', () => {
     expect(ids).toEqual(['fordow', 'cartoonbomb']);
   });
 });
+
+describe('the budget can always pass', () => {
+  it('with an empty treasury and the exemption already law, a ministry still passes it', () => {
+    const g = createGame({ seed: 3 });
+    const s = g.state;
+    s.fiscal = 0;
+    s.lawsPassed.push('exempt');
+    s.event = { id: 'budget', subject: null, firedAt: s.day, leftDays: 10 };
+    const opts = g.observe().event!.options.filter((o) => o.dir !== 'ignore');
+    expect(opts.map((o) => o.id)).toEqual(['ministry', 'funds']);
+    expect(opts[0].available).toBe(true);
+  });
+});
