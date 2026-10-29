@@ -115,3 +115,11 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - A paused trial is frozen: no drift and no new charges until the pause ends; the pause is shown.
 - Opposition cards (scandal in the government, a wavering MK, a protest) chip at the rival government; no early elections from the opposition.
 - Balance round 8.
+
+## #24 Calmer main screen + blind-playtest fixes
+- Header: one compact row (date, ⚖ trial x/100 once the trial runs, ? / sound / pause), seats and approval in big numbers, a thin seat bar and timeline, and one status line: the next event, or a single tappable warning ("⚠ RZ may leave → 56 seats" opens Parties).
+- Removed: the party chip row, the separate warnings line, the title badge (current and next title are now in the Log tab) and the spin-doctor tips (`advice()` stays for bots and text mode).
+- The card fills the remaining height. Nothing overflows the screen width any more (toasts, options and lines wrap).
+- Trial chips read "Trial slower" / "Trial faster". In opposition the header shows the rival government's stability, and The Daily Coalition says "What now?" with the opposition moves.
+- The clock stops while the sheet is open. Unavailable options shake and say why. Invite reports who joined or why they refused. A promise needs a confirm step that shows the boost and the due date. No text selection in the game area.
+- API: read-only `Preview.meter` (`'trial'`).

@@ -115,7 +115,8 @@ export interface Observation {
   timeline: Timeline;
 }
 
-export interface Preview { label: string; up: boolean }
+/** `meter: 'trial'` marks a trial-pressure chip (up = good = the trial slows down) so the UI can word it */
+export interface Preview { label: string; up: boolean; meter?: string }
 
 export interface OutcomeView {
   seq: number; day: number; kind: Outcome['kind'];
@@ -383,7 +384,7 @@ export function preview(s: GameState, optionId: string): Preview[] {
   }
   for (const e of effects) {
     for (const k of ['approval', 'street', 'us', 'fiscal'] as const) if (e[k]) out.push({ label: t(`fx.${k}`), up: e[k]! > 0 });
-    if (e.trial) out.push({ label: t('fx.trial'), up: e.trial < 0 });
+    if (e.trial) out.push({ label: t('fx.trial'), up: e.trial < 0, meter: 'trial' });
     if (e.position) out.push({ label: t(e.position > 0 ? 'fx.right' : 'fx.left'), up: true });
     for (const x of e.sat ?? []) out.push({ label: tagLabel(s, x.target, subject), up: x.delta > 0 });
     if (e.pauseTrialDays) out.push({ label: t('fx.pause'), up: true });
