@@ -171,3 +171,12 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 ## #35 Budget can always pass; meters recover faster
 - The budget card's first option is a ministry (always available). A permanent law already passed counts as spent, so a backup remedy takes its side. Before, an empty treasury plus a passed exemption left no way to pass the budget.
 - `meterRegression` 0.002 → 0.004: street, US and fiscal recover twice as fast. Smart play pays again (see docs/balance.md, round 9).
+
+## #36 Context and reasons (second blind playtest)
+- Cards only where they make sense: the High Court strikes down a law only after some law passed; the defence minister argues about the reform only once it is passed or promised; "the President hasn't called" not while Trump is 😍; a paused trial gets no new cases or testimony; US midterms only in Oct–Nov of a midterm year; after a war the deal card offers no ceasefire (backups take its side).
+- Usable options come first on a card (e.g. under an ICC warrant the Trump card falls back to non-travel answers, incl. Channel 14).
+- Every rejection says why: which cooldown and for how long, or the reason an option/move is unavailable; a refused invitation says the likely reason in text mode too.
+- Previews match the result: one arrow per meter summed over all parts (incl. a war starting/ending), weakened by recent use (shown as "Used recently: weaker"); primetime backfires and an exposed spoiler are marked "did not work".
+- Ministries: the PM party keeps at least `pmMinMinistries` (3); when nothing is left to hand out a partner gets a deputy-minister post. Treasury empty → no "deliver at a premium".
+- A wartime partner with mood ≥ `wartimeStayMood` (65) stays after the war; the join message says so.
+- "Washington" is stronger than "Congress" (it is a gamble). Election messages say "seats". Laws/promises hidden in the opposition text view. Text fixes: Yair's title, Iran's third variant.

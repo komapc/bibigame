@@ -1,6 +1,6 @@
 // DOM layer. Reads Observation, sends Actions. No game logic here.
 import './style.css';
-import { createGame, promisesFor, type Game, type Observation, type OutcomeView, type Preview } from '../api/game.ts';
+import { createGame, errorText, promisesFor, type Game, type Observation, type OutcomeView, type Preview } from '../api/game.ts';
 import { promiseById } from '../data/promises.ts';
 import type { Action } from '../engine/types.ts';
 import { titleBoard } from '../api/text.ts';
@@ -873,7 +873,7 @@ function fileEdition(ed: ReturnType<typeof fridayEdition>, date: string) {
 
 function doAct(a: Action) {
   const r = game.act(a);
-  if (!r.ok && r.error) toast(t(r.error));
+  if (!r.ok && r.error) toast(errorText(r));
   render();
   return r;
 }
@@ -885,7 +885,7 @@ function invite(id: string) {
   if (!p) return;
   const seq = game.state.outcomeSeq;
   const r = game.act({ type: 'invite', partyId: id });
-  if (!r.ok) { if (r.error) toast(t(r.error)); render(); return; }
+  if (!r.ok) { if (r.error) toast(errorText(r)); render(); return; }
   const after = game.observe(0).parties.find((x) => x.id === id);
   if (after?.inCoalition) { toast(`✅ ${t('ui.inviteYes', { party: p.name })}`); render(); return; }
   const why = !p.willSitWithBibi ? 'bibi' : Math.abs(p.position - before.govPosition) > 4 ? 'far'
