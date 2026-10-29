@@ -28,6 +28,8 @@ export interface Config {
   uiCardClockScale: number;
   /** UI: if true the clock STOPS while a decision card is open (no countdown); overrides uiCardClockScale */
   pauseOnDecision: boolean;
+  /** UI: if true the clock stops on the news screen after a card until the player taps Next */
+  pauseOnNews: boolean;
   /** UI: clock speed multiplier when no card is pending (fast-forward between events) */
   uiIdleClockScale: number;
   /** UI: the clock runs this many times faster during the Knesset summer recess */
@@ -233,6 +235,7 @@ export const DEFAULT_CONFIG: Config = {
   uiUrgentAnswerMs: 8000,
   uiCardClockScale: 0.25,
   pauseOnDecision: true,
+  pauseOnNews: true,
   uiIdleClockScale: 2.5,
   recessClockMult: 2,
   recessStartMonth: 7,
