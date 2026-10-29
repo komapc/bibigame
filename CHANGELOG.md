@@ -133,3 +133,6 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 
 ## #27 Fewer filler cards
 - Removed the Eurovision, Shabbat-elevator, recess-junket and beach-selfie news, and the extra Trump card texts.
+
+## #28 Rewritten rogue-MK, polls and defence-minister cards
+- New texts for the rogue backbencher and the defence minister on live TV; the polls card keeps only its "party that does not exist yet" text.
