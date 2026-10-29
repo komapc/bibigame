@@ -395,6 +395,7 @@ export const he: Record<string, string> = {
   'ui.mayLeave': 'עלולים לפרוש',
   'ui.without': 'בלי {party}: {seats}',
   'ui.ignore': 'להתעלם',
+  'ui.next': 'הבא',
   'ui.ignoreFx': 'מסלים: {fx}',
   'ui.tutorial': 'החלק את הכרטיס (או השתמש בחצים) כדי לבחור. שים עין על המדדים ועל מצב הרוח של המפלגות.',
   'ui.resultTap': 'הקש כדי להמשיך',

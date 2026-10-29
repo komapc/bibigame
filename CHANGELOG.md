@@ -150,5 +150,7 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - Option labels are plain actions ("Judicial reform, part N" → "Pass a law limiting the court", "Coalition funds" → "Give them coalition funds").
 - The punch line is gone from the Trump card.
 
+## #31 News screen waits for Next
+- After a card the clock stops on the news screen until the player taps **Next ▶** (or Space / Enter); moves can be made meanwhile. Config `pauseOnNews` (default on).
 ## #32 Reshuffle: two ready-made options
 - The ministries panel shows two ready-made reshuffles (the unhappiest partners each get a ministry from whoever holds the most above their fair share) instead of a dropdown per ministry. `observe().reshuffles`; `giveMinistry` is unchanged for bots and text mode.

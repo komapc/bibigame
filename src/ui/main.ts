@@ -40,6 +40,9 @@ const seedType = daily ? 'daily' : query.has('seed') && Number.isFinite(urlSeed)
 const randomSeed = () => Math.floor(Math.random() * 1e9);
 let game: Game = createGame({ seed: daily ? dailySeed(daily) : seedType === 'fixed' ? urlSeed : randomSeed() });
 let paused = false;
+/** the news screen between cards holds the clock until the player taps Next (config.pauseOnNews) */
+let newsHold = true;
+let hadEvent = false;
 let last = performance.now();
 let lastTitles = 0;
 const keys: Record<string, string> = {};
@@ -311,7 +314,7 @@ function arrivalHtml(a: OutcomeView | null): string {
 
 function renderStage(o: Observation) {
   const ev = o.event;
-  const key = ev ? `${ev.id}|${game.state.event?.firedAt}|${ev.options.map((x) => x.available).join()}|${canWar(o)}` : `none|${newsKey(o)}`;
+  const key = ev ? `${ev.id}|${game.state.event?.firedAt}|${ev.options.map((x) => x.available).join()}|${canWar(o)}` : `none|${newsKey(o)}|${holding()}`;
   if (swipe.dragging()) return;
   const kind = ev ? `card:${game.state.event?.firedAt}` : 'news';
   region('stage', key, () => {
@@ -381,6 +384,8 @@ function newsKey(o: Observation) {
 
 let lastStageKind = '';
 
+const holding = () => newsHold && game.state.config.pauseOnNews && !game.state.event && !game.over;
+
 function newsHtml(o: Observation, enter: string): string {
   const tl = o.timeline;
   const next = tl.upcoming.find((m) => m.kind !== 'goal');
@@ -410,6 +415,7 @@ function newsHtml(o: Observation, enter: string): string {
       <button data-act="open" data-sec="laws" ${o.cooldowns.law ? 'disabled' : ''}>📜 ${t('ui.qLaw')}</button>
       <button data-act="war" class="warq" ${warOk ? '' : 'disabled'}>⚔ ${t('ui.war')}</button>
     </div>` : ''}
+    ${holding() ? `<button class="primary nextbtn" data-act="next">${t('ui.next')} ▶</button>` : ''}
   </div>`;
 }
 
@@ -901,6 +907,7 @@ function restart(day: string | null = null) {
   clearResult();
   toastQ.length = 0;
   cardKey = ''; overTracked = false; edition = null; nextEdition = 90;
+  newsHold = true; hadEvent = false;
   editions.length = 0;
   $('editions').innerHTML = '';
   pendingPromise = null;
@@ -933,6 +940,7 @@ app.addEventListener('click', (e) => {
     location.href = u.toString();
   }
   else if (d.act === 'war') doAct({ type: 'startWar' });
+  else if (d.act === 'next') { newsHold = false; render(); }
   else if (d.act === 'restart') restart();
   else if (d.act === 'daily') restart(todayKey());
   else if (d.share) doShare(d.share);
@@ -974,6 +982,7 @@ window.addEventListener('keydown', (e) => {
   const dir = ({ ArrowLeft: 'left', ArrowRight: 'right' } as Record<string, string>)[e.key];
   if (dir && game.state.event) { e.preventDefault(); swipe.flyThenChoose(dir); }
   else if ((e.key === '0' || e.key === ' ') && game.state.event && game.observe(0).event?.options.some((x) => x.dir === 'ignore')) { e.preventDefault(); choose('ignore'); }
+  else if ((e.key === ' ' || e.key === 'Enter') && holding() && tag !== 'BUTTON') { e.preventDefault(); newsHold = false; render(); }
   else if (e.key === ' ' && tag !== 'BUTTON') { e.preventDefault(); $('pause').click(); }
 });
 
@@ -988,7 +997,9 @@ function frame(now: number) {
   last = now;
   if (!paused && !document.hidden && !game.over && layer !== 'intro' && layer !== 'sheet') {
     const c = game.state.config;
-    const scale = game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : c.uiIdleClockScale;
+    if (hadEvent && !game.state.event) newsHold = true; // a card was just answered: read the news first
+    hadEvent = !!game.state.event;
+    const scale = game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : holding() ? 0 : c.uiIdleClockScale;
     if (scale > 0) game.advance(dt * scale * (game.state.recess && !game.state.event ? c.recessClockMult : 1));
   }
   render();
