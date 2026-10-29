@@ -736,6 +736,27 @@ export function ministryFor(s: GameState, to: Party): Ministry | undefined {
   return from && [...s.ministries].reverse().find((m) => m.holder === from.id && m.id !== 'defense');
 }
 
+/** up to two ready-made reshuffles: the unhappiest partners each get a ministry from whoever holds
+ *  the most above their fair share (the PM party first on a tie: it minds the least) */
+export function reshuffleOffers(s: GameState): { ministryId: string; from: string; to: string }[] {
+  const coal = s.parties.filter((p) => p.inCoalition && p.seats > 0);
+  const counts = ministryCounts(s.ministries);
+  const over = (id: string) => {
+    const p = coal.find((x) => x.id === id);
+    return p ? (counts[id] ?? 0) - fairShare(p, s.parties, s.ministries.length) + (id === s.base.pmParty ? 0.5 : 0) : -Infinity;
+  };
+  const takers = coal.filter((p) => p.id !== s.base.pmParty).sort((a, b) => a.satisfaction - b.satisfaction);
+  const out: { ministryId: string; from: string; to: string }[] = [];
+  for (const to of takers) {
+    const m = s.ministries
+      .filter((x) => x.holder && x.holder !== to.id && !out.some((o) => o.ministryId === x.id))
+      .sort((a, b) => over(b.holder!) - over(a.holder!))[0];
+    if (m) out.push({ ministryId: m.id, from: m.holder!, to: to.id });
+    if (out.length === 2) break;
+  }
+  return out;
+}
+
 function transferMinistry(s: GameState, ministryId: string, toId: string) {
   const m = s.ministries.find((x) => x.id === ministryId)!;
   const from = m.holder ? partyById(s, m.holder) : undefined;

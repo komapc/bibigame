@@ -149,3 +149,6 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - Card titles say what happened (e.g. "High Court strikes back" → "High Court strikes down a law", "Iran fires" → "Missile barrage from Iran"), in EN/RU/HE.
 - Option labels are plain actions ("Judicial reform, part N" → "Pass a law limiting the court", "Coalition funds" → "Give them coalition funds").
 - The punch line is gone from the Trump card.
+
+## #32 Reshuffle: two ready-made options
+- The ministries panel shows two ready-made reshuffles (the unhappiest partners each get a ministry from whoever holds the most above their fair share) instead of a dropdown per ministry. `observe().reshuffles`; `giveMinistry` is unchanged for bots and text mode.

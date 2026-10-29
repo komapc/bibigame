@@ -594,14 +594,18 @@ function promiseConfirm(o: Observation, p: Observation['parties'][number], id: s
   </div>`;
 }
 
+// two ready-made reshuffles instead of a table of dropdowns
 function renderMinistries(o: Observation) {
-  const coal = o.parties.filter((p) => p.inCoalition && p.seats > 0);
   const ready = o.cooldowns.ministry === 0 && o.phase === 'governing';
-  region('ministries', o.ministries.map((m) => m.holder).join() + coal.map((p) => p.id).join() + ready, () =>
+  const c = game.state.config;
+  const short = (id: string) => { const p = o.parties.find((x) => x.id === id); return p?.short || p?.name || id; };
+  region('ministries', o.reshuffles.map((r) => `${r.ministryId}>${r.to}`).join() + ready, () =>
     `<p class="sub">${ready ? t('ui.ready') : t('ui.cooldown', { days: o.cooldowns.ministry })}</p>` +
-    o.ministries.map((m) => `<label class="min"><span>${esc(m.name)}</span>
-      <select data-ministry="${m.id}" ${ready ? '' : 'disabled'}>${coal.map((p) => `<option value="${p.id}" ${p.id === m.holder ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
-      ${m.holder && !coal.some((p) => p.id === m.holder) ? `<option selected>${esc(partyName(o, m.holder))}</option>` : ''}</select></label>`).join(''));
+    o.reshuffles.map((r) => {
+      const loss = Math.round(r.from === game.state.base.pmParty ? c.ministryLoss / 3 : c.ministryLoss);
+      return `<button class="reshuffle" data-reshuffle="${r.ministryId}" data-to="${r.to}" ${ready ? '' : 'disabled'}>🏛 ${esc(r.ministry)}: ${esc(short(r.from))} → ${esc(short(r.to))}
+        <span class="fx mini"><span class="up">${esc(short(r.to))} ${signed(Math.round(c.ministryGain))}</span><span class="down">${esc(short(r.from))} ${signed(-loss)}</span></span></button>`;
+    }).join(''));
 }
 
 function renderLaws(o: Observation) {
@@ -934,6 +938,7 @@ app.addEventListener('click', (e) => {
   else if (d.share) doShare(d.share);
   else if (d.act === 'sound') { setSound(!soundOn()); if (soundOn()) play('cash'); render(); }
   else if (d.law) doAct({ type: 'passLaw', lawId: d.law });
+  else if (d.reshuffle && d.to) { doAct({ type: 'giveMinistry', ministryId: d.reshuffle, partyId: d.to }); if (layer === 'sheet') closeLayer(); }
   else if (d.move) {
     const m = game.observe(0).moves.find((x) => x.id === d.move);
     if (m?.ending && !window.confirm(`${m.label}\n\n${m.desc}`)) return;
@@ -959,11 +964,6 @@ app.addEventListener('change', (e) => {
   const s = e.target as HTMLSelectElement;
   // no promise on the first (maybe accidental) pick: show what it costs and when it is due, then Confirm
   if (s.dataset.promise && s.value) { pendingPromise = { party: s.dataset.promise, promise: s.value }; render(); }
-  else if (s.dataset.ministry) {
-    const holder = game.state.ministries.find((m) => m.id === s.dataset.ministry)?.holder;
-    if (s.value !== holder) doAct({ type: 'giveMinistry', ministryId: s.dataset.ministry, partyId: s.value });
-    keys.ministries = '';
-  }
 });
 
 window.addEventListener('keydown', (e) => {
