@@ -302,12 +302,8 @@ export const CRISES: CrisisDef[] = [
     remedies: ['dc', 'congress', 'lifeitself'],
     ignore: { us: -8, approval: -1 } },
   // ---- good news (no card: a flash + headline; absurd, rare)
-  { id: 'eurovision', weight: 0.35, goodNews: true, remedies: [], ignore: {},
-    onFire: { approval: 4, street: 3, sat: [{ target: 'pm', delta: 3 }] } },
   { id: 'gasfield', weight: 0.25, goodNews: true, remedies: [], ignore: {},
     onFire: { fiscal: 12, us: 3, sat: [{ target: 'coalition', delta: 3 }] } },
-  { id: 'elevator', weight: 0.25, goodNews: true, remedies: [], ignore: {},
-    onFire: { sat: [{ target: 'haredi', delta: 10 }], approval: 1 } },
   { id: 'exit', weight: 0.25, goodNews: true, remedies: [], ignore: {},
     onFire: { fiscal: 8, approval: 2 } },
   { id: 'hummus', weight: 0.2, goodNews: true, remedies: [], ignore: {},
@@ -320,10 +316,6 @@ export const CRISES: CrisisDef[] = [
   { id: 'oppprotest', weight: 0.9, requires: { opposition: true },
     remedies: ['oppjoin', 'oppcounter'], ignore: { approval: -2 } },
   // --- wildcards: nobody's fault, no card (badNews = shown as bad news)
-  { id: 'junket', weight: 0.6, goodNews: true, badNews: true, requires: { recess: true }, remedies: [], ignore: {},
-    onFire: { approval: -2, street: -2 } },
-  { id: 'beachselfie', weight: 0.6, goodNews: true, badNews: true, requires: { recess: true }, remedies: [], ignore: {},
-    onFire: { approval: -3, sat: [{ target: 'coalition', delta: -3 }] } },
   { id: 'mkresigns', weight: 0.12, goodNews: true, badNews: true, remedies: [], ignore: {},
     onFire: { special: 'defector', approval: -1 } },
   { id: 'courtpres', weight: 0.15, goodNews: true, remedies: [], ignore: {},

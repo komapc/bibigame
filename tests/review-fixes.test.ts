@@ -45,8 +45,8 @@ describe('review fixes (2026-10-28)', () => {
     const s = g.state;
     s.lastFired.kaplan = s.day;
     expect(crisisWeight(s, crisisById.get('kaplan')!)).toBe(0);
-    s.lastFired.eurovision = s.day - 200;
-    expect(crisisWeight(s, crisisById.get('eurovision')!)).toBe(0);
+    s.lastFired.gasfield = s.day - 200;
+    expect(crisisWeight(s, crisisById.get('gasfield')!)).toBe(0);
     s.street = 0;
     s.lastFired.kaplan = -999;
     expect(crisisWeight(s, crisisById.get('kaplan')!)).toBeLessThanOrEqual(crisisById.get('kaplan')!.weight * 2 + 1e-9);

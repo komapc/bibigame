@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createGame } from '../src/api/game.ts';
 import { runText } from '../src/api/text.ts';
-import { CRISES, crisisById, remedyById } from '../src/data/crises.ts';
-import { approvalTarget, crisisWeight, remedyAvailable } from '../src/engine/game.ts';
+import { crisisById, remedyById } from '../src/data/crises.ts';
+import { approvalTarget, crisisWeight } from '../src/engine/game.ts';
 
 const quiet = { eventIntervalDays: 1e9, eventJitterDays: 0, clusterChance: 0, startDate: '2026-05-01', randomStart: false, outcomeNoise: 0 };
 
@@ -36,10 +36,10 @@ describe('playtest fixes', () => {
   });
   it('repeat cards get different text; the rogue backbencher counts real seats', () => {
     const g = createGame({ seed: 1, config: quiet });
-    g.state.event = { id: 'trump', subject: null, firedAt: 0, leftDays: 10 };
-    g.state.firedCount = { trump: 1 };
+    g.state.event = { id: 'iran', subject: null, firedAt: 0, leftDays: 10 };
+    g.state.firedCount = { iran: 1 };
     const a = g.observe().event!.text;
-    g.state.firedCount = { trump: 2 };
+    g.state.firedCount = { iran: 2 };
     expect(g.observe().event!.text).not.toBe(a);
     g.state.event = { id: 'rebel', subject: 'likud', firedAt: 0, leftDays: 10 };
     expect(g.observe().event!.text).toContain(`${g.observe().seats - 1} seats`);
@@ -82,15 +82,5 @@ describe('playtest fixes', () => {
     g.act({ type: 'move', moveId: 'gevalt' });
     expect(g.state.campaignPollSeats).toBe(poll + g.state.config.gevaltSeats);
     expect(runText(g, 'look').reply).toMatch(/tricks applied: gevalt/);
-  });
-  it('recess has a little bad news too', () => {
-    const bad = CRISES.filter((c) => c.requires?.recess && c.badNews);
-    expect(bad.length).toBeGreaterThanOrEqual(2);
-    const g = createGame({ seed: 1, config: quiet });
-    g.state.recess = true;
-    expect(bad.every((c) => crisisWeight(g.state, c) > 0)).toBe(true);
-    g.state.recess = false;
-    expect(bad.every((c) => crisisWeight(g.state, c) === 0)).toBe(true);
-    expect(remedyAvailable(g.state, 'ownpoll')).toBe(true);
   });
 });
