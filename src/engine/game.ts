@@ -373,9 +373,11 @@ export function remedyAvailable(s: GameState, id: string): boolean {
   return true;
 }
 
-/** a one-shot option already spent (used once per game): drop it from the card instead of greying it out */
+/** a one-shot option already spent (used once per game, or a permanent law already passed):
+ *  drop it from the card instead of greying it out, so a backup can take its side */
 function remedySpent(s: GameState, id: string): boolean {
-  return !!remedyById.get(id)?.once && s.usedOnce.includes(id);
+  const r = remedyById.get(id);
+  return !!r && ((!!r.once && s.usedOnce.includes(id)) || (!!r.permanent && s.lawsPassed.includes(id)));
 }
 
 /** slow killers get a log line when they cross a step (cause → effect for things that drift) */

@@ -142,6 +142,7 @@ export interface Config {
   /** approval target drops this much per year as PM (incumbency fatigue) */
   fatiguePerYear: number;
   trialGrowthPerDay: number;
+  /** street / US / fiscal pull back toward their norm per day (0.004 ≈ half way in ~6 months) */
   meterRegression: number;
   /** seats the PM party gains per approval point above approvalNeutral at elections */
   approvalSeatFactor: number;
@@ -307,7 +308,7 @@ export const DEFAULT_CONFIG: Config = {
   approvalRegression: 0.01,
   fatiguePerYear: 1.0,
   trialGrowthPerDay: 0.03,
-  meterRegression: 0.002,
+  meterRegression: 0.004,
   approvalSeatFactor: 0.35,
   approvalNeutral: 45,
   electionNoise: 0.12,
