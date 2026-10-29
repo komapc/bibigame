@@ -57,6 +57,6 @@ describe('coalition math', () => {
     expect(g.act({ type: 'giveMinistry', ministryId: 'heritage', partyId: 'shas' }).ok).toBe(true);
     expect(g.state.ministries.find((m) => m.id === 'heritage')!.holder).toBe('shas');
     expect(g.state.parties.find((p) => p.id === 'otzma')!.satisfaction).toBeLessThan(before);
-    expect(g.act({ type: 'giveMinistry', ministryId: 'negev', partyId: 'shas' }).error).toBe('err.cooldown');
+    expect(g.act({ type: 'giveMinistry', ministryId: 'negev', partyId: 'shas' }).error).toBe('err.cooldown.ministry');
   });
 });

@@ -74,6 +74,12 @@ function record(s: GameState, kind: Outcome['kind'], cause: Outcome['cause'], b:
 /** causes of the outcomes being recorded (a risky remedy marks its cause as failed) */
 const causeStack: Outcome['cause'][] = [];
 
+/** the outcome being recorded is a gamble that went wrong (shown as "did not work") */
+function markFailed() {
+  const cause = causeStack[causeStack.length - 1];
+  if (cause) cause.params = { ...cause.params, fail: 1 };
+}
+
 function withOutcome<T>(s: GameState, kind: Outcome['kind'], cause: Outcome['cause'], fn: () => T): T {
   const b = snap(s);
   wrapDepth++;
@@ -336,12 +342,25 @@ export function crisisWeight(s: GameState, c: CrisisDef): number {
   const last = s.lastFired[c.id];
   if (last !== undefined && s.day - last < (c.goodNews ? c0.goodNewsCooldownDays : c0.crisisCooldownDays)) return 0;
   if (req?.notPassed && s.lawsPassed.includes(req.notPassed)) return 0;
+  if (req?.anyLaw && !s.lawsEnacted?.length) return 0;
+  if (req?.lawOrPromise && !s.lawsPassed.includes(req.lawOrPromise)
+    && !s.parties.some((p) => p.trust.promiseId === req.lawOrPromise && (p.trust.state === 'believing' || p.trust.state === 'angry'))) return 0;
   if (req?.recentWar && !s.war.active && s.day - s.lastWarEnd > c0.recentWarDays) return 0;
   // the same card again and again gets old: each earlier firing this game scales the weight down
   let w = c.weight * (1 + (s.pressure[c.id] ?? 0)) * c0.crisisRepeatDecay ** (s.firedCount?.[c.id] ?? 0);
   switch (c.id) {
     case 'kaplan': w *= Math.min(c0.kaplanStreetMaxMult, 1 + Math.max(0, 60 - s.street) / 20); break;
-    case 'case': w *= 0.5 + s.trial / 50; break;
+    // a frozen trial: no new hearings or charges until it thaws (that is what the pause bought)
+    case 'case': w *= s.day < s.trialPausedUntil ? 0 : 0.5 + s.trial / 50; break;
+    case 'testimony': case 'qatargate': if (s.day < s.trialPausedUntil) return 0; break;
+    case 'president': if ((s.trumpMood ?? 0) >= 1) return 0; break;
+    // US midterms: only in the autumn of a midterm year (2026, 2030, …), when they are actually held
+    case 'midterms': {
+      const d = dateOf(s);
+      if (d.getUTCFullYear() % 4 !== 2 || d.getUTCMonth() < 9 || d.getUTCMonth() > 10) return 0;
+      w *= c0.midtermsSeasonMult;
+      break;
+    }
     // "Trump cools off" makes no sense while he is still in love (😍)
     case 'trump': w *= (s.trumpMood ?? 0) >= 1 ? 0 : 1 + Math.max(0, 50 - s.us) / 25; break;
     case 'rebel': w *= 1 + Math.max(0, 60 - pmParty(s).satisfaction) / 20; break;
@@ -367,7 +386,7 @@ export function remedyAvailable(s: GameState, id: string): boolean {
   if (r.permanent && s.lawsPassed.includes(id)) return false;
   if (r.travel && s.day < s.iccUntil) return false;
   if (id === 'war') return !s.war.active && s.war.cooldownDays <= 0;
-  if (id === 'funds' && s.fiscal < s.config.fundsMinFiscal) return false;
+  if ((id === 'funds' || id === 'deliverpremium') && s.fiscal < s.config.fundsMinFiscal) return false;
   if (id === 'fire') return coalition(s).some((p) => p.tags.includes('farright') && ministryCounts(s.ministries)[p.id]);
   if (id === 'newministry') return s.ministries.length < s.base.ministries.length + s.config.newMinistryMax;
   return true;
@@ -377,6 +396,7 @@ export function remedyAvailable(s: GameState, id: string): boolean {
  *  drop it from the card instead of greying it out, so a backup can take its side */
 function remedySpent(s: GameState, id: string): boolean {
   const r = remedyById.get(id);
+  if (id === 'ceasefire' && !s.war.active) return true; // nothing left to end
   return !!r && ((!!r.once && s.usedOnce.includes(id)) || (!!r.permanent && s.lawsPassed.includes(id)));
 }
 
@@ -413,9 +433,15 @@ export function unavailableReason(s: GameState, id: string): { key: string; para
   if (r.once && s.usedOnce.includes(id)) return { key: 'why.once' };
   if (r.permanent && s.lawsPassed.includes(id)) return { key: 'why.passed' };
   if (r.travel && s.day < s.iccUntil) return { key: 'why.icc', params: { days: Math.ceil(s.iccUntil - s.day) } };
-  if (id === 'funds') return { key: 'why.fiscal' };
+  if (id === 'funds' || id === 'deliverpremium') return { key: 'why.fiscal' };
   if (id === 'newministry') return { key: 'why.cap' };
   return { key: 'why.na' };
+}
+
+/** the likeliest reason an invited party said no (ui.inviteWhy.<id>) */
+export function inviteWhy(s: GameState, p: Party): string {
+  return !p.willSitWithBibi ? 'bibi' : Math.abs(p.position - s.govPosition) > 4 ? 'far'
+    : p.satisfaction < 40 ? 'mood' : s.approval < 40 ? 'polls' : 'luck';
 }
 
 /** opposition party an MK can be poached from (the biggest one with 2+ seats) */
@@ -510,6 +536,11 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
       }
       const m = ministryFor(s, to);
       if (m) transferMinistry(s, m.id, to.id);
+      else {
+        // nothing left to hand out without gutting your own party: a deputy-minister post instead
+        to.satisfaction = clamp(to.satisfaction + c.pmPostBoost, 0, 100);
+        log(s, 'log.deputyPost', { party: to.id }, 'info');
+      }
       break;
     }
     case 'fireFarRight': {
@@ -593,6 +624,7 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
     case 'primetime': {
       const d = c.primetimeMin + rngOf(s).next() * (c.primetimeMax - c.primetimeMin);
       s.approval = clamp(s.approval + d, 0, 100);
+      if (d < 0) markFailed();
       log(s, d >= 0 ? 'log.primetimeUp' : 'log.primetimeDown', { n: Math.round(Math.abs(d)) }, d >= 0 ? 'good' : 'bad');
       break;
     }
@@ -619,6 +651,7 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
         s.stats.maxOpenCases = Math.max(s.stats.maxOpenCases, s.openCases.length);
         s.trial = clamp(s.trial + 8, 0, 100);
         s.approval = clamp(s.approval - 3, 0, 100);
+        markFailed();
         log(s, 'log.spoilerExposed', {}, 'bad');
       } else log(s, 'log.spoiler', {}, 'info');
       break;
@@ -661,7 +694,13 @@ export function scaleCosts(e: Effect, k: number): Effect {
   return out;
 }
 
-function dampen(e: Effect, k: number): Effect {
+/** how much of a remedy's good side is left after recent uses (1 = fresh; the preview shows the same) */
+export function fatigueOf(s: GameState, id: string): number {
+  const n = (s.remedyUses?.[id] ?? []).filter((d) => s.day - d <= s.config.remedyFatigueDays).length;
+  return 1 / (1 + n * s.config.remedyFatigue);
+}
+
+export function dampen(e: Effect, k: number): Effect {
   const out: Effect = { ...e };
   for (const key of ['approval', 'street', 'us', 'fiscal'] as const) if ((e[key] ?? 0) > 0) out[key] = e[key]! * k;
   if ((e.trial ?? 0) < 0) out.trial = e.trial! * k;
@@ -675,11 +714,12 @@ function applyMove(s: GameState, moveId: string, subject: string | null, extra?:
   if (!r) return;
   if (r.once && !s.usedOnce.includes(moveId)) s.usedOnce.push(moveId);
   if (r.permanent && !s.lawsPassed.includes(moveId)) s.lawsPassed.push(moveId);
+  if (r.law && !(s.lawsEnacted ??= []).includes(moveId)) s.lawsEnacted.push(moveId);
   if (r.tension) s.tensionUntil = Math.max(s.tensionUntil, s.day + r.tension);
   if (r.promise) makePromise(s, r.promise);
   // diminishing returns: the public (and partners) have seen this trick recently
   const uses = ((s.remedyUses ??= {})[moveId] ??= []).filter((d) => s.day - d <= s.config.remedyFatigueDays);
-  const k = 1 / (1 + uses.length * s.config.remedyFatigue);
+  const k = fatigueOf(s, moveId);
   uses.push(s.day);
   s.remedyUses[moveId] = uses;
   // a gamble: roll the shown odds; on a miss the fail effect replaces the effect
@@ -690,8 +730,7 @@ function applyMove(s: GameState, moveId: string, subject: string | null, extra?:
     if (!ok) {
       failed = true;
       eff = r.risk.fail;
-      const cause = causeStack[causeStack.length - 1];
-      if (cause) cause.params = { ...cause.params, fail: 1 };
+      markFailed();
       log(s, 'log.riskFailed', { remedy: moveId }, 'bad');
     }
   }
@@ -738,7 +777,8 @@ export function ministryFor(s: GameState, to: Party): Ministry | undefined {
   if (free) return free;
   if (to.id === s.base.pmParty) return undefined;
   const pm = s.base.pmParty;
-  const own = [...s.ministries].reverse().find((m) => m.holder === pm && m.id !== 'defense');
+  const counts0 = ministryCounts(s.ministries);
+  const own = (counts0[pm] ?? 0) > s.config.pmMinMinistries ? [...s.ministries].reverse().find((m) => m.holder === pm && m.id !== 'defense') : undefined;
   if (own) return own;
   const counts = ministryCounts(s.ministries);
   const from = coalition(s).filter((x) => x.id !== to.id && x.id !== pm && (counts[x.id] ?? 0) > 1)
@@ -756,10 +796,12 @@ export function reshuffleOffers(s: GameState): { ministryId: string; from: strin
     return p ? (counts[id] ?? 0) - fairShare(p, s.parties, s.ministries.length) + (id === s.base.pmParty ? 0.5 : 0) : -Infinity;
   };
   const takers = coal.filter((p) => p.id !== s.base.pmParty).sort((a, b) => a.satisfaction - b.satisfaction);
+  // the PM party keeps its core ministries
+  const pmLeft = () => (counts[s.base.pmParty] ?? 0) - out.filter((o) => o.from === s.base.pmParty).length;
   const out: { ministryId: string; from: string; to: string }[] = [];
   for (const to of takers) {
     const m = s.ministries
-      .filter((x) => x.holder && x.holder !== to.id && !out.some((o) => o.ministryId === x.id))
+      .filter((x) => x.holder && x.holder !== to.id && !out.some((o) => o.ministryId === x.id) && !(x.holder === s.base.pmParty && pmLeft() <= s.config.pmMinMinistries))
       .sort((a, b) => over(b.holder!) - over(a.holder!))[0];
     if (m) out.push({ ministryId: m.id, from: m.holder!, to: to.id });
     if (out.length === 2) break;
@@ -795,7 +837,7 @@ function startWar(s: GameState) {
       p.inCoalition = true;
       p.wartime = true;
       p.satisfaction = 50;
-      log(s, 'log.wartimeJoin', { party: p.id }, 'good');
+      log(s, 'log.wartimeJoin', { party: p.id, n: s.config.wartimeStayMood }, 'good');
     }
   }
   log(s, 'log.war', {}, 'event');
@@ -810,7 +852,9 @@ function endWar(s: GameState) {
   for (const p of s.parties) {
     if (p.wartime) {
       p.wartime = false;
-      leave(s, p, 'log.wartimeLeave');
+      // a happy emergency partner stays on as a regular one
+      if (p.satisfaction >= s.config.wartimeStayMood) log(s, 'log.wartimeStays', { party: p.id }, 'good');
+      else leave(s, p, 'log.wartimeLeave');
     }
   }
   log(s, 'log.warEnd', {}, 'info');
@@ -855,7 +899,7 @@ function callElections(s: GameState, reason: string) {
   const base = s.base.parties.find((p) => p.id === s.base.pmParty)!;
   s.campaignPollSeats = Math.round(base.seats + pmBonus(s));
   log(s, 'log.elections', { reason, n: s.elections, poll: s.campaignPollSeats }, 'bad');
-  if (b) record(s, 'elections', { key: `out.elections.${reason}`, params: { poll: s.campaignPollSeats } }, b);
+  if (b) record(s, 'elections', { key: `out.elections.${reason}`, params: { poll: s.campaignPollSeats, seats: s.campaignPollSeats } }, b);
 }
 
 function resolveElection(s: GameState) {
@@ -865,7 +909,7 @@ function resolveElection(s: GameState) {
   if (s.status === 'lost') record(s, 'newGov', { key: s.lostReason === 'voters' ? 'out.votersLost' : 'out.noGovLost' }, b);
   else if (s.phase === 'opposition') record(s, 'newGov', { key: 'out.opposition' }, b);
   else if (s.phase === 'governing') record(s, 'newGov', { key: 'out.newGov', params: { seats: seatsOf(s), pm: pmParty(s).seats } }, b);
-  else record(s, 'elections', { key: 'out.elections.deadlock', params: { poll: s.campaignPollSeats } }, b);
+  else record(s, 'elections', { key: 'out.elections.deadlock', params: { poll: s.campaignPollSeats, seats: s.campaignPollSeats } }, b);
 }
 
 /** election night: the exit poll first (a few seats off), then the real count; a party that was in
@@ -1046,7 +1090,9 @@ export function eventOptions(s: GameState): { id: string; dir: OptionDir; availa
   if (!s.event) return [];
   const c = crisisById.get(s.event.id)!;
   // spent once-per-game remedies drop out and the next one in the list (a backup) takes the side
-  const opts: { id: string; dir: OptionDir; available: boolean }[] = c.remedies.filter((id) => !remedySpent(s, id))
+  // usable ones first (e.g. under an ICC warrant a non-travel backup beats a greyed-out trip), list order otherwise
+  const ids = c.remedies.filter((id) => !remedySpent(s, id));
+  const opts: { id: string; dir: OptionDir; available: boolean }[] = [...ids.filter((id) => remedyAvailable(s, id)), ...ids.filter((id) => !remedyAvailable(s, id))]
     .slice(0, DIRS.length).map((id, i) => ({ id, dir: DIRS[i], available: remedyAvailable(s, id) }));
   if (!c.urgent) opts.push({ id: 'ignore', dir: 'ignore', available: true });
   return opts;
@@ -1322,7 +1368,11 @@ export function act(s: GameState, a: Action): ActionResult {
   wrapDepth++;
   let r: ActionResult;
   try { r = actInner(s, a); } finally { wrapDepth--; }
-  if (r.ok) record(s, 'action', actionCause(a), b);
+  if (r.ok) {
+    const cause = actionCause(a);
+    if (r.causeParams) cause.params = { ...cause.params, ...r.causeParams };
+    record(s, 'action', cause, b);
+  }
   return r;
 }
 
@@ -1339,6 +1389,15 @@ function actionCause(a: Action): Outcome['cause'] {
   }
 }
 
+/** a rejection that says which cooldown and for how long */
+const cooldown = (what: 'ministry' | 'law' | 'invite', days: number): ActionResult =>
+  ({ ok: false, error: `err.cooldown.${what}`, params: { days: Math.ceil(days) } });
+
+/** a rejection that says why the option/move can't be used now */
+function unavailable(s: GameState, id: string): ActionResult {
+  return { ok: false, error: 'err.unavailableWhy', why: unavailableReason(s, id) ?? { key: 'why.na' } };
+}
+
 function actInner(s: GameState, a: Action): ActionResult {
   if (s.status !== 'playing') return { ok: false, error: 'err.over' };
   if (a.type === 'noop') return { ok: true };
@@ -1346,7 +1405,7 @@ function actInner(s: GameState, a: Action): ActionResult {
   if (a.type === 'move') {
     const m = moveById.get(a.moveId);
     if (!m) return { ok: false, error: 'err.unknown' };
-    if (!moveAvailable(s, a.moveId)) return { ok: false, error: (s.moveReadyAt?.[a.moveId] ?? 0) > s.day ? 'err.cooldown' : 'err.unavailable' };
+    if (!moveAvailable(s, a.moveId)) return unavailable(s, a.moveId);
     if (m.cooldownDays) (s.moveReadyAt ??= {})[a.moveId] = s.day + m.cooldownDays;
     if (m.oncePerTerm) (s.usedThisTerm ??= []).push(a.moveId);
     log(s, 'log.move', { remedy: a.moveId }, 'info');
@@ -1365,12 +1424,12 @@ function actInner(s: GameState, a: Action): ActionResult {
       if (a.optionId === 'ignore' && def) { resolveEvent(s, def); return { ok: true }; }
       const opt = eventOptions(s).find((o) => o.id === a.optionId || o.dir === a.optionId);
       if (!opt) return { ok: false, error: 'err.badOption' };
-      if (!opt.available) return { ok: false, error: 'err.unavailable' };
+      if (!opt.available) return unavailable(s, opt.id);
       resolveEvent(s, opt.id);
       return { ok: true };
     }
     case 'giveMinistry': {
-      if (s.cooldowns.ministry > 0) return { ok: false, error: 'err.cooldown' };
+      if (s.cooldowns.ministry > 0) return cooldown('ministry', s.cooldowns.ministry);
       const m = s.ministries.find((x) => x.id === a.ministryId);
       const p = partyById(s, a.partyId);
       if (!m || !p) return { ok: false, error: 'err.unknown' };
@@ -1383,14 +1442,14 @@ function actInner(s: GameState, a: Action): ActionResult {
       return { ok: true };
     }
     case 'startWar': {
-      if (!remedyAvailable(s, 'war')) return { ok: false, error: 'err.cooldown' };
+      if (!remedyAvailable(s, 'war')) return unavailable(s, 'war');
       applyMove(s, 'war', null);
       checkCoalition(s);
       return { ok: true };
     }
     case 'passLaw': {
       if (!LAWS.includes(a.lawId)) return { ok: false, error: 'err.unknown' };
-      if (s.cooldowns.law > 0) return { ok: false, error: 'err.cooldown' };
+      if (s.cooldowns.law > 0) return cooldown('law', s.cooldowns.law);
       log(s, 'log.law', { law: a.lawId }, 'info');
       applyMove(s, a.lawId, null);
       s.cooldowns.law = c.lawCooldownDays;
@@ -1398,7 +1457,7 @@ function actInner(s: GameState, a: Action): ActionResult {
       return { ok: true };
     }
     case 'invite': {
-      if (s.cooldowns.invite > 0) return { ok: false, error: 'err.cooldown' };
+      if (s.cooldowns.invite > 0) return cooldown('invite', s.cooldowns.invite);
       const p = partyById(s, a.partyId);
       if (!p || p.seats === 0) return { ok: false, error: 'err.unknown' };
       if (p.inCoalition) return { ok: false, error: 'err.alreadyIn' };
@@ -1419,6 +1478,7 @@ function actInner(s: GameState, a: Action): ActionResult {
         const opp = s.parties.filter((x) => !x.inCoalition && x.seats > 0);
         if (opp.length && opp.every((x) => s.refusedBy.includes(x.id))) s.stats.refusedByAll = 1;
         log(s, 'log.refused', { party: p.id }, 'bad');
+        return { ok: true, causeParams: { why: inviteWhy(s, p) } };
       }
       return { ok: true };
     }
@@ -1446,18 +1506,18 @@ function actInner(s: GameState, a: Action): ActionResult {
       const p = partyById(s, a.partyId);
       const def = promiseById.get(a.promiseId);
       if (!p || !def) return { ok: false, error: 'err.unknown' };
-      if (def.cardOnly) return { ok: false, error: 'err.unavailable' };
-      if (s.cooldowns.law > 0) return { ok: false, error: 'err.cooldown' };
+      if (def.cardOnly) return { ok: false, error: 'err.cardOnly' };
+      if (s.cooldowns.law > 0) return cooldown('law', s.cooldowns.law);
       if (def.deliveredBy === 'ministry') {
         if (!p.inCoalition) return { ok: false, error: 'err.notInCoalition' };
         const counts = ministryCounts(s.ministries);
         const from = coalition(s).filter((x) => x.id !== p.id && (counts[x.id] ?? 0) > 0)
           .sort((x, y) => (counts[y.id] ?? 0) - (counts[x.id] ?? 0))[0];
         const m = from && s.ministries.find((x) => x.holder === from.id);
-        if (!m) return { ok: false, error: 'err.unavailable' };
+        if (!m) return { ok: false, error: 'err.noMinistryToGive' };
         transferMinistry(s, m.id, p.id);
       } else {
-        if (!remedyAvailable(s, def.deliveredBy)) return { ok: false, error: 'err.unavailable' };
+        if (!remedyAvailable(s, def.deliveredBy)) return unavailable(s, def.deliveredBy);
         log(s, 'log.law', { law: def.deliveredBy }, 'info');
         applyMove(s, def.deliveredBy, p.id);
       }

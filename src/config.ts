@@ -126,6 +126,12 @@ export interface Config {
   goodNewsCooldownDays: number;
   /** ceasefire/deal cards: during a war or this many days after it */
   recentWarDays: number;
+  /** the US-midterms wildcard only fires in Oct–Nov of a midterm year: its weight there is multiplied by this */
+  midtermsSeasonMult: number;
+  /** a wartime partner stays after the war if its mood is at least this */
+  wartimeStayMood: number;
+  /** the PM party never gives away ministries below this many (handouts then become deputy posts) */
+  pmMinMinistries: number;
   /** repeated use of a remedy within remedyFatigueDays: its POSITIVE effects shrink by 1 / (1 + uses × remedyFatigue) */
   remedyFatigue: number;
   remedyFatigueDays: number;
@@ -298,6 +304,9 @@ export const DEFAULT_CONFIG: Config = {
   crisisRepeatDecay: 0.75,
   goodNewsCooldownDays: 365,
   recentWarDays: 90,
+  midtermsSeasonMult: 15,
+  wartimeStayMood: 65,
+  pmMinMinistries: 3,
   remedyFatigue: 1.0,
   remedyFatigueDays: 365,
   fundsMinFiscal: 15,

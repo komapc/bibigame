@@ -4,7 +4,7 @@ import { advice } from './extras.ts';
 import type { Action } from '../engine/types.ts';
 import { TITLES } from '../data/titles.ts';
 import { t } from '../i18n/index.ts';
-import { type Game, type Observation, formatOutcome, promisesFor } from './game.ts';
+import { type Game, type Observation, errorText, formatOutcome, promisesFor } from './game.ts';
 
 export type Command =
   | { kind: 'action'; action: Action }
@@ -88,9 +88,10 @@ export function renderText(o: Observation): string {
       L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.odds !== null ? ` [${op.odds}% odds]` : ''}${op.available ? '' : ` [unavailable: ${op.why}]`}${fx ? ` -> ${fx}` : ''}`);
     }
   } else if (o.phase === 'governing' || o.phase === 'opposition') L.push('No crisis right now.');
-  L.push(`LAWS: ${o.laws.map((l) => l.id).join(', ')}`);
+  // laws and promises are a governing thing: in opposition they only clutter the screen
+  if (!o.opposition) L.push(`LAWS: ${o.laws.map((l) => l.id).join(', ')}`);
   if (o.moves.length) L.push(`MOVES: ${o.moves.map((m) => `${m.id}${m.available ? '' : m.cooldown ? ` (${m.cooldown}d)` : ` (n/a: ${m.why})`}${m.ending ? ' [ENDS GAME]' : ''}`).join(', ')}`);
-  L.push(`PROMISES: ${o.promises.map((p) => `${p.id}->${p.to.join('/')}`).join(', ')}`);
+  if (!o.opposition) L.push(`PROMISES: ${o.promises.map((p) => `${p.id}->${p.to.join('/')}`).join(', ')}`);
   L.push(`TITLES: ${o.titles.length ? o.titles.map((x) => `${x.name} (${x.gloss})`).join('; ') : 'none yet'}`);
   if (o.log.length) {
     L.push('RECENT:');
@@ -183,7 +184,7 @@ export function runText(g: Game, line: string): { reply: string; ok: boolean } {
     case 'action': {
       const r = g.act(cmd.action);
       ok = r.ok;
-      head = r.ok ? `OK: ${cmd.action.type}` : `REJECTED: ${t(r.error ?? 'err.unknown')}`;
+      head = r.ok ? `OK: ${cmd.action.type}` : `REJECTED: ${errorText(r)}`;
       break;
     }
     case 'wait': {

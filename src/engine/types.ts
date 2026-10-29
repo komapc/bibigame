@@ -141,6 +141,10 @@ export interface CrisisDef {
     minTrial?: number; warHistory?: boolean;
     /** not once this permanent law has passed */
     notPassed?: string;
+    /** only once some law has passed (a card about striking one down) */
+    anyLaw?: boolean;
+    /** only once this law has passed or is promised to someone (the card argues about it) */
+    lawOrPromise?: string;
     /** only during a war or within config.recentWarDays after one */
     recentWar?: boolean;
     /** only if the card's subjectMinistry is held by a party with this tag (the text names that kind of minister) */
@@ -267,6 +271,8 @@ export interface GameState {
   termReached: boolean;
   phase: Phase;
   phaseLeftDays: number;
+  /** every law enacted this game, permanent or not (cards about striking a law down need one) */
+  lawsEnacted?: string[];
   govPosition: number;
   approval: number;
   street: number;
@@ -371,6 +377,12 @@ export interface ActionResult {
   ok: boolean;
   /** i18n key explaining a rejection */
   error?: string;
+  /** params for `error` (e.g. {days} of a cooldown) */
+  params?: Record<string, string | number>;
+  /** why the option/move is unavailable (an unavailableReason), filled into `error` as {why} */
+  why?: { key: string; params?: Record<string, number> };
+  /** extra params for the recorded outcome's cause (e.g. why an invited party said no) */
+  causeParams?: Record<string, string | number>;
 }
 
 /** What a single decision (or a coalition change) did, so the UI/text mode can show cause → result. */

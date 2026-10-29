@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, approvalTarget, budgetDueYear, partyById, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, reshuffleOffers, satDrivers, seatsOf, step,
+  act, approvalTarget, dampen, fatigueOf, budgetDueYear, partyById, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, reshuffleOffers, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
@@ -193,7 +193,11 @@ export function formatOutcome(s: GameState, o: Outcome): OutcomeView {
   if (o.seats.from !== o.seats.to) parts.push(t('out.seats', o.seats));
   if (left.length) parts.push(t('out.leftList', { parties: left.join(', ') }));
   if (joined.length) parts.push(t('out.joinedList', { parties: joined.join(', ') }));
-  if (o.cause.key === 'out.invite' && !joined.length) parts.push(t('out.refused', { party: nameOf(String(o.cause.params?.party)) }));
+  if (o.cause.key === 'out.invite' && !joined.length) {
+    const why = o.cause.params?.why;
+    parts.push(why ? t('ui.inviteNo', { party: nameOf(String(o.cause.params?.party)), why: t(`ui.inviteWhy.${why}`) })
+      : t('out.refused', { party: nameOf(String(o.cause.params?.party)) }));
+  }
   const fx = [...sat.slice(0, 6).map((x) => `${x.name} ${sign(x.delta)}`), ...meters.map((x) => `${x.label} ${sign(x.delta)}`)];
   if (fx.length) parts.push(fx.join(', '));
   if (risks.length) parts.push(`${t('out.risk')}: ${risks.join(', ')}`);
@@ -364,6 +368,12 @@ const tagLabel = (s: GameState, target: string, subject: string | null): string 
   return t(`tag.${target}`);
 };
 
+/** a rejected action as a sentence: which cooldown, or why it can't be done now */
+export function errorText(r: ActionResult): string {
+  const why = r.why ? t(r.why.key, r.why.params) : '';
+  return t(r.error ?? 'err.unknown', { ...r.params, why });
+}
+
 function whyText(s: GameState, id: string): string {
   const r = unavailableReason(s, id);
   return r ? t(r.key, r.params) : t('why.na');
@@ -396,9 +406,21 @@ export function preview(s: GameState, optionId: string): Preview[] {
     const bill = premiumBill(s, subject);
     if (bill) out.unshift({ label: t('fx.bill', { bill }), up: false });
   }
-  for (const e of effects) {
-    for (const k of ['approval', 'street', 'us', 'fiscal'] as const) if (e[k]) out.push({ label: t(`fx.${k}`), up: e[k]! > 0, size: sizeOf(e[k]!) });
-    if (e.trial) out.push({ label: t('fx.trial'), up: e.trial < 0, meter: 'trial', size: sizeOf(e.trial) });
+  // a war starting or ending moves the meters too: show it in the same arrows
+  const sp0 = effects.map((e) => e.special);
+  if (sp0.includes('war') && !s.war.active) effects.push({ approval: s.config.warApproval, fiscal: s.config.warFiscal });
+  if (sp0.includes('endWar') && s.war.active) effects.push({ approval: s.config.warEndApproval });
+  // a recently used trick works less (the same factor the engine applies)
+  const k = optionId === 'ignore' ? 1 : fatigueOf(s, optionId);
+  if (k < 1) out.push({ label: t('fx.tired'), up: false });
+  const shown = effects.map((e) => (k < 1 ? dampen(e, k) : e));
+  // meters: one arrow per meter, summed over all parts (so +2 and −4 show as one −)
+  for (const m of ['approval', 'street', 'us', 'fiscal', 'trial'] as const) {
+    const v = shown.reduce((a, e) => a + (e[m] ?? 0), 0);
+    if (Math.abs(v) < 0.5) continue;
+    out.push(m === 'trial' ? { label: t('fx.trial'), up: v < 0, meter: 'trial', size: sizeOf(v) } : { label: t(`fx.${m}`), up: v > 0, size: sizeOf(v) });
+  }
+  for (const e of shown) {
     if (e.position) out.push({ label: t(e.position > 0 ? 'fx.right' : 'fx.left'), up: true });
     for (const x of e.sat ?? []) out.push({ label: tagLabel(s, x.target, subject), up: x.delta > 0, size: sizeOf(x.delta, true) });
     if (e.pauseTrialDays) out.push({ label: t('fx.pause'), up: true });
@@ -417,7 +439,6 @@ export function preview(s: GameState, optionId: string): Preview[] {
       groundGame: ['fx.groundGame', true],
     };
     if (e.special && sp[e.special]) out.push({ label: t(sp[e.special][0]), up: sp[e.special][1] });
-    if (e.special === 'war') out.push({ label: t('fx.fiscal'), up: false });
   }
   const seen = new Set<string>();
   return out.filter((x) => { const k = x.label + x.up; if (seen.has(k)) return false; seen.add(k); return true; });
