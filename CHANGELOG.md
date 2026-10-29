@@ -149,3 +149,6 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - Card titles say what happened (e.g. "High Court strikes back" → "High Court strikes down a law", "Iran fires" → "Missile barrage from Iran"), in EN/RU/HE.
 - Option labels are plain actions ("Judicial reform, part N" → "Pass a law limiting the court", "Coalition funds" → "Give them coalition funds").
 - The punch line is gone from the Trump card.
+
+## #31 News screen waits for Next
+- After a card the clock stops on the news screen until the player taps **Next ▶** (or Space / Enter); moves can be made meanwhile. Config `pauseOnNews` (default on).
