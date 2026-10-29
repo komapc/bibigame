@@ -401,6 +401,7 @@ export const en: Record<string, string> = {
   'ui.mayLeave': 'may leave',
   'ui.without': 'without {party}: {seats}',
   'ui.ignore': 'Ignore it',
+  'ui.next': 'Next',
   'ui.ignoreFx': 'escalates: {fx}',
   'ui.tutorial': 'Swipe the card (or use arrows) to choose. Watch the meters and party moods change.',
   'ui.resultTap': 'tap to continue',

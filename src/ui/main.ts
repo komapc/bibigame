@@ -40,6 +40,9 @@ const seedType = daily ? 'daily' : query.has('seed') && Number.isFinite(urlSeed)
 const randomSeed = () => Math.floor(Math.random() * 1e9);
 let game: Game = createGame({ seed: daily ? dailySeed(daily) : seedType === 'fixed' ? urlSeed : randomSeed() });
 let paused = false;
+/** the news screen between cards holds the clock until the player taps Next (config.pauseOnNews) */
+let newsHold = true;
+let hadEvent = false;
 let last = performance.now();
 let lastTitles = 0;
 const keys: Record<string, string> = {};
@@ -311,7 +314,7 @@ function arrivalHtml(a: OutcomeView | null): string {
 
 function renderStage(o: Observation) {
   const ev = o.event;
-  const key = ev ? `${ev.id}|${game.state.event?.firedAt}|${ev.options.map((x) => x.available).join()}|${canWar(o)}` : `none|${newsKey(o)}`;
+  const key = ev ? `${ev.id}|${game.state.event?.firedAt}|${ev.options.map((x) => x.available).join()}|${canWar(o)}` : `none|${newsKey(o)}|${holding()}`;
   if (swipe.dragging()) return;
   const kind = ev ? `card:${game.state.event?.firedAt}` : 'news';
   region('stage', key, () => {
@@ -381,6 +384,8 @@ function newsKey(o: Observation) {
 
 let lastStageKind = '';
 
+const holding = () => newsHold && game.state.config.pauseOnNews && !game.state.event && !game.over;
+
 function newsHtml(o: Observation, enter: string): string {
   const tl = o.timeline;
   const next = tl.upcoming.find((m) => m.kind !== 'goal');
@@ -410,6 +415,7 @@ function newsHtml(o: Observation, enter: string): string {
       <button data-act="open" data-sec="laws" ${o.cooldowns.law ? 'disabled' : ''}>📜 ${t('ui.qLaw')}</button>
       <button data-act="war" class="warq" ${warOk ? '' : 'disabled'}>⚔ ${t('ui.war')}</button>
     </div>` : ''}
+    ${holding() ? `<button class="primary nextbtn" data-act="next">${t('ui.next')} ▶</button>` : ''}
   </div>`;
 }
 
@@ -594,14 +600,18 @@ function promiseConfirm(o: Observation, p: Observation['parties'][number], id: s
   </div>`;
 }
 
+// two ready-made reshuffles instead of a table of dropdowns
 function renderMinistries(o: Observation) {
-  const coal = o.parties.filter((p) => p.inCoalition && p.seats > 0);
   const ready = o.cooldowns.ministry === 0 && o.phase === 'governing';
-  region('ministries', o.ministries.map((m) => m.holder).join() + coal.map((p) => p.id).join() + ready, () =>
+  const c = game.state.config;
+  const short = (id: string) => { const p = o.parties.find((x) => x.id === id); return p?.short || p?.name || id; };
+  region('ministries', o.reshuffles.map((r) => `${r.ministryId}>${r.to}`).join() + ready, () =>
     `<p class="sub">${ready ? t('ui.ready') : t('ui.cooldown', { days: o.cooldowns.ministry })}</p>` +
-    o.ministries.map((m) => `<label class="min"><span>${esc(m.name)}</span>
-      <select data-ministry="${m.id}" ${ready ? '' : 'disabled'}>${coal.map((p) => `<option value="${p.id}" ${p.id === m.holder ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
-      ${m.holder && !coal.some((p) => p.id === m.holder) ? `<option selected>${esc(partyName(o, m.holder))}</option>` : ''}</select></label>`).join(''));
+    o.reshuffles.map((r) => {
+      const loss = Math.round(r.from === game.state.base.pmParty ? c.ministryLoss / 3 : c.ministryLoss);
+      return `<button class="reshuffle" data-reshuffle="${r.ministryId}" data-to="${r.to}" ${ready ? '' : 'disabled'}>🏛 ${esc(r.ministry)}: ${esc(short(r.from))} → ${esc(short(r.to))}
+        <span class="fx mini"><span class="up">${esc(short(r.to))} ${signed(Math.round(c.ministryGain))}</span><span class="down">${esc(short(r.from))} ${signed(-loss)}</span></span></button>`;
+    }).join(''));
 }
 
 function renderLaws(o: Observation) {
@@ -897,6 +907,7 @@ function restart(day: string | null = null) {
   clearResult();
   toastQ.length = 0;
   cardKey = ''; overTracked = false; edition = null; nextEdition = 90;
+  newsHold = true; hadEvent = false;
   editions.length = 0;
   $('editions').innerHTML = '';
   pendingPromise = null;
@@ -929,11 +940,13 @@ app.addEventListener('click', (e) => {
     location.href = u.toString();
   }
   else if (d.act === 'war') doAct({ type: 'startWar' });
+  else if (d.act === 'next') { newsHold = false; render(); }
   else if (d.act === 'restart') restart();
   else if (d.act === 'daily') restart(todayKey());
   else if (d.share) doShare(d.share);
   else if (d.act === 'sound') { setSound(!soundOn()); if (soundOn()) play('cash'); render(); }
   else if (d.law) doAct({ type: 'passLaw', lawId: d.law });
+  else if (d.reshuffle && d.to) { doAct({ type: 'giveMinistry', ministryId: d.reshuffle, partyId: d.to }); if (layer === 'sheet') closeLayer(); }
   else if (d.move) {
     const m = game.observe(0).moves.find((x) => x.id === d.move);
     if (m?.ending && !window.confirm(`${m.label}\n\n${m.desc}`)) return;
@@ -959,11 +972,6 @@ app.addEventListener('change', (e) => {
   const s = e.target as HTMLSelectElement;
   // no promise on the first (maybe accidental) pick: show what it costs and when it is due, then Confirm
   if (s.dataset.promise && s.value) { pendingPromise = { party: s.dataset.promise, promise: s.value }; render(); }
-  else if (s.dataset.ministry) {
-    const holder = game.state.ministries.find((m) => m.id === s.dataset.ministry)?.holder;
-    if (s.value !== holder) doAct({ type: 'giveMinistry', ministryId: s.dataset.ministry, partyId: s.value });
-    keys.ministries = '';
-  }
 });
 
 window.addEventListener('keydown', (e) => {
@@ -974,6 +982,7 @@ window.addEventListener('keydown', (e) => {
   const dir = ({ ArrowLeft: 'left', ArrowRight: 'right' } as Record<string, string>)[e.key];
   if (dir && game.state.event) { e.preventDefault(); swipe.flyThenChoose(dir); }
   else if ((e.key === '0' || e.key === ' ') && game.state.event && game.observe(0).event?.options.some((x) => x.dir === 'ignore')) { e.preventDefault(); choose('ignore'); }
+  else if ((e.key === ' ' || e.key === 'Enter') && holding() && tag !== 'BUTTON') { e.preventDefault(); newsHold = false; render(); }
   else if (e.key === ' ' && tag !== 'BUTTON') { e.preventDefault(); $('pause').click(); }
 });
 
@@ -988,7 +997,9 @@ function frame(now: number) {
   last = now;
   if (!paused && !document.hidden && !game.over && layer !== 'intro' && layer !== 'sheet') {
     const c = game.state.config;
-    const scale = game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : c.uiIdleClockScale;
+    if (hadEvent && !game.state.event) newsHold = true; // a card was just answered: read the news first
+    hadEvent = !!game.state.event;
+    const scale = game.state.event ? (c.pauseOnDecision ? 0 : c.uiCardClockScale) : holding() ? 0 : c.uiIdleClockScale;
     if (scale > 0) game.advance(dt * scale * (game.state.recess && !game.state.event ? c.recessClockMult : 1));
   }
   render();

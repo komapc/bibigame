@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, approvalTarget, budgetDueYear, partyById, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
+  act, approvalTarget, budgetDueYear, partyById, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, reshuffleOffers, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
@@ -85,6 +85,8 @@ export interface Observation {
   outcomes: OutcomeView[];
   outcomeSeq: number;
   ministries: { id: string; name: string; holder: string | null }[];
+  /** two ready-made reshuffles (giveMinistry ministryId → to) */
+  reshuffles: { ministryId: string; ministry: string; from: string; to: string }[];
   event: null | {
     id: string; title: string; text: string; subject: string | null; daysLeft: number;
     /** what the crisis already did when it arrived (onFire), or null */
@@ -287,6 +289,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     outcomes: (s.outcomes ?? []).slice(-5).map((o) => formatOutcome(s, o)),
     outcomeSeq: s.outcomeSeq ?? 0,
     ministries: s.ministries.map((m) => ({ id: m.id, name: t(`ministry.${m.id}`), holder: m.holder })),
+    reshuffles: reshuffleOffers(s).map((r) => ({ ...r, ministry: t(`ministry.${r.ministryId}`) })),
     event: s.event && {
       id: s.event.id,
       title: again(s, s.event.id) ? t('crisis.again', { title: t(`crisis.${s.event.id}.title`) }) : t(`crisis.${s.event.id}.title`),

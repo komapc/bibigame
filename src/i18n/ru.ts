@@ -399,6 +399,7 @@ export const ru: Record<string, string> = {
   'ui.mayLeave': 'может уйти',
   'ui.without': 'уйдёт {party}: {seats}',
   'ui.ignore': 'Игнорировать',
+  'ui.next': 'Дальше',
   'ui.ignoreFx': 'последствия: {fx}',
   'ui.tutorial': 'Смахни карточку (или жми стрелки), чтобы выбрать. Следи за шкалами и настроением партий.',
   'ui.resultTap': 'нажми, чтобы продолжить',
