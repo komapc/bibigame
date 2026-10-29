@@ -50,11 +50,16 @@ export function renderText(o: Observation): string {
   L.push(`=== ${o.date} | day ${o.day} | PM for ${years}y (${Math.round(o.termProgress * 100)}% of 4y term${o.termReached ? ', TERM REACHED' : ''}) | ${o.status.toUpperCase()} ===`);
   if (o.opposition) L.push(`IN OPPOSITION: rival government stability ${o.opposition.stability}% (falls at 0; elections in ${o.opposition.daysLeft}d at the latest). Lose the next election and it is over.`);
   if (o.phase === 'campaign') L.push(`ELECTION CAMPAIGN: ${o.phaseLeftDays}d to election day (election #${o.elections}); chance the voters throw you out: ${Math.round(o.electionRisk * 100)}%${o.campaignTricks.length ? ` (tricks applied: ${o.campaignTricks.join(', ')}; already counted)` : ''}`);
+  if (o.electionSoon) {
+    const f = o.electionFactors.map((x) => `${x.label} ${x.delta >= 0 ? '+' : ''}${x.delta}`).join(', ');
+    L.push(`ELECTION ODDS: ${Math.round(o.electionRisk * 100)}% the voters throw you out (${f})${o.phase === 'governing' ? ' — levers: move electionbudget, move groundgame' : ''}`);
+  }
+  if (o.collapse) L.push(`POLL COLLAPSE: approval under ${o.collapse.below} for ${o.collapse.days}d — partners bolt at ${o.collapse.limit}d (elections)`);
   L.push(`Coalition: ${o.seats}/120 (need ${o.majority})${o.defectors ? `, ${o.defectors} rogue MKs` : ''} | gov position ${o.govPosition} (-10 left .. +10 right)`);
   const m = o.meters;
   if (o.recess) L.push('RECESS: Knesset summer recess (no regular crises; wildcards still possible)');
   if (o.startConditions.length && o.day < 60) L.push(`Start: ${o.startConditions.map((x) => x.label).join('; ')}`);
-  L.push(`Approval ${m.approval} (drifting toward ${Math.round(o.approvalTarget)}${o.approvalTarget < o.panicBelow ? `; partners panic below ${o.panicBelow}` : ''}) | street calm ${m.street} | US ${m.us} (Trump ${o.trump.face} ${o.trump.mood}) | budget health ${m.fiscal} | trial ${m.trial} | open cases ${o.openCases}`);
+  L.push(`Approval ${m.approval} (drifting toward ${Math.round(o.approvalTarget)}${o.approvalTarget < o.panicBelow ? `; partners panic below ${o.panicBelow}` : ''}) | street calm ${m.street} | US ${m.us} (Trump ${o.trump.face} ${o.trump.mood}) | budget health ${m.fiscal} | trial ${m.trial}${o.trialPausedDays ? ` (PAUSED ${o.trialPausedDays}d: no new charges)` : ''} | open cases ${o.openCases}`);
   L.push(`Budget ${o.budget.dueYear}: ${o.budget.passed ? 'passed' : 'NOT passed (due 31 March)'}`);
   L.push(`War: ${o.war.active ? `ACTIVE ${o.war.daysLeft}d left` : o.war.cooldownDays ? `cooldown ${o.war.cooldownDays}d` : 'ready'} | cooldowns: ministry ${o.cooldowns.ministry}d, law ${o.cooldowns.law}d, invite ${o.cooldowns.invite}d`);
   L.push('PARTIES (id seats pos sat trust ministries trend):');
@@ -82,7 +87,7 @@ export function renderText(o: Observation): string {
       const fx = op.preview.map((p) => `${p.label}${p.up ? '+' : '-'}`).join(', ');
       L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.odds !== null ? ` [${op.odds}% odds]` : ''}${op.available ? '' : ` [unavailable: ${op.why}]`}${fx ? ` -> ${fx}` : ''}`);
     }
-  } else if (o.phase === 'governing') L.push('No crisis right now.');
+  } else if (o.phase === 'governing' || o.phase === 'opposition') L.push('No crisis right now.');
   L.push(`LAWS: ${o.laws.map((l) => l.id).join(', ')}`);
   if (o.moves.length) L.push(`MOVES: ${o.moves.map((m) => `${m.id}${m.available ? '' : m.cooldown ? ` (${m.cooldown}d)` : ` (n/a: ${m.why})`}${m.ending ? ' [ENDS GAME]' : ''}`).join(', ')}`);
   L.push(`PROMISES: ${o.promises.map((p) => `${p.id}->${p.to.join('/')}`).join(', ')}`);

@@ -39,6 +39,10 @@ given date), `?seed=N` for a fixed seed, `?lang=en|ru|he` for the language.
   believe you (the due date) and what delivering takes. Invite says who joined, or who refused and why.
 - **Moves** (🎲), **opposition** period after a lost election, **rotation** promises, special
   **endings** (Miami, plea bargain, rotation handover) and 22 titles.
+- **Late game**: in the last 180 days of a term the election odds and their factors (approval, open
+  cases, recent elections, tricks) are shown, with two levers (election-year budget, ground game).
+  Approval under 20 for 90 days makes the partners bolt (warned at 45 days). The opposition has its own
+  cards (a scandal in the government, a wavering MK, a protest) that bring the rival government down.
 - **Knesset summer recess** (Aug–Sep): regular crises pause (wildcards still happen), the clock runs
   faster, shown on the timeline.
 - **Friday edition**: every 3 game months a newspaper recap of what moved and why, filed in the

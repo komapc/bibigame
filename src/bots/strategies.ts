@@ -223,7 +223,21 @@ function cardOnly(name: string, value: (g: Game, c: Game) => number): Strategy {
   return {
     name,
     decide(g, o) {
-      if (!o.event || o.phase !== 'governing') return [];
+      if (!o.event || o.phase === 'campaign') return [];
+      if (o.phase === 'opposition') {
+        // opposition cards: whatever brings the rival government down without sinking approval
+        let best: string | null = null;
+        let bs = -Infinity;
+        for (const op of o.event.options) {
+          if (!op.available) continue;
+          const c = g.clone();
+          if (!c.act({ type: 'choose', optionId: op.id }).ok) continue;
+          const v = (c.state.phase !== 'opposition' ? 100 : 0) + ((g.state.rival?.stability ?? 0) - (c.state.rival?.stability ?? 0))
+            + 1.5 * (c.state.approval - g.state.approval) + 0.2 * (c.state.street - g.state.street);
+          if (v > bs) { bs = v; best = op.id; }
+        }
+        return best ? [{ type: 'choose', optionId: best }] : [];
+      }
       if (o.event.id === 'angry' && o.event.options.some((x) => x.id === 'deliverpremium' && x.available)) return [{ type: 'choose', optionId: 'deliverpremium' }];
       let best: string | null = null;
       let bs = -Infinity;

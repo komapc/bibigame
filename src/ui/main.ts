@@ -374,7 +374,8 @@ function headline(o: Observation): string {
 
 function newsKey(o: Observation) {
   return [o.phase, headline(o), o.timeline.upcoming[0]?.label, Math.floor(o.day / 15), o.cooldowns.ministry > 0, o.cooldowns.law > 0, o.war.cooldownDays > 0,
-    o.opposition ? o.moves.map((m) => `${m.id}${m.available}${m.cooldown}`).join() : ''].join('|');
+    o.opposition ? o.moves.map((m) => `${m.id}${m.available}${m.cooldown}`).join() : '',
+    o.electionSoon ? o.electionFactors.map((x) => x.delta).join() : '', o.trialPausedDays > 0].join('|');
 }
 
 let lastStageKind = '';
@@ -382,7 +383,14 @@ let lastStageKind = '';
 function newsHtml(o: Observation, enter: string): string {
   const tl = o.timeline;
   const next = tl.upcoming.find((m) => m.kind !== 'goal');
+  // the vote is close: the odds and what makes them up (levers are in the Moves tab)
+  const odds = o.electionSoon ? t('news.odds', {
+    risk: Math.round(o.electionRisk * 100),
+    factors: o.electionFactors.map((x) => `${x.label} ${ltr(x.delta >= 0 ? `+${x.delta}` : `${x.delta}`)}`).join(', '),
+  }) : '';
   const ticker = [
+    odds,
+    o.trialPausedDays ? t('news.trialPaused', { days: o.trialPausedDays }) : '',
     next ? t('news.next', { label: next.label, days: next.day - tl.nowDay }) : '',
     tl.nextTitle ? t('news.title', { title: tl.nextTitle.name, days: tl.nextTitle.inDays }) : '',
     t(`news.flavour.${Math.floor(o.day / 23) % 10}`),

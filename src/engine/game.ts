@@ -285,14 +285,28 @@ function retire(s: GameState, reason: 'miami' | 'plea' | 'rotation') {
   checkTitles(s);
 }
 
+/** what goes into the voters' verdict, one line per factor (shown before the vote) */
+export function loseFactors(s: GameState): { id: string; delta: number }[] {
+  const c = s.config;
+  // before the campaign starts, the next election is one more on the fatigue clock
+  const recent = (s.electionDays ?? []).filter((d) => s.day - d <= c.electionFatigueDays).length - (s.phase === 'campaign' ? 1 : 0);
+  const fx = s.campaignFx;
+  const gap = c.approvalNeutral - s.approval;
+  const out = [
+    { id: 'base', delta: c.loseBase },
+    { id: 'approval', delta: gap > 0 ? gap * c.losePerApprovalPoint : gap * c.loseGainPerApprovalPoint },
+    { id: 'cases', delta: s.openCases.length * c.losePerOpenCase },
+    { id: 'recent', delta: Math.max(0, recent) * c.losePerRecentElection },
+    { id: 'gevalt', delta: fx?.gevalt ? -c.gevaltLose : 0 },
+    { id: 'spoiler', delta: fx?.spoiler ? -c.spoilerLose : 0 },
+    { id: 'groundgame', delta: s.termFx?.groundGame ? -c.groundGameLose : 0 },
+  ];
+  return out.filter((x) => x.id === 'base' || Math.abs(x.delta) > 1e-9);
+}
+
 /** chance the voters throw you out at this election */
 export function loseChance(s: GameState): number {
-  const c = s.config;
-  const recent = (s.electionDays ?? []).filter((d) => s.day - d <= c.electionFatigueDays).length - 1;
-  const fx = s.campaignFx;
-  return clamp(c.loseBase + Math.max(0, c.approvalNeutral - s.approval) * c.losePerApprovalPoint
-    + s.openCases.length * c.losePerOpenCase + Math.max(0, recent) * c.losePerRecentElection
-    - (fx?.gevalt ? c.gevaltLose : 0) - (fx?.spoiler ? c.spoilerLose : 0), 0, c.loseMax);
+  return clamp(loseFactors(s).reduce((n, x) => n + x.delta, 0), 0, s.config.loseMax);
 }
 
 export function crisisWeight(s: GameState, c: CrisisDef): number {
@@ -305,7 +319,9 @@ export function crisisWeight(s: GameState, c: CrisisDef): number {
   if (req?.warHistory && !s.war.active && s.stats.warsEnded === 0) return 0;
   const c0 = s.config;
   // summer recess: the Knesset is at the beach; only wildcards (no-card news) still happen
-  if (!c.goodNews && s.recess) return 0;
+  // opposition cards only in the opposition; everything else only while governing
+  if (!!req?.opposition !== (s.phase === 'opposition')) return 0;
+  if (!c.goodNews && s.recess && !req?.opposition) return 0;
   if (req?.recess && !s.recess) return 0;
   if (req?.subjectMoodBelow !== undefined && c.subjectTag
     && !coalition(s).some((p) => matchesTag(p, c.subjectTag!) && p.satisfaction < req.subjectMoodBelow!)) return 0;
@@ -363,12 +379,16 @@ function driftNotes(s: GameState, trial0: number, street0: number) {
 
 /** why an option/move is unavailable (i18n key under why.*), or null when it is available */
 export function unavailableReason(s: GameState, id: string): { key: string; params?: Record<string, number> } | null {
+  if (id === 'elections' && s.phase === 'opposition') return { key: 'why.inOpposition' };
   const m = moveById.get(id);
   if (m && remedyAvailable(s, id)) {
     if (s.usedThisTerm.includes(id)) return { key: 'why.oncePerTerm' };
     if (m.requires?.war && !s.war.active) return { key: 'why.needWar' };
     if (m.requires?.minTrial !== undefined && s.trial < m.requires.minTrial) return { key: 'why.needTrial', params: { n: m.requires.minTrial } };
-    if (m.requires?.electionsWithinDays !== undefined && s.termEndsDay - s.day > m.requires.electionsWithinDays) return { key: 'why.tooEarly' };
+    const within = m.requires?.electionsWithinDays;
+    if (within !== undefined && s.termEndsDay - s.day > within) {
+      return within >= 365 ? { key: 'why.tooEarly' } : { key: 'why.electionsFar', params: { days: within, left: Math.ceil(s.termEndsDay - s.day - within) } };
+    }
   }
   if (remedyAvailable(s, id)) {
     const days = moveCooldown(s, id);
@@ -433,7 +453,11 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
   if (e.street && !(s.war.active && e.street < 0 && !e.streetInWar)) s.street = clamp(s.street + e.street, 0, 100);
   if (e.us) s.us = clamp(s.us + e.us, 0, 100);
   if (e.fiscal) s.fiscal = clamp(s.fiscal + e.fiscal, 0, 100);
-  if (e.trial) s.trial = clamp(s.trial + e.trial, 0, 100);
+  if (e.trial) {
+    // a paused trial is frozen: new charges wait too (the pause itself can still lower it)
+    if (e.trial > 0 && s.day < s.trialPausedUntil) log(s, 'log.trialFrozen', { days: Math.ceil(s.trialPausedUntil - s.day) }, 'good');
+    else s.trial = clamp(s.trial + e.trial, 0, 100);
+  }
   driftNotes(s, trial0, street0);
   if (e.pauseTrialDays) {
     s.trialPausedUntil = Math.max(s.trialPausedUntil, s.day) + e.pauseTrialDays;
@@ -503,7 +527,7 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
       const group = promiseGroup(s, p);
       if (def.deliveredBy === 'ministry') {
         for (const x of group) { const m = ministryFor(s, x); if (m) transferMinistry(s, m.id, x.id); }
-      } else applyMove(s, def.deliveredBy, p.id);
+      } else applyMove(s, def.deliveredBy, p.id, undefined, c.premiumCostScale);
       for (const x of group) x.trust = { state: 'neutral', promiseId: null, until: 0 };
       break;
     }
@@ -531,6 +555,10 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
     case 'passBudget':
       s.budgetPassedYear = budgetDueYear(s);
       log(s, 'log.budgetPassed', { year: s.budgetPassedYear }, 'good');
+      break;
+    case 'groundGame':
+      s.termFx = { ...s.termFx, groundGame: true };
+      log(s, 'log.groundGame', { n: Math.round(c.groundGameLose * 100) }, 'info');
       break;
     case 'defector':
       s.defectors++;
@@ -624,6 +652,15 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
 }
 
 /** scale the positive parts of an effect (negatives stay full) */
+/** scale the costs (negative parts) of an effect; a rushed premium delivery is cheaper than the real thing */
+export function scaleCosts(e: Effect, k: number): Effect {
+  const out: Effect = { ...e };
+  for (const key of ['approval', 'street', 'us', 'fiscal'] as const) if ((e[key] ?? 0) < 0) out[key] = e[key]! * k;
+  if ((e.trial ?? 0) > 0) out.trial = e.trial! * k;
+  if (e.sat) out.sat = e.sat.map((x) => (x.delta < 0 ? { ...x, delta: x.delta * k } : x));
+  return out;
+}
+
 function dampen(e: Effect, k: number): Effect {
   const out: Effect = { ...e };
   for (const key of ['approval', 'street', 'us', 'fiscal'] as const) if ((e[key] ?? 0) > 0) out[key] = e[key]! * k;
@@ -633,7 +670,7 @@ function dampen(e: Effect, k: number): Effect {
 }
 
 /** apply a remedy/law move: effect + backfire pressure + promise delivery */
-function applyMove(s: GameState, moveId: string, subject: string | null, extra?: Effect) {
+function applyMove(s: GameState, moveId: string, subject: string | null, extra?: Effect, costScale = 1) {
   const r = remedyById.get(moveId);
   if (!r) return;
   if (r.once && !s.usedOnce.includes(moveId)) s.usedOnce.push(moveId);
@@ -647,17 +684,20 @@ function applyMove(s: GameState, moveId: string, subject: string | null, extra?:
   s.remedyUses[moveId] = uses;
   // a gamble: roll the shown odds; on a miss the fail effect replaces the effect
   let eff = r.effect;
+  let failed = false;
   if (r.risk) {
     const ok = rngOf(s).next() < r.risk.chance;
     if (!ok) {
+      failed = true;
       eff = r.risk.fail;
       const cause = causeStack[causeStack.length - 1];
       if (cause) cause.params = { ...cause.params, fail: 1 };
       log(s, 'log.riskFailed', { remedy: moveId }, 'bad');
     }
   }
+  if (costScale !== 1) eff = scaleCosts(eff, costScale);
   applyEffect(s, jitter(s, k < 1 ? dampen(eff, k) : eff), subject);
-  if (extra && eff === r.effect) applyEffect(s, jitter(s, extra), subject);
+  if (extra && !failed) applyEffect(s, jitter(s, extra), subject);
   for (const b of r.backfires) s.pressure[b] = (s.pressure[b] ?? 0) + s.config.backfirePressure;
   deliverPromises(s, moveId, subject);
 }
@@ -840,6 +880,7 @@ function resolveElectionInner(s: GameState) {
   }
   const lossRoll = loseChance(s);
   s.campaignFx = { merger: false, spoiler: false, gevalt: false };
+  s.termFx = {};
   for (const p of s.parties) { p.seats = seats[p.id] ?? 0; p.inCoalition = false; p.wartime = false; p.threatening = false; }
   // the voters may simply be done with you (approval, cases, election fatigue)
   if (rngOf(s).next() < lossRoll) {
@@ -922,6 +963,10 @@ function enterOpposition(s: GameState, why: 'voters' | 'deadlock') {
   s.event = null;
   s.defectors = 0;
   s.failedElections = 0;
+  s.termFx = {};
+  s.lowApprovalDays = 0;
+  s.lowApprovalWarned = false;
+  s.nextEventInDays = scheduleNext(s);
   log(s, why === 'voters' ? 'log.oppositionVoters' : 'log.oppositionDeadlock', {}, 'bad');
 }
 
@@ -981,7 +1026,7 @@ export function eventOptions(s: GameState): { id: string; dir: OptionDir; availa
   const c = crisisById.get(s.event.id)!;
   const opts: { id: string; dir: OptionDir; available: boolean }[] =
     c.remedies.slice(0, 3).map((id, i) => ({ id, dir: DIRS[i], available: remedyAvailable(s, id) }));
-  opts.push({ id: 'elections', dir: 'down', available: true });
+  opts.push({ id: 'elections', dir: 'down', available: s.phase !== 'opposition' });
   if (!c.urgent) opts.push({ id: 'ignore', dir: 'ignore', available: true });
   return opts;
 }
@@ -1109,7 +1154,10 @@ function tickDay(s: GameState, dt: number) {
     if (r.stability <= 0 || s.day >= r.until) {
       log(s, 'log.rivalFell', {}, 'good');
       callElections(s, 'rivalCollapse');
+      return;
     }
+    // the comeback is played: opposition cards (scandal, defector, protest) chip at the rival
+    runEvents(s, dt);
     return;
   }
 
@@ -1141,6 +1189,25 @@ function tickDay(s: GameState, dt: number) {
 
   if (s.day >= s.termEndsDay) { callElections(s, 'scheduled'); return; }
 
+  // approval collapse: weeks under the floor and the partners bolt (warned first)
+  if (s.approval < c.collapseBelow) {
+    s.lowApprovalDays = (s.lowApprovalDays ?? 0) + dt;
+    if (s.lowApprovalDays >= c.collapseDays) {
+      s.lowApprovalDays = 0;
+      s.lowApprovalWarned = false;
+      log(s, 'log.pollCollapse', {}, 'bad');
+      callElections(s, 'pollCollapse');
+      return;
+    }
+    if (s.lowApprovalDays >= c.collapseWarnDays && !s.lowApprovalWarned) {
+      s.lowApprovalWarned = true;
+      log(s, 'log.pollCollapseWarn', { below: c.collapseBelow, days: Math.ceil(c.collapseDays - s.lowApprovalDays) }, 'bad');
+    }
+  } else if (s.approval >= c.collapseBelow + 2) {
+    s.lowApprovalDays = 0;
+    s.lowApprovalWarned = false;
+  }
+
   // budget: nag in Feb–Mar, automatic elections on 1 April without one
   const d = dateOf(s);
   const due = budgetDueYear(s);
@@ -1161,7 +1228,12 @@ function tickDay(s: GameState, dt: number) {
   const rec = inRecess(s);
   if (rec !== !!s.recess) { s.recess = rec; log(s, rec ? 'log.recessStart' : 'log.recessEnd', {}, 'event'); }
 
-  // events
+  runEvents(s, dt);
+  checkCoalition(s);
+}
+
+/** the card slot: tick the open card, fire queued cards, or roll the next random one */
+function runEvents(s: GameState, dt: number) {
   if (s.event) {
     s.event.leftDays -= dt;
     if (s.event.leftDays <= 0) resolveEvent(s, crisisById.get(s.event.id)?.defaultOption ?? 'ignore', true);
@@ -1185,7 +1257,6 @@ function tickDay(s: GameState, dt: number) {
       else s.nextEventInDays = scheduleNext(s);
     }
   }
-  checkCoalition(s);
 }
 
 function checkTitles(s: GameState) {
@@ -1262,8 +1333,9 @@ function actInner(s: GameState, a: Action): ActionResult {
     checkCoalition(s);
     return { ok: true };
   }
-  if (s.phase === 'opposition') return { ok: false, error: 'err.opposition' };
-  if (s.phase !== 'governing') return { ok: false, error: 'err.campaign' };
+  // in the opposition the only thing besides moves is answering an opposition card
+  if (s.phase === 'opposition' && a.type !== 'choose') return { ok: false, error: 'err.opposition' };
+  if (s.phase === 'campaign') return { ok: false, error: 'err.campaign' };
   switch (a.type) {
     case 'choose': {
       if (!s.event) return { ok: false, error: 'err.noEvent' };
