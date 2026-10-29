@@ -42,6 +42,7 @@ describe('promises and trust', () => {
       expect(g.state.event!.leftDays).toBeLessThanOrEqual(c.urgentTimeoutDays);
     };
     waitAngry();
+    expect(g.observe().event!.text).toMatch(/^You promised a draft exemption\./); // the card speaks about this very promise
     expect(g.act({ type: 'choose', optionId: 'buytime' }).ok).toBe(true);
     expect(shas().trust.state).toBe('believing');
     waitAngry();

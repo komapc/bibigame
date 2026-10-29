@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, approvalTarget, budgetDueYear, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
+  act, approvalTarget, budgetDueYear, partyById, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
@@ -219,14 +219,17 @@ export interface Timeline {
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
-/** card text; repeat cards cycle through crisis.<id>.text, .text.1, .text.2 … (as many as the locale has) */
+/** card text; repeat cards cycle through <base>, <base>.1, <base>.2 … (as many as the locale has).
+ *  <base> is crisis.<id>.text.<promise> when the card's party holds a promise that has its own text, else crisis.<id>.text */
 export function crisisText(s: GameState, id: string): string {
   const own = (k: string) => hasOwn(k); // only variants the active locale has (no mixed languages)
+  const promise = s.event?.id === id && s.event.subject ? partyById(s, s.event.subject)?.trust.promiseId ?? null : null;
+  const base = promise && own(`crisis.${id}.text.${promise}`) ? `crisis.${id}.text.${promise}` : `crisis.${id}.text`;
   let n = 1;
-  while (own(`crisis.${id}.text.${n}`)) n++;
+  while (own(`${base}.${n}`)) n++;
   const k = ((s.firedCount?.[id] ?? 1) - 1) % n;
-  const params = { seats: Math.max(0, seatsOf(s) - 1) };
-  return t(k ? `crisis.${id}.text.${k}` : `crisis.${id}.text`, params);
+  const params = { seats: Math.max(0, seatsOf(s) - 1), promise: promise ? t(`promise.${promise}`) : '' };
+  return t(k ? `${base}.${k}` : base, params);
 }
 
 /** what the current card did on arrival (its onFire effect), as a recorded outcome */
