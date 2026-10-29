@@ -62,6 +62,19 @@ export function randomBot(seed = 1): Strategy {
   };
 }
 
+/** answers every card with the same side (if that side is greyed out: the other one, else ignore) */
+export function sideBot(dir: 'left' | 'right'): Strategy {
+  return {
+    name: `always-${dir}`,
+    decide(_g, o) {
+      if (!o.event) return [];
+      const opts = o.event.options.filter((x) => x.available && x.dir !== 'ignore');
+      const op = opts.find((x) => x.dir === dir) ?? opts[0];
+      return [{ type: 'choose', optionId: op?.id ?? 'ignore' }];
+    },
+  };
+}
+
 export const alwaysWar: Strategy = {
   name: 'always-war',
   decide(_g, o) {
@@ -279,6 +292,8 @@ export const cardOnlyHudAware = cardOnly('card-only-hud-aware', (g, c) => {
 export const STRATEGIES: Record<string, (seed: number) => Strategy> = {
   'never-act': () => neverAct,
   random: (seed) => randomBot(seed),
+  'always-left': () => sideBot('left'),
+  'always-right': () => sideBot('right'),
   'always-war': () => alwaysWar,
   'promise-spammer': () => promiseSpammer,
   'card-only-trial-aware': () => cardOnlyTrialAware,

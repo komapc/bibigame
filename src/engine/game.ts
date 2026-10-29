@@ -325,6 +325,8 @@ export function crisisWeight(s: GameState, c: CrisisDef): number {
   if (req?.recess && !s.recess) return 0;
   if (req?.subjectMoodBelow !== undefined && c.subjectTag
     && !coalition(s).some((p) => matchesTag(p, c.subjectTag!) && p.satisfaction < req.subjectMoodBelow!)) return 0;
+  // most cards are a one-time story; the rest come back, but not within crisisCooldownDays (good news: a year)
+  if (!c.repeats && s.firedCount?.[c.id]) return 0;
   // no card twice within crisisCooldownDays (good news: within a year)
   const last = s.lastFired[c.id];
   if (last !== undefined && s.day - last < (c.goodNews ? c0.goodNewsCooldownDays : c0.crisisCooldownDays)) return 0;
@@ -1014,8 +1016,9 @@ export type OptionDir = Dir | 'ignore';
 export function eventOptions(s: GameState): { id: string; dir: OptionDir; available: boolean }[] {
   if (!s.event) return [];
   const c = crisisById.get(s.event.id)!;
-  const opts: { id: string; dir: OptionDir; available: boolean }[] =
-    c.remedies.slice(0, DIRS.length).flatMap((id, i) => remedySpent(s, id) ? [] : [{ id, dir: DIRS[i], available: remedyAvailable(s, id) }]);
+  // spent once-per-game remedies drop out and the next one in the list (a backup) takes the side
+  const opts: { id: string; dir: OptionDir; available: boolean }[] = c.remedies.filter((id) => !remedySpent(s, id))
+    .slice(0, DIRS.length).map((id, i) => ({ id, dir: DIRS[i], available: remedyAvailable(s, id) }));
   if (!c.urgent) opts.push({ id: 'ignore', dir: 'ignore', available: true });
   return opts;
 }

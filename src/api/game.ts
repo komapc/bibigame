@@ -221,6 +221,9 @@ const r1 = (v: number) => Math.round(v * 10) / 10;
 
 /** card text; repeat cards cycle through <base>, <base>.1, <base>.2 … (as many as the locale has).
  *  <base> is crisis.<id>.text.<promise> when the card's party holds a promise that has its own text, else crisis.<id>.text */
+/** a repeatable card that already fired earlier this game (the count includes this firing) */
+const again = (s: GameState, id: string) => !!crisisById.get(id)?.repeats && (s.firedCount?.[id] ?? 0) > 1;
+
 export function crisisText(s: GameState, id: string): string {
   const own = (k: string) => hasOwn(k); // only variants the active locale has (no mixed languages)
   const promise = s.event?.id === id && s.event.subject ? partyById(s, s.event.subject)?.trust.promiseId ?? null : null;
@@ -286,7 +289,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     ministries: s.ministries.map((m) => ({ id: m.id, name: t(`ministry.${m.id}`), holder: m.holder })),
     event: s.event && {
       id: s.event.id,
-      title: t(`crisis.${s.event.id}.title`),
+      title: again(s, s.event.id) ? t('crisis.again', { title: t(`crisis.${s.event.id}.title`) }) : t(`crisis.${s.event.id}.title`),
       text: crisisText(s, s.event.id),
       arrival: arrivalOf(s),
       subject: s.event.subject,

@@ -149,3 +149,9 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - Card titles say what happened (e.g. "High Court strikes back" → "High Court strikes down a law", "Iran fires" → "Missile barrage from Iran"), in EN/RU/HE.
 - Option labels are plain actions ("Judicial reform, part N" → "Pass a law limiting the court", "Coalition funds" → "Give them coalition funds").
 - The punch line is gone from the Trump card.
+
+## #33 One-time cards, "Again:" repeats, backup options
+- Most random cards fire once per game (the reservists' letter, Qatargate, the submarines…). Cards marked `repeats` (Kaplan, Iran, polls, the court, Trump, the budget…) come back, titled "Again: …".
+- A spent once-only remedy (beepers, Fordow, Saudi, Nobel) no longer leaves a card with Ignore only: the next remedy in the card's list takes its side.
+- The angry card no longer mentions "buy time".
+- Balance harness: `always-left` and `always-right` strategies.

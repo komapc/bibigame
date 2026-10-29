@@ -70,8 +70,9 @@ export const en: Record<string, string> = {
   'ui.icc': 'ICC warrant: {daysText}',
   'ui.botHint': 'Bots: window.bibigame',
 
+  'crisis.again': 'Again: {title}',
   'crisis.angry.title': 'Angry reminder',
-  'crisis.angry.text': 'A partner remembers exactly what you promised, and when. Deliver, buy time, or say no — and watch them slam the door.',
+  'crisis.angry.text': 'A partner remembers exactly what you promised, and when. Deliver, or say no and watch them slam the door.',
   'crisis.angry.text.ceasefire': 'You promised a ceasefire. They already told voters it was done, and now have to explain why the sirens still work.',
   'crisis.angry.text.ceasefire.1': 'You promised a ceasefire. The Qatari mediator is tired, and so are they.',
   'crisis.angry.text.ceasefire.2': 'You promised a ceasefire. So far there is only a four-hour "humanitarian pause", and they have heard that one before.',
