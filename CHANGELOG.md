@@ -144,3 +144,8 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - "Buy time" removed (option, config `buyTimeDays`, strings).
 - "VAT off cottage cheese" is no longer offered on cards; it stays as a move with its cooldown.
 - **Breaking for bots / text protocol**: options have `dir` left / right / ignore only; `up`, `down`, `3`, `4` are gone; `choose elections` → `move elections`.
+
+## #30 Plain wording
+- Card titles say what happened (e.g. "High Court strikes back" → "High Court strikes down a law", "Iran fires" → "Missile barrage from Iran"), in EN/RU/HE.
+- Option labels are plain actions ("Judicial reform, part N" → "Pass a law limiting the court", "Coalition funds" → "Give them coalition funds").
+- The punch line is gone from the Trump card.
