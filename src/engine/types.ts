@@ -143,6 +143,8 @@ export interface CrisisDef {
     notPassed?: string;
     /** only during a war or within config.recentWarDays after one */
     recentWar?: boolean;
+    /** only if the card's subjectMinistry is held by a party with this tag (the text names that kind of minister) */
+    ministryHolderTag?: string;
     /** only if some coalition party with the card's subjectTag is below this mood */
     subjectMoodBelow?: number;
     /** only during the Knesset summer recess */

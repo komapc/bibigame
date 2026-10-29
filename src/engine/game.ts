@@ -315,6 +315,11 @@ export function crisisWeight(s: GameState, c: CrisisDef): number {
   if (req?.maxApproval !== undefined && s.approval > req.maxApproval) return 0;
   if (req?.noWar && s.war.active) return 0;
   if (req?.maxFiscal !== undefined && s.fiscal > req.maxFiscal) return 0;
+  if (req?.ministryHolderTag && c.subjectMinistry) {
+    const h = s.ministries.find((m) => m.id === c.subjectMinistry)?.holder;
+    const hp = h ? partyById(s, h) : undefined;
+    if (!hp || !matchesTag(hp, req.ministryHolderTag)) return 0;
+  }
   if (req?.minTrial !== undefined && s.trial < req.minTrial) return 0;
   if (req?.warHistory && !s.war.active && s.stats.warsEnded === 0) return 0;
   const c0 = s.config;
@@ -337,7 +342,8 @@ export function crisisWeight(s: GameState, c: CrisisDef): number {
   switch (c.id) {
     case 'kaplan': w *= Math.min(c0.kaplanStreetMaxMult, 1 + Math.max(0, 60 - s.street) / 20); break;
     case 'case': w *= 0.5 + s.trial / 50; break;
-    case 'trump': w *= 1 + Math.max(0, 50 - s.us) / 25; break;
+    // "Trump cools off" makes no sense while he is still in love (😍)
+    case 'trump': w *= (s.trumpMood ?? 0) >= 1 ? 0 : 1 + Math.max(0, 50 - s.us) / 25; break;
     case 'rebel': w *= 1 + Math.max(0, 60 - pmParty(s).satisfaction) / 20; break;
     case 'deal': w *= s.war.active ? 3 : 1; break;
     case 'budget': {

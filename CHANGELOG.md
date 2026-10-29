@@ -162,6 +162,12 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - The angry card no longer mentions "buy time".
 - Balance harness: `always-left` and `always-right` strategies.
 
+## #34 Effect sizes, failed gambles, cards that fit the moment
+- Effect chips show the size: ▲ / ▲▲ / ▲▲▲ (text mode: `+`, `++`, `+++`).
+- A gamble that missed says "❌ it did not work" in the result line.
+- The Temple Mount and prison-pita cards fire only while a far-right party holds the security ministry; "Trump cools off" not while he is still in love (😍).
+- Season-neutral texts: the start condition "summer heatwave" became "cost-of-living anger"; the drift "honeymoon wearing off" became "the mood cools off".
+
 ## #35 Budget can always pass; meters recover faster
 - The budget card's first option is a ministry (always available). A permanent law already passed counts as spent, so a backup remedy takes its side. Before, an empty treasury plus a passed exemption left no way to pass the budget.
 - `meterRegression` 0.002 → 0.004: street, US and fiscal recover twice as fast. Smart play pays again (see docs/balance.md, round 9).

@@ -298,7 +298,7 @@ function renderHud(o: Observation) {
 
 // ------------------------------------------------------------------ crisis card
 /** an effect chip's text: "▲Approval", but the trial reads "Trial slower" / "Trial faster" (no arrows to decode) */
-const chipText = (p: Preview, sep = '') => p.meter === 'trial' ? t(p.up ? 'ui.trialSlower' : 'ui.trialFaster') : `${p.up ? '▲' : '▼'}${sep}${p.label}`;
+const chipText = (p: Preview, sep = '') => p.meter === 'trial' ? t(p.up ? 'ui.trialSlower' : 'ui.trialFaster') : `${(p.up ? '▲' : '▼').repeat(p.size ?? 1)}${sep}${p.label}`;
 const meterLabel = (meter: string, label: string, delta: number) => meter === 'trial' ? t(delta > 0 ? 'ui.trialFaster' : 'ui.trialSlower') : label;
 
 /** what the crisis already did when it arrived (onFire): small chips under the card text */
