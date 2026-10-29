@@ -84,7 +84,7 @@ export function renderText(o: Observation): string {
     L.push(`CRISIS: ${o.event.title} — ${o.event.text}${o.event.subject ? ` (subject: ${o.event.subject})` : ''} [${g_timeoutNote(o)}]`);
     const n: Record<string, number> = { left: 1, right: 2, up: 3, down: 4, ignore: 0 };
     for (const op of o.event.options) {
-      const fx = op.preview.map((p) => `${p.label}${p.up ? '+' : '-'}`).join(', ');
+      const fx = op.preview.map((p) => `${p.label}${(p.up ? '+' : '-').repeat(p.size ?? 1)}`).join(', ');
       L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.odds !== null ? ` [${op.odds}% odds]` : ''}${op.available ? '' : ` [unavailable: ${op.why}]`}${fx ? ` -> ${fx}` : ''}`);
     }
   } else if (o.phase === 'governing' || o.phase === 'opposition') L.push('No crisis right now.');
