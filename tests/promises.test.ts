@@ -45,7 +45,7 @@ describe('promises and trust', () => {
     expect(g.act({ type: 'choose', optionId: 'buytime' }).ok).toBe(true);
     expect(shas().trust.state).toBe('believing');
     waitAngry();
-    expect(g.observe().event!.options.find((o) => o.id === 'buytime')!.available).toBe(false);
+    expect(g.observe().event!.options.find((o) => o.id === 'buytime')).toBeUndefined(); // spent: dropped from the card
     expect(g.act({ type: 'choose', optionId: 'left' }).ok).toBe(true); // deliver at a premium
     expect(shas().trust.state).toBe('neutral');
     expect(g.state.stats.promisesKept).toBe(1);

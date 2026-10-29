@@ -369,6 +369,16 @@ export function remedyAvailable(s: GameState, id: string): boolean {
   return true;
 }
 
+/** a one-shot option already spent (used once per game, or time already bought for this promise): drop it from the card instead of greying it out */
+function remedySpent(s: GameState, id: string): boolean {
+  if (remedyById.get(id)?.once && s.usedOnce.includes(id)) return true;
+  if (id === 'buytime') {
+    const p = s.event?.subject ? partyById(s, s.event.subject) : undefined;
+    return !!p?.trust.extended;
+  }
+  return false;
+}
+
 /** slow killers get a log line when they cross a step (cause → effect for things that drift) */
 function driftNotes(s: GameState, trial0: number, street0: number) {
   if (Math.floor(s.trial / 10) > Math.floor(trial0 / 10) && s.trial >= 40) {
@@ -1025,7 +1035,7 @@ export function eventOptions(s: GameState): { id: string; dir: OptionDir; availa
   if (!s.event) return [];
   const c = crisisById.get(s.event.id)!;
   const opts: { id: string; dir: OptionDir; available: boolean }[] =
-    c.remedies.slice(0, 3).map((id, i) => ({ id, dir: DIRS[i], available: remedyAvailable(s, id) }));
+    c.remedies.slice(0, 3).flatMap((id, i) => remedySpent(s, id) ? [] : [{ id, dir: DIRS[i], available: remedyAvailable(s, id) }]);
   opts.push({ id: 'elections', dir: 'down', available: s.phase !== 'opposition' });
   if (!c.urgent) opts.push({ id: 'ignore', dir: 'ignore', available: true });
   return opts;
