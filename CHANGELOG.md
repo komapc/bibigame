@@ -123,3 +123,13 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - Trial chips read "Trial slower" / "Trial faster". In opposition the header shows the rival government's stability, and The Daily Coalition says "What now?" with the opposition moves.
 - The clock stops while the sheet is open. Unavailable options shake and say why. Invite reports who joined or why they refused. A promise needs a confirm step that shows the boost and the due date. No text selection in the game area.
 - API: read-only `Preview.meter` (`'trial'`).
+
+## #25 Spent options leave the card
+- A one-shot option that is already used (time already bought for this promise, once-per-game remedies) is no longer shown greyed out; its slot stays empty. Buy-time texts drop "works once".
+
+## #26 Hebrew phrase review
+- Reviewed Hebrew texts for intro, crises and remedies; EN/RU follow. Most card punch lines are gone, so cards are shorter.
+- The angry reminder names the broken promise: per-promise texts (`crisis.<id>.text.<promise>`, 3 variants each), `{promise}` placeholder.
+
+## #27 Fewer filler cards
+- Removed the Eurovision, Shabbat-elevator, recess-junket and beach-selfie news, and the extra Trump card texts.
