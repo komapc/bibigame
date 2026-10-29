@@ -15,6 +15,9 @@ export const MOVES: MoveDef[] = [
   { id: 'lifeitself', phases: ['governing', 'campaign'], cooldownDays: 180 },
   { id: 'securitydetail', phases: ['governing'], cooldownDays: 365 },
   { id: 'postponeelections', phases: ['governing'], oncePerTerm: true, requires: { war: true, electionsWithinDays: 365 } },
+  // the last months of a term: two levers on the vote (both show up in the election odds)
+  { id: 'electionbudget', phases: ['governing'], oncePerTerm: true, requires: { electionsWithinDays: 180 } },
+  { id: 'groundgame', phases: ['governing'], oncePerTerm: true, requires: { electionsWithinDays: 180 } },
   { id: 'primetime', phases: ['governing', 'campaign', 'opposition'], cooldownDays: 60 },
   // campaign (once per election)
   { id: 'merger', phases: ['campaign'], oncePerTerm: true },

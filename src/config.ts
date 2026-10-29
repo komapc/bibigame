@@ -64,6 +64,19 @@ export interface Config {
   losePerRecentElection: number;
   electionFatigueDays: number;
   loseMax: number;
+  /** the roll also falls per approval point ABOVE approvalNeutral (popular PMs are safer) */
+  loseGainPerApprovalPoint: number;
+  /** the "ground game" lever (last months of a term): off the next loss roll */
+  groundGameLose: number;
+  /** approval collapse: below this for collapseDays in a row (governing) → partners bolt, elections;
+   *  a warning (log + advisor) after collapseWarnDays */
+  collapseBelow: number;
+  collapseDays: number;
+  collapseWarnDays: number;
+  /** "deliver now (at a premium)": the delivered remedy's costs are scaled by this (the premium is the bill) */
+  premiumCostScale: number;
+  /** show the election odds and their factors this many days before scheduled elections */
+  electionOddsDays: number;
   /** trial meter at which you're indicted and the game ends (0 = never) */
   indictAt: number;
   /** consecutive elections without a Bibi government before game over */
@@ -247,6 +260,13 @@ export const DEFAULT_CONFIG: Config = {
   losePerRecentElection: 0.1,
   electionFatigueDays: 1461,
   loseMax: 0.85,
+  loseGainPerApprovalPoint: 0.005,
+  groundGameLose: 0.08,
+  collapseBelow: 20,
+  collapseDays: 90,
+  collapseWarnDays: 45,
+  premiumCostScale: 0.5,
+  electionOddsDays: 180,
   indictAt: 100,
   maxFailedElections: 1,
 

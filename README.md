@@ -28,6 +28,10 @@ given date), `?seed=N` for a fixed seed, `?lang=en|ru|he` for the language.
   Between cards, The Daily Coalition offers quick Promise / Reshuffle / Pass a law / Start a war buttons.
 - **Moves** (🎲), **opposition** period after a lost election, **rotation** promises, special
   **endings** (Miami, plea bargain, rotation handover) and 22 titles.
+- **Late game**: in the last 180 days of a term the election odds and their factors (approval, open
+  cases, recent elections, tricks) are shown, with two levers (election-year budget, ground game).
+  Approval under 20 for 90 days makes the partners bolt (warned at 45 days). The opposition has its own
+  cards (a scandal in the government, a wavering MK, a protest) that bring the rival government down.
 - **Knesset summer recess** (Aug–Sep): regular crises pause (wildcards still happen), the clock runs
   faster, shown on the timeline.
 - **Spin-doctor tips**: rule-based hints shown inline under the card (no popup, no repeats for a
