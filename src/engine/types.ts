@@ -152,6 +152,8 @@ export interface CrisisDef {
   };
   /** never fired by the random roll (scheduled by the engine) */
   scheduled?: boolean;
+  /** may fire again later in the game (titled "Again: …"); every other random card fires once per game */
+  repeats?: boolean;
   /** shorter timer, distinct look */
   urgent?: boolean;
   /** option applied on timeout (default 'ignore') */

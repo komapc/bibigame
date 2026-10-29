@@ -152,5 +152,12 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 
 ## #31 News screen waits for Next
 - After a card the clock stops on the news screen until the player taps **Next ▶** (or Space / Enter); moves can be made meanwhile. Config `pauseOnNews` (default on).
+
 ## #32 Reshuffle: two ready-made options
 - The ministries panel shows two ready-made reshuffles (the unhappiest partners each get a ministry from whoever holds the most above their fair share) instead of a dropdown per ministry. `observe().reshuffles`; `giveMinistry` is unchanged for bots and text mode.
+
+## #33 One-time cards, "Again:" repeats, backup options
+- Most random cards fire once per game (the reservists' letter, Qatargate, the submarines…). Cards marked `repeats` (Kaplan, Iran, polls, the court, Trump, the budget…) come back, titled "Again: …".
+- A spent once-only remedy (beepers, Fordow, Saudi, Nobel) no longer leaves a card with Ignore only: the next remedy in the card's list takes its side.
+- The angry card no longer mentions "buy time".
+- Balance harness: `always-left` and `always-right` strategies.

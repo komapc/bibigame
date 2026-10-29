@@ -65,8 +65,9 @@ export const he: Record<string, string> = {
   'ui.icc': 'צו מהאג: עוד {daysText}',
   'ui.botHint': 'בוטים: window.bibigame',
 
+  'crisis.again': 'שוב: {title}',
   'crisis.angry.title': 'תזכורת עצבנית',
-  'crisis.angry.text': 'שותף זוכר בדיוק מה הבטחת ומתי. לקיים, לקנות זמן או להגיד לא — ולראות אותו טורק את הדלת.',
+  'crisis.angry.text': 'שותף זוכר בדיוק מה הבטחת ומתי. לקיים — או להגיד לא ולראות אותו טורק את הדלת.',
   'crisis.angry.text.ceasefire': 'הבטחת הפסקת אש. הם כבר אמרו לבוחרים שזה סגור, ועכשיו צריכים להסביר למה האזעקות עוד עובדות.',
   'crisis.angry.text.ceasefire.1': 'הבטחת הפסקת אש. המתווך הקטארי כבר עייף, וגם הם.',
   'crisis.angry.text.ceasefire.2': 'הבטחת הפסקת אש. בינתיים יש רק "הפוגה הומניטרית" של ארבע שעות, וגם אותה הם כבר שמעו.',
