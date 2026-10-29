@@ -89,7 +89,7 @@ export interface Observation {
     id: string; title: string; text: string; subject: string | null; daysLeft: number;
     /** what the crisis already did when it arrived (onFire), or null */
     arrival: OutcomeView | null;
-    /** left / right / up = remedies, down = early elections; timeout = ignore */
+    /** left / right = remedies; timeout = ignore (early elections are a move) */
     options: { id: string; dir: string; odds: number | null; label: string; desc: string; available: boolean; preview: Preview[]; why: string }[];
   };
   war: { active: boolean; daysLeft: number; cooldownDays: number };
@@ -397,7 +397,7 @@ export function preview(s: GameState, optionId: string): Preview[] {
       war: ['fx.war', true], endWar: ['fx.endWar', true], ministryToSubject: ['fx.ministry', true],
       fireFarRight: ['fx.fire', false], fireDefence: ['fx.fire', false], elections: ['fx.elections', false],
       passBudget: ['fx.budget', true], defector: ['fx.defector', false],
-      deliverPromise: ['fx.deliver', true], buyTime: ['fx.buyTime', true], refuse: ['fx.refuse', false],
+      deliverPromise: ['fx.deliver', true], refuse: ['fx.refuse', false],
       poach: ['fx.poach', true], newMinistry: ['fx.newMinistry', true], merger: ['fx.merger', true],
       spoiler: ['fx.spoiler', true], gevalt: ['fx.gevalt', true], exileRival: ['fx.exileRival', true],
       primetime: ['fx.primetime', true], postponeElections: ['fx.postponeElections', true],

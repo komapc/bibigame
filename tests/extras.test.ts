@@ -23,7 +23,7 @@ describe('advisor + Friday edition', () => {
     const g = createGame({ seed: 3 });
     const snap = editionSnap(g.state);
     for (let i = 0; i < 90; i++) {
-      if (g.state.event) g.act({ type: 'choose', optionId: g.observe(0).event!.options.find((x) => x.available && x.id !== 'elections')!.id });
+      if (g.state.event) g.act({ type: 'choose', optionId: g.observe(0).event!.options.find((x) => x.available)!.id });
       g.advanceDays(1);
     }
     const ed = fridayEdition(g.state, snap);

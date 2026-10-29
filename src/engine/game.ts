@@ -359,24 +359,15 @@ export function remedyAvailable(s: GameState, id: string): boolean {
   if (r.permanent && s.lawsPassed.includes(id)) return false;
   if (r.travel && s.day < s.iccUntil) return false;
   if (id === 'war') return !s.war.active && s.war.cooldownDays <= 0;
-  if (id === 'buytime') {
-    const p = s.event?.subject ? partyById(s, s.event.subject) : undefined;
-    return !!p && !p.trust.extended;
-  }
   if (id === 'funds' && s.fiscal < s.config.fundsMinFiscal) return false;
   if (id === 'fire') return coalition(s).some((p) => p.tags.includes('farright') && ministryCounts(s.ministries)[p.id]);
   if (id === 'newministry') return s.ministries.length < s.base.ministries.length + s.config.newMinistryMax;
   return true;
 }
 
-/** a one-shot option already spent (used once per game, or time already bought for this promise): drop it from the card instead of greying it out */
+/** a one-shot option already spent (used once per game): drop it from the card instead of greying it out */
 function remedySpent(s: GameState, id: string): boolean {
-  if (remedyById.get(id)?.once && s.usedOnce.includes(id)) return true;
-  if (id === 'buytime') {
-    const p = s.event?.subject ? partyById(s, s.event.subject) : undefined;
-    return !!p?.trust.extended;
-  }
-  return false;
+  return !!remedyById.get(id)?.once && s.usedOnce.includes(id);
 }
 
 /** slow killers get a log line when they cross a step (cause → effect for things that drift) */
@@ -413,7 +404,6 @@ export function unavailableReason(s: GameState, id: string): { key: string; para
   if (r.permanent && s.lawsPassed.includes(id)) return { key: 'why.passed' };
   if (r.travel && s.day < s.iccUntil) return { key: 'why.icc', params: { days: Math.ceil(s.iccUntil - s.day) } };
   if (id === 'funds') return { key: 'why.fiscal' };
-  if (id === 'buytime') return { key: 'why.boughtTime' };
   if (id === 'newministry') return { key: 'why.cap' };
   return { key: 'why.na' };
 }
@@ -539,16 +529,6 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
         for (const x of group) { const m = ministryFor(s, x); if (m) transferMinistry(s, m.id, x.id); }
       } else applyMove(s, def.deliveredBy, p.id, undefined, c.premiumCostScale);
       for (const x of group) x.trust = { state: 'neutral', promiseId: null, until: 0 };
-      break;
-    }
-    case 'buyTime': {
-      const p = subject ? partyById(s, subject) : undefined;
-      if (!p || p.trust.state !== 'angry') break;
-      for (const x of promiseGroup(s, p)) {
-        x.trust = { state: 'believing', promiseId: x.trust.promiseId, until: s.day + s.config.buyTimeDays, extended: true };
-        x.satisfaction = clamp(x.satisfaction - 5, 0, 100);
-        log(s, 'log.buyTime', { party: x.id }, 'info');
-      }
       break;
     }
     case 'refuse': {
@@ -1023,20 +1003,19 @@ function fireCrisis(s: GameState, c: CrisisDef, subjectOverride?: string | null)
   log(s, 'log.crisis', { crisis: c.id, subject: subject ?? '' }, 'event');
 }
 
-export type Dir = 'left' | 'right' | 'up' | 'down';
-export const DIRS: Dir[] = ['left', 'right', 'up', 'down'];
+export type Dir = 'left' | 'right';
+export const DIRS: Dir[] = ['left', 'right'];
 
 /** the current crisis card: ≤3 remedies on left/right/up, elections on down */
 export type OptionDir = Dir | 'ignore';
 
-/** the current crisis card: ≤3 remedies on left/right/up, elections on down, plus a separate
- *  "ignore it" tap (dir 'ignore', key 0) on every non-urgent card */
+/** the current crisis card: ≤2 remedies on left/right, plus a separate "ignore it" tap
+ *  (dir 'ignore', key 0) on every non-urgent card; war is its own action (startWar) */
 export function eventOptions(s: GameState): { id: string; dir: OptionDir; available: boolean }[] {
   if (!s.event) return [];
   const c = crisisById.get(s.event.id)!;
   const opts: { id: string; dir: OptionDir; available: boolean }[] =
-    c.remedies.slice(0, 3).flatMap((id, i) => remedySpent(s, id) ? [] : [{ id, dir: DIRS[i], available: remedyAvailable(s, id) }]);
-  opts.push({ id: 'elections', dir: 'down', available: s.phase !== 'opposition' });
+    c.remedies.slice(0, DIRS.length).flatMap((id, i) => remedySpent(s, id) ? [] : [{ id, dir: DIRS[i], available: remedyAvailable(s, id) }]);
   if (!c.urgent) opts.push({ id: 'ignore', dir: 'ignore', available: true });
   return opts;
 }

@@ -102,8 +102,6 @@ details[open] > summary::before { transform: rotate(90deg); }
 .hint.na { opacity: .45; cursor: not-allowed; }
 .hint .arrow { font-weight: 700; color: var(--gold); margin-inline-end: 4px; }
 .hint.empty { visibility: hidden; }
-.hint-up, .hint-down { width: 100%; text-align: center; }
-.hint-down { background: #1d2c3f; color: var(--mute); }
 .lr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .hint-right { text-align: end; }
 .swipelabel { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: 10px; border-radius: 14px; background: #120a20ee; pointer-events: none; }
@@ -115,7 +113,7 @@ details[open] > summary::before { transform: rotate(90deg); }
 .fx span { font-size: 12px; padding: 2px 6px; border-radius: 999px; }
 .fx .up { background: #1f4d2b; color: #b9f6ca; } .fx .down { background: #5a1f1a; color: #ffcdd2; }
 .hint .fx.mini { display: flex; margin-top: 3px; gap: 2px; }
-.hint-right .fx.mini { justify-content: flex-end; } .hint-up .fx.mini, .hint-down .fx.mini { justify-content: center; }
+.hint-right .fx.mini { justify-content: flex-end; }
 .fx.mini span { font-size: 10px; padding: 1px 4px; line-height: 1.3; }
 .hint .why { display: block; font-size: 10px; color: var(--mute); margin-top: 2px; }
 
@@ -272,6 +270,9 @@ body[data-layer=over] .toast { bottom: 16px; }
 .ignorebtn { width: 100%; min-height: 44px; margin-top: 8px; border-radius: 12px; background: transparent; border: 1px dashed #6d5a8f; color: var(--mute); text-align: start; padding: 6px 12px; }
 .ignorebtn b { color: var(--ink); }
 .ignorebtn kbd { float: inline-end; opacity: .6; font-size: 11px; }
+.underbtns { display: flex; gap: 8px; }
+.underbtns .ignorebtn { flex: 1; }
+.underbtns .warbtn { width: auto; flex: none; border-color: #a3453a; }
 .meter { position: relative; }
 .floater { position: absolute; inset-inline-end: 0; top: -4px; font-weight: 800; pointer-events: none; animation: floatup 1.3s ease-out forwards; }
 .floater.up { color: var(--good, #5fd38d); } .floater.down { color: var(--bad); }

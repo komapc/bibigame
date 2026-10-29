@@ -67,7 +67,7 @@ describe('rotation', () => {
     g.state.budgetPassedYear = 2100;
     g.advanceDays(3);
     expect(g.state.event?.id).toBe('rotation');
-    expect(g.observe().event!.options.map((o) => o.id)).toEqual(['handover', 'breakrotation', 'elections']);
+    expect(g.observe().event!.options.map((o) => o.id)).toEqual(['handover', 'breakrotation']);
     g.act({ type: 'choose', optionId: 'handover' });
     expect(g.state.status).toBe('retired');
     expect(g.state.lostReason).toBe('rotation');
