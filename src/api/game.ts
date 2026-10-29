@@ -118,7 +118,11 @@ export interface Observation {
 }
 
 /** `meter: 'trial'` marks a trial-pressure chip (up = good = the trial slows down) so the UI can word it */
-export interface Preview { label: string; up: boolean; meter?: string }
+/** size: 1 small, 2 medium, 3 large (shown as ▲ / ▲▲ / ▲▲▲) */
+export interface Preview { label: string; up: boolean; meter?: string; size?: number }
+
+/** rough size of a change: meters move in smaller steps than party moods */
+const sizeOf = (delta: number, sat = false) => { const a = Math.abs(delta) / (sat ? 1.5 : 1); return a <= 4 ? 1 : a <= 10 ? 2 : 3; };
 
 export interface OutcomeView {
   seq: number; day: number; kind: Outcome['kind'];
@@ -179,7 +183,8 @@ const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 
 export function formatOutcome(s: GameState, o: Outcome): OutcomeView {
   const nameOf = (id: string) => pname(s, id);
-  const cause = formatLog({ t: o.day, key: o.cause.key, params: o.cause.params }, nameOf);
+  // a gamble that missed says so: the numbers alone read like a mystery
+  const cause = formatLog({ t: o.day, key: o.cause.key, params: o.cause.params }, nameOf) + (o.cause.params?.fail ? ` — ${t('out.failed')}` : '');
   const sat = o.sat.map((x) => ({ ...x, name: nameOf(x.party) }));
   const meters = o.meters.map((x) => ({ ...x, label: t(`fx.${x.meter}`) }));
   const risks = o.risks.map((id) => t(`crisis.${id}.title`));
@@ -392,10 +397,10 @@ export function preview(s: GameState, optionId: string): Preview[] {
     if (bill) out.unshift({ label: t('fx.bill', { bill }), up: false });
   }
   for (const e of effects) {
-    for (const k of ['approval', 'street', 'us', 'fiscal'] as const) if (e[k]) out.push({ label: t(`fx.${k}`), up: e[k]! > 0 });
-    if (e.trial) out.push({ label: t('fx.trial'), up: e.trial < 0, meter: 'trial' });
+    for (const k of ['approval', 'street', 'us', 'fiscal'] as const) if (e[k]) out.push({ label: t(`fx.${k}`), up: e[k]! > 0, size: sizeOf(e[k]!) });
+    if (e.trial) out.push({ label: t('fx.trial'), up: e.trial < 0, meter: 'trial', size: sizeOf(e.trial) });
     if (e.position) out.push({ label: t(e.position > 0 ? 'fx.right' : 'fx.left'), up: true });
-    for (const x of e.sat ?? []) out.push({ label: tagLabel(s, x.target, subject), up: x.delta > 0 });
+    for (const x of e.sat ?? []) out.push({ label: tagLabel(s, x.target, subject), up: x.delta > 0, size: sizeOf(x.delta, true) });
     if (e.pauseTrialDays) out.push({ label: t('fx.pause'), up: true });
     if (e.quietDays) out.push({ label: t('fx.quiet'), up: true });
     if (e.rival) out.push({ label: t('fx.rival'), up: e.rival < 0 });

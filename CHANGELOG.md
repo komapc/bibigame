@@ -161,3 +161,9 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - A spent once-only remedy (beepers, Fordow, Saudi, Nobel) no longer leaves a card with Ignore only: the next remedy in the card's list takes its side.
 - The angry card no longer mentions "buy time".
 - Balance harness: `always-left` and `always-right` strategies.
+
+## #34 Effect sizes, failed gambles, cards that fit the moment
+- Effect chips show the size: ▲ / ▲▲ / ▲▲▲ (text mode: `+`, `++`, `+++`).
+- A gamble that missed says "❌ it did not work" in the result line.
+- The Temple Mount and prison-pita cards fire only while a far-right party holds the security ministry; "Trump cools off" not while he is still in love (😍).
+- Season-neutral texts: the start condition "summer heatwave" became "cost-of-living anger"; the drift "honeymoon wearing off" became "the mood cools off".
