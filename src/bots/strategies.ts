@@ -299,5 +299,5 @@ export const STRATEGIES: Record<string, (seed: number) => Strategy> = {
   'card-only-trial-aware': () => cardOnlyTrialAware,
   'card-only-hud-aware': () => cardOnlyHudAware,
   greedy: () => greedy(0, 'greedy'),
-  lookahead: () => greedy(30, 'lookahead', 4),
+  lookahead: () => greedy(30, 'lookahead', 2),
 };

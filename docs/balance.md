@@ -21,7 +21,7 @@ was effectively an oracle and never lost).
 | always-war | starts wars whenever possible, picks `war` on cards |
 | promise-spammer | promises everything to everyone, never delivers |
 | greedy | picks the card option with the best immediate score; ministries to the unhappiest partner, cheap promises, delivers before expiry, invites when the majority is thin |
-| lookahead | greedy, but scores options by the mean of 4 blind 30-day rollouts; skips snap elections unless the majority is already gone |
+| lookahead | greedy, but scores options by the mean of 2 blind 30-day rollouts (was 4; halved for run time); skips snap elections unless the majority is already gone |
 | card-only-trial-aware | human proxy: no drawer, no rollouts; picks the option with the best immediate coalition mood + approval − trial, always delivers on angry cards |
 | **card-only-hud-aware** | **primary "decent human" target**: like trial-aware but reads every meter (approval, street, fiscal, US, trial, budget) and avoids leaving a partner below 20 |
 
