@@ -189,3 +189,4 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - Invite odds shown before you spend the invitation (UI button and text mode); an accepted partner pulls the government's line toward it.
 - Cards: "President hasn't called" not while US support ≥ 60; "Laundry" only after a Washington trip; the deal card has a peacetime text and non-travel backups; the Trump card's Channel 14 backup now pleases Trump.
 - Fixes: PM time doesn't count during a campaign run from the opposition; the poll-collapse counter resets once approval is back; no "Nothing visible changed" on elections or game over; up to 8 parties listed in a result; text fixes (new party, cottage cheese, ministry quip).
+- Balance: closing the exploits made the game harder (0/10/20/37 at 12y); `meterRegression` 0.004 → 0.0045 restores the profile: random 3% · always-right 20% · greedy 37% · lookahead 63%. The lookahead bot now uses 2 rollouts instead of 4 (half the run time).

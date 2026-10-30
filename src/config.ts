@@ -319,7 +319,7 @@ export const DEFAULT_CONFIG: Config = {
   approvalRegression: 0.01,
   fatiguePerYear: 1.0,
   trialGrowthPerDay: 0.03,
-  meterRegression: 0.004,
+  meterRegression: 0.0045,
   approvalSeatFactor: 0.35,
   approvalNeutral: 45,
   electionNoise: 0.12,
