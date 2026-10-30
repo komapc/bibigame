@@ -38,6 +38,8 @@ export interface Trust {
   promiseId: string | null;
   /** game day the current state ends */
   until: number;
+  /** game day the promise was made (a kept promise pays more the longer they waited) */
+  since?: number;
 }
 
 export type Trait = 'patient' | 'hothead' | 'greedy' | 'loyal' | 'opportunist';

@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, approvalTarget, dampen, fatigueOf, budgetDueYear, partyById, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, reshuffleOffers, satDrivers, seatsOf, step,
+  act, approvalTarget, dampen, inviteChance, fatigueOf, ministryTarget, budgetDueYear, partyById, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, reshuffleOffers, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
@@ -68,6 +68,8 @@ export interface Observation {
   parties: {
     id: string; name: string; short: string; color: string; seats: number; position: number; tolerance: number;
     satisfaction: number; inCoalition: boolean; wartime: boolean; threatening: boolean;
+    /** % chance an invitation is accepted (null for coalition members) */
+    inviteOdds: number | null;
     willSitWithBibi: boolean; tags: string[]; ministries: string[];
     /** waiting = believe window ends within config.promiseWarnDays (angry reminder coming) */
     trust: { state: string; promiseId: string | null; daysLeft: number; waiting: boolean };
@@ -198,10 +200,11 @@ export function formatOutcome(s: GameState, o: Outcome): OutcomeView {
     parts.push(why ? t('ui.inviteNo', { party: nameOf(String(o.cause.params?.party)), why: t(`ui.inviteWhy.${why}`) })
       : t('out.refused', { party: nameOf(String(o.cause.params?.party)) }));
   }
-  const fx = [...sat.slice(0, 6).map((x) => `${x.name} ${sign(x.delta)}`), ...meters.map((x) => `${x.label} ${sign(x.delta)}`)];
+  const fx = [...sat.slice(0, 8).map((x) => `${x.name} ${sign(x.delta)}`), ...meters.map((x) => `${x.label} ${sign(x.delta)}`)];
   if (fx.length) parts.push(fx.join(', '));
   if (risks.length) parts.push(`${t('out.risk')}: ${risks.join(', ')}`);
-  if (!parts.length) parts.push(t('out.nothing'));
+  // an election or the end of the game speaks for itself
+  if (!parts.length && o.kind !== 'elections' && o.kind !== 'newGov' && s.status === 'playing') parts.push(t('out.nothing'));
   return {
     seq: o.seq, day: o.day, kind: o.kind, cause, sat, meters, seats: o.seats, left, joined, risks,
     big: left.length > 0 || joined.length > 0 || o.kind === 'elections' || o.kind === 'newGov',
@@ -238,7 +241,9 @@ const again = (s: GameState, id: string) => !!crisisById.get(id)?.repeats && (s.
 export function crisisText(s: GameState, id: string): string {
   const own = (k: string) => hasOwn(k); // only variants the active locale has (no mixed languages)
   const promise = s.event?.id === id && s.event.subject ? partyById(s, s.event.subject)?.trust.promiseId ?? null : null;
-  const base = promise && own(`crisis.${id}.text.${promise}`) ? `crisis.${id}.text.${promise}` : `crisis.${id}.text`;
+  // a card that also fires in peacetime may have a peacetime text (e.g. the deal card after a war)
+  const plain = !s.war.active && own(`crisis.${id}.text.peace`) ? `crisis.${id}.text.peace` : `crisis.${id}.text`;
+  const base = promise && own(`crisis.${id}.text.${promise}`) ? `crisis.${id}.text.${promise}` : plain;
   let n = 1;
   while (own(`${base}.${n}`)) n++;
   const k = ((s.firedCount?.[id] ?? 1) - 1) % n;
@@ -287,6 +292,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     parties: s.parties.map((p) => ({
       id: p.id, name: partyLabel(p.id, p.name), short: partyLabel(`${p.id}.short`, p.short), color: p.color, seats: p.seats, position: p.position,
       tolerance: p.tolerance, satisfaction: r1(p.satisfaction), inCoalition: p.inCoalition, wartime: p.wartime,
+      inviteOdds: p.inCoalition || p.seats === 0 ? null : Math.round(inviteChance(s, p) * 100),
       threatening: p.threatening, willSitWithBibi: p.willSitWithBibi, tags: p.tags,
       ministries: s.ministries.filter((m) => m.holder === p.id).map((m) => m.id),
       trust: {
@@ -438,7 +444,14 @@ export function preview(s: GameState, optionId: string): Preview[] {
       breakRotation: ['fx.breakRotation', false], pivot: ['fx.pivot', true], securityDetail: ['fx.securityDetail', true], noConfidence: ['fx.noConfidence', true], oppPoach: ['fx.poach', true],
       groundGame: ['fx.groundGame', true],
     };
-    if (e.special && sp[e.special]) out.push({ label: t(sp[e.special][0]), up: sp[e.special][1] });
+    if (e.special === 'ministryToSubject') {
+      // name who gets a portfolio and who pays for it (or a deputy post when nothing is left)
+      const mt = ministryTarget(s, subject);
+      if (mt.to && mt.ministry) {
+        out.push({ label: t('fx.ministryTo', { party: pname(s, mt.to.id), ministry: t(`ministry.${mt.ministry.id}`) }), up: true });
+        if (mt.from) out.push({ label: pname(s, mt.from), up: false, size: 2 });
+      } else if (mt.to) out.push({ label: t('fx.deputyPost', { party: pname(s, mt.to.id) }), up: true });
+    } else if (e.special && sp[e.special]) out.push({ label: t(sp[e.special][0]), up: sp[e.special][1] });
   }
   const seen = new Set<string>();
   return out.filter((x) => { const k = x.label + x.up; if (seen.has(k)) return false; seen.add(k); return true; });
