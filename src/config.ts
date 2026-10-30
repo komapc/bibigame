@@ -187,6 +187,14 @@ export interface Config {
   warEndApproval: number;
   warFiscal: number;
   warApprovalBonusTarget: number;
+  /** the rally fades: by the end of the war only this share of warApprovalBonusTarget is left */
+  warRallyMinShare: number;
+  /** the bill arrives later: budget health lost per day of war */
+  warFiscalPerDay: number;
+  /** empty treasury: below this budget health the approval target drops and partners sour daily */
+  fiscalCrisisBelow: number;
+  fiscalCrisisApproval: number;
+  fiscalCrisisMoodPerDay: number;
 
   /** budget must pass by 31 March each year; crisis starts nagging from this month (0=Jan) */
   budgetNagFromMonth: number;
@@ -345,10 +353,15 @@ export const DEFAULT_CONFIG: Config = {
   ministryLoss: 15,
   inviteBaseChance: 0.25,
 
-  warApproval: 8,
+  warApproval: 5,
   warEndApproval: -4,
-  warFiscal: -15,
+  warFiscal: -8,
   warApprovalBonusTarget: 10,
+  warRallyMinShare: 0.3,
+  warFiscalPerDay: 0.12,
+  fiscalCrisisBelow: 5,
+  fiscalCrisisApproval: 6,
+  fiscalCrisisMoodPerDay: 0.1,
 
   budgetNagFromMonth: 1,
 

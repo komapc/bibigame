@@ -321,6 +321,7 @@ export interface GameState {
   firedCount?: Record<string, number>;
   /** the approval target is under config.pollPanicBelow (logged when it crosses) */
   targetBelowPanic?: boolean;
+  treasuryEmpty?: boolean;
   /** game day the last war ended */
   lastWarEnd: number;
   elections: number;

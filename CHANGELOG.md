@@ -190,3 +190,8 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - Cards: "President hasn't called" not while US support ≥ 60; "Laundry" only after a Washington trip; the deal card has a peacetime text and non-travel backups; the Trump card's Channel 14 backup now pleases Trump.
 - Fixes: PM time doesn't count during a campaign run from the opposition; the poll-collapse counter resets once approval is back; no "Nothing visible changed" on elections or game over; up to 8 parties listed in a result; text fixes (new party, cottage cheese, ministry quip).
 - Balance: closing the exploits made the game harder (0/10/20/37 at 12y); `meterRegression` 0.004 → 0.0045 restores the profile: random 3% · always-right 20% · greedy 37% · lookahead 63%. The lookahead bot now uses 2 rollouts instead of 4 (half the run time).
+
+## #38 War and an empty treasury have a price
+- War: the instant rally is smaller (`warApproval` 8 → 5, `warFiscal` −15 → −8), but every day of war costs budget health (`warFiscalPerDay` 0.12, ~11 over a full war), and the rally's pull on approval fades to `warRallyMinShare` (30%) by the end of the war. The "rally is fading" message names what is actually lost.
+- Empty treasury (budget health under `fiscalCrisisBelow` 5): the approval target drops by `fiscalCrisisApproval` (6) and coalition partners sour by `fiscalCrisisMoodPerDay` (0.1/day, shown as a mood driver). Entering and leaving the state is logged.
+- Balance (60 games, 12y), old → new: greedy 33% → 43%, lookahead 57% → 57%, card-only-hud-aware 43% → 40%; random 3% · always-right 5%. A threshold of 10 instead of 5 made the game ~10 points harder for every bot (the bots sit under 10 often), so the penalty is kept for a truly empty treasury.
