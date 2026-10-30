@@ -61,7 +61,7 @@ export function renderText(o: Observation): string {
   if (o.startConditions.length && o.day < 60) L.push(`Start: ${o.startConditions.map((x) => x.label).join('; ')}`);
   L.push(`Approval ${m.approval} (drifting toward ${Math.round(o.approvalTarget)}${o.approvalTarget < o.panicBelow ? `; partners panic below ${o.panicBelow}` : ''}) | street calm ${m.street} | US ${m.us} (Trump ${o.trump.face} ${o.trump.mood}) | budget health ${m.fiscal} | trial ${m.trial}${o.trialPausedDays ? ` (PAUSED ${o.trialPausedDays}d: no new charges)` : ''} | open cases ${o.openCases}`);
   L.push(`Budget ${o.budget.dueYear}: ${o.budget.passed ? 'passed' : 'NOT passed (due 31 March)'}`);
-  L.push(`War: ${o.war.active ? `ACTIVE ${o.war.daysLeft}d left` : o.war.cooldownDays ? `cooldown ${o.war.cooldownDays}d` : 'ready'} | cooldowns: ministry ${o.cooldowns.ministry}d, law ${o.cooldowns.law}d, invite ${o.cooldowns.invite}d`);
+  L.push(`War: ${o.war.active ? `ACTIVE ${o.war.daysLeft}d left` : o.war.cooldownDays ? `cooldown ${o.war.cooldownDays}d` : o.tension ? 'ready' : 'needs tension with Iran/Hezbollah'} | cooldowns: ministry ${o.cooldowns.ministry}d, law ${o.cooldowns.law}d, invite ${o.cooldowns.invite}d`);
   L.push('PARTIES (id seats pos sat trust ministries trend):');
   const parties = [...o.parties].filter((p) => p.seats > 0).sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || b.seats - a.seats);
   for (const p of parties) {
@@ -69,7 +69,7 @@ export function renderText(o: Observation): string {
     const flags = [p.trait && `trait:${p.trait.id}`, p.wartime && 'WARTIME', p.threatening && 'THREATENING', !p.inCoalition && !p.willSitWithBibi && 'boycotts-you'].filter(Boolean).join(' ');
     const tr = p.inCoalition && Math.abs(p.trend.perMonth) >= 0.5 ? ` ${p.trend.perMonth > 0 ? '↑+' : '↓'}${p.trend.perMonth}/mo (${p.trend.reason})` : '';
     const danger = p.mayLeave ? ` MAY LEAVE (without them: ${p.seatsWithout})` : '';
-    L.push(`  ${p.inCoalition ? 'C' : 'o'} ${p.id.padEnd(9)} ${String(p.seats).padStart(2)}  ${String(p.position).padStart(3)}  ${bar(p.satisfaction)} ${String(Math.round(p.satisfaction)).padStart(3)}  ${trust}  [${p.ministries.join(',')}] ${flags}${tr}${danger}`);
+    L.push(`  ${p.inCoalition ? 'C' : 'o'} ${p.id.padEnd(9)} ${String(p.seats).padStart(2)}  ${String(p.position).padStart(3)}  ${bar(p.satisfaction)} ${String(Math.round(p.satisfaction)).padStart(3)}  ${trust}  [${p.ministries.join(',')}] ${p.inviteOdds !== null ? `invite ${p.inviteOdds}% ` : ''}${flags}${tr}${danger}`);
   }
   const tl = o.timeline;
   const span = Math.max(tl.goalDay, tl.nowDay + 30) - tl.startDay || 1;
@@ -137,8 +137,9 @@ export function parseCommand(g: Game, line: string): Command {
       return p ? { kind: 'action', action: { type: 'invite', partyId: p } } : { kind: 'error', message: `Unknown party: ${rest[0] ?? ''}` };
     }
     case 'promise': case 'deliver': {
+      if (!rest[0]) return { kind: 'error', message: `${c} <party> <promise> (see PROMISES)` };
       const p = resolveParty(g, rest[0]);
-      if (!p) return { kind: 'error', message: `Unknown party: ${rest[0] ?? ''}` };
+      if (!p) return { kind: 'error', message: `Unknown party: ${rest[0]}` };
       const promiseId = (rest[1] ?? '').toLowerCase();
       if (!promiseId) return { kind: 'error', message: `Promises for ${p}: ${promisesFor(g.state, p).join(', ')}` };
       return { kind: 'action', action: { type: c, partyId: p, promiseId } };

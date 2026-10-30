@@ -544,7 +544,7 @@ function blocked(dir: string) {
 function renderParties(o: Observation) {
   const list = o.parties.filter((p) => p.seats > 0)
     .sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || b.seats - a.seats);
-  const key = list.map((p) => [p.id, p.seats, p.inCoalition, p.wartime, p.threatening, p.mayLeave, p.trust.state, p.trust.waiting, p.ministries.length, p.trait?.id, p.lastChange?.day, Math.round(p.trend.perMonth), p.trend.reason].join(':')).join('|')
+  const key = list.map((p) => [p.id, p.seats, p.inCoalition, p.wartime, p.threatening, p.mayLeave, p.trust.state, p.trust.waiting, p.ministries.length, p.trait?.id, p.lastChange?.day, Math.round(p.trend.perMonth), p.trend.reason, p.inviteOdds].join(':')).join('|')
     + `|${o.cooldowns.invite > 0}|${o.cooldowns.law > 0}|${o.phase}|${pendingPromise ? pendingPromise.party + pendingPromise.promise + Math.floor(o.day) : ''}`;
   region('parties', key, () => list.map((p) => {
     const promises = promisesFor(game.state, p.id);
@@ -555,7 +555,7 @@ function renderParties(o: Observation) {
     const deliver = (p.trust.state === 'believing' || p.trust.state === 'distrust') && p.trust.promiseId && canAct
       ? `<button data-deliver="${p.id}" data-pid="${p.trust.promiseId}" ${o.cooldowns.law > 0 ? 'disabled' : ''}>${t('ui.deliver')}: ${esc(t(`promise.${p.trust.promiseId}`))}</button>` : '';
     const invite = !p.inCoalition && canAct
-      ? `<button data-invite="${p.id}" ${o.cooldowns.invite > 0 ? 'disabled' : ''}>${t('ui.invite')}</button>` : '';
+      ? `<button data-invite="${p.id}" ${o.cooldowns.invite > 0 ? 'disabled' : ''}>${t('ui.invite')}${p.inviteOdds !== null ? ` · ${p.inviteOdds}%` : ''}</button>` : '';
     const flags = [p.wartime && t('ui.wartime'), p.mayLeave ? t('ui.mayLeave') : p.threatening && t('ui.threatening')].filter(Boolean).join(' · ');
     const sgn = (n: number) => ltr(n > 0 ? `+${n}` : `${n}`);
     const cause = p.lastChange ? `<div class="cause ${p.lastChange.delta > 0 ? 'good' : 'bad'}">${esc(t('out.because', { delta: sgn(p.lastChange.delta), cause: p.lastChange.because }))}</div>` : '';

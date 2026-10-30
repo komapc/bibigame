@@ -225,6 +225,8 @@ export const CRISES: CrisisDef[] = [
   { id: 'trump', weight: 1.5, repeats: true,
     onFire: { us: -12 },
     remedies: ['dc', 'nobel', 'congress', 'ch14'],
+    // the backup interview is for an audience of one in Florida
+    extra: { ch14: { us: 8 } },
     ignore: { us: -10, approval: -2 } },
   { id: 'iran', weight: 1.2, repeats: true, tension: 240,
     onFire: { approval: -3 },
@@ -236,7 +238,7 @@ export const CRISES: CrisisDef[] = [
     ignore: { approval: -5, fiscal: -5 } },
   { id: 'deal', weight: 1, repeats: true, requires: { recentWar: true },
     // after the war "sign the ceasefire" drops out and a backup takes its side
-    remedies: ['ceasefire', 'dc', 'saudi', 'congress'],
+    remedies: ['ceasefire', 'dc', 'saudi', 'congress', 'nobel', 'ch14'],
     ignore: { us: -10, approval: -1 } },
   { id: 'icc', weight: 0.5, requires: { warHistory: true }, icc: 540,
     onFire: { us: 2 },

@@ -167,6 +167,8 @@ export interface Config {
   promiseBoost: number;
   promiseBrokenPenalty: number;
   promiseDeliverBonus: number;
+  /** a promise kept right after it was made is just a deal: the delivery bonus ramps from 25% to 100% over this many days */
+  promiseRipenDays: number;
   believeDriftPerDay: number;
   /** security detail move: daily mood bonus for the guarded partner, and for how long */
   guardDriftPerDay: number;
@@ -332,6 +334,7 @@ export const DEFAULT_CONFIG: Config = {
   promiseBoost: 12,
   promiseBrokenPenalty: 20,
   promiseDeliverBonus: 10,
+  promiseRipenDays: 60,
   believeDriftPerDay: 0.05,
   guardDriftPerDay: 0.04,
   guardDays: 365,

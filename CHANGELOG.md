@@ -180,3 +180,12 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - Ministries: the PM party keeps at least `pmMinMinistries` (3); when nothing is left to hand out a partner gets a deputy-minister post. Treasury empty → no "deliver at a premium".
 - A wartime partner with mood ≥ `wartimeStayMood` (65) stays after the war; the join message says so.
 - "Washington" is stronger than "Congress" (it is a gamble). Election messages say "seats". Laws/promises hidden in the opposition text view. Text fixes: Yair's title, Iran's third variant.
+
+## #37 Honest promises, previews and refusals (third blind playtest)
+- Promises are checked: none for a law that is already law, no ceasefire promise without a war, a permanent law can't be passed again, no laws during the summer recess. Keeping a promise closes its angry-reminder card.
+- Promise-then-deliver-at-once is a plain deal: the delivery bonus ramps 25% → 100% over `promiseRipenDays` (60).
+- "Hand out a ministry" weakens with repeated use like every other remedy, and its preview names who gets which ministry and who pays (or a deputy post).
+- Refusals: war without regional tension says so (no more "ready in 0 days"; the text status line too), "treasury nearly empty (under N)", rotation names its rule, `deliver` without arguments shows the usage.
+- Invite odds shown before you spend the invitation (UI button and text mode); an accepted partner pulls the government's line toward it.
+- Cards: "President hasn't called" not while US support ≥ 60; "Laundry" only after a Washington trip; the deal card has a peacetime text and non-travel backups; the Trump card's Channel 14 backup now pleases Trump.
+- Fixes: PM time doesn't count during a campaign run from the opposition; the poll-collapse counter resets once approval is back; no "Nothing visible changed" on elections or game over; up to 8 parties listed in a result; text fixes (new party, cottage cheese, ministry quip).
