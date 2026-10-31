@@ -107,6 +107,7 @@ export function satDrivers(
     out.push({ key: 'drift.hate', perDay: -hateCount(p, ctx.coal) * c.hatePenalty });
     const panic = p.trait === 'loyal' ? 0.5 : p.trait === 'opportunist' ? 2 : 1;
     out.push({ key: 'drift.polls', perDay: -panic * Math.min(c.pollPanicMaxPerDay, Math.max(0, c.pollPanicBelow - s.approval) * c.pollPanicPerPoint) });
+    if (s.fiscal < c.fiscalCrisisBelow) out.push({ key: 'drift.treasury', perDay: -c.fiscalCrisisMoodPerDay });
   }
   if (p.trust.state === 'believing') out.push({ key: 'drift.believe', perDay: c.believeDriftPerDay });
   if ((p.guardedUntil ?? 0) > s.day) out.push({ key: 'drift.guarded', perDay: c.guardDriftPerDay });
@@ -884,6 +885,7 @@ function startWar(s: GameState) {
 }
 
 function endWar(s: GameState) {
+  const rally = Math.round(warRally(s));
   s.war.active = false;
   s.war.leftDays = 0;
   s.stats.warsEnded++;
@@ -898,7 +900,7 @@ function endWar(s: GameState) {
     }
   }
   log(s, 'log.warEnd', {}, 'info');
-  log(s, 'log.driftWarOver', { n: s.config.warApprovalBonusTarget }, 'bad');
+  log(s, 'log.driftWarOver', { n: rally }, 'bad');
 }
 
 function leave(s: GameState, p: Party, key = 'log.left') {
@@ -1193,11 +1195,19 @@ function trumpTick(s: GameState, dt: number) {
   }
 }
 
+/** the war's pull on approval: full at the start, fading to warRallyMinShare by the end */
+export function warRally(s: GameState): number {
+  const c = s.config;
+  if (!s.war.active) return 0;
+  const left = clamp(s.war.leftDays / c.warDurationDays, 0, 1);
+  return c.warApprovalBonusTarget * (c.warRallyMinShare + (1 - c.warRallyMinShare) * left);
+}
+
 /** where approval drifts to: street, US, budget, trial, war rally, years in office, opposition bonus */
 export function approvalTarget(s: GameState): number {
   const c = s.config;
   return 20 + 0.2 * s.street + 0.15 * s.us + 0.1 * s.fiscal - 0.15 * s.trial
-    + (s.war.active ? c.warApprovalBonusTarget : 0) - c.fatiguePerYear * (s.pmDays / 365.25)
+    + warRally(s) - (s.fiscal < c.fiscalCrisisBelow ? c.fiscalCrisisApproval : 0) - c.fatiguePerYear * (s.pmDays / 365.25)
     + (s.phase === 'opposition' ? c.oppositionApprovalBonus : 0);
 }
 
@@ -1218,6 +1228,12 @@ function tickDay(s: GameState, dt: number) {
   s.us += (55 + c.trumpUsPull * (s.trumpMood ?? 0) - s.us) * c.meterRegression * dt;
   trumpTick(s, dt);
   s.fiscal += (50 - s.fiscal) * c.meterRegression * dt;
+  if (s.war.active) s.fiscal = clamp(s.fiscal - c.warFiscalPerDay * dt, 0, 100);
+  const broke = s.fiscal < c.fiscalCrisisBelow;
+  if (broke !== !!s.treasuryEmpty) {
+    s.treasuryEmpty = broke;
+    log(s, broke ? 'log.treasuryEmpty' : 'log.treasuryOk', { n: c.fiscalCrisisApproval }, broke ? 'bad' : 'good');
+  }
   const target = approvalTarget(s);
   // the slide toward a target under the panic line is invisible otherwise: say it when it crosses
   const below = target < c.pollPanicBelow;
