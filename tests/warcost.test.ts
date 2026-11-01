@@ -5,6 +5,7 @@ import { approvalTarget, satDrivers, warRally } from '../src/engine/game.ts';
 describe('war has a price', () => {
   it('the rally fades as the war drags on', () => {
     const g = createGame({ seed: 1 });
+    g.state.war.cooldownDays = 0;
     g.act({ type: 'startWar' });
     const start = warRally(g.state);
     g.state.war.leftDays = 0;

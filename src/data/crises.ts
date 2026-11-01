@@ -163,7 +163,7 @@ export const CRISES: CrisisDef[] = [
     remedies: ['handover', 'breakrotation'],
     ignore: {} },
   // --- coalition
-  { id: 'leftist', weight: 3, repeats: true, requires: { coalitionTag: 'farright', subjectMoodBelow: 60 }, subjectTag: 'farright',
+  { id: 'leftist', weight: 3, repeats: true, requires: { coalitionTag: 'farright', subjectMoodBelow: 60, subjectRightOfGov: 1.5 }, subjectTag: 'farright',
     remedies: ['settle', 'deepstate'],
     ignore: { sat: [{ target: 'subject', delta: -15 }, { target: 'farright', delta: -5 }] } },
   { id: 'draft', weight: 2, repeats: true, requires: { coalitionTag: 'haredi', notPassed: 'exempt' }, subjectTag: 'haredi',
