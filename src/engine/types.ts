@@ -153,6 +153,8 @@ export interface CrisisDef {
     ministryHolderTag?: string;
     /** only if some coalition party with the card's subjectTag is below this mood */
     subjectMoodBelow?: number;
+    /** some subject-tag partner sits at least this far right of the government's line */
+    subjectRightOfGov?: number;
     /** only during the Knesset summer recess */
     recess?: boolean;
     /** an opposition-only card (fires only while you are in the opposition; never otherwise) */

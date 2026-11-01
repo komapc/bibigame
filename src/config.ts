@@ -42,6 +42,8 @@ export interface Config {
 
   warDurationDays: number;
   warCooldownDays: number;
+  /** no war in the first days of a government (the honeymoon is not a war cabinet) */
+  warFirstDays: number;
   ministryCooldownDays: number;
   lawCooldownDays: number;
   inviteCooldownDays: number;
@@ -261,6 +263,7 @@ export const DEFAULT_CONFIG: Config = {
 
   warDurationDays: 90,
   warCooldownDays: 300,
+  warFirstDays: 60,
   ministryCooldownDays: 60,
   lawCooldownDays: 90,
   inviteCooldownDays: 90,

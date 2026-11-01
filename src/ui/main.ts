@@ -348,7 +348,7 @@ function renderStage(o: Observation) {
     </div>
     <div class="underbtns">
       ${ign ? `<button class="ignorebtn" data-dir="ignore"><b>${t('ui.ignore')}</b> <small>${esc(t('ui.ignoreFx', { fx: ignFx || t('out.escalates') }))}</small> <kbd>0</kbd></button>` : ''}
-      ${canWar(o) ? `<button class="ignorebtn warbtn" data-act="war"><b>💥 ${t('ui.war')}</b></button>` : ''}
+      ${canWar(o) ? `<button class="ignorebtn warbtn" data-act="war"><b>💥 ${t('ui.war')}</b> <small>${esc(warFx(o))}</small></button>` : ''}
     </div>`;
   });
   if (ev) {
@@ -413,7 +413,7 @@ function newsHtml(o: Observation, enter: string): string {
       <button data-act="open" data-sec="parties">🤝 ${t('ui.qPromise')}</button>
       <button data-act="open" data-sec="ministries" ${o.cooldowns.ministry ? 'disabled' : ''}>🏛 ${t('ui.qMinistry')}</button>
       <button data-act="open" data-sec="laws" ${o.cooldowns.law ? 'disabled' : ''}>📜 ${t('ui.qLaw')}</button>
-      <button data-act="war" class="warq" ${warOk ? '' : 'disabled'}>⚔ ${t('ui.war')}</button>
+      <button data-act="war" class="warq" ${warOk ? `title="${esc(warFx(o))}"` : 'disabled'}>⚔ ${t('ui.war')}</button>
     </div>` : ''}
     ${holding() ? `<button class="primary nextbtn" data-act="next">${t('ui.next')} ▶</button>` : ''}
   </div>`;
@@ -633,12 +633,19 @@ function renderMoves(o: Observation) {
 /** war can start now: shown under the crisis card and enabled in the moves panel */
 const canWar = (o: Observation) => o.phase === 'governing' && !o.war.active && o.war.cooldownDays === 0 && o.tension;
 
+/** what starting a war now gives and costs ("+12 seats · Approval +5 · Treasury −8, then −0.12 a day") */
+const warFx = (o: Observation) => {
+  const seats = o.war.joiners.reduce((n, j) => n + j.seats, 0);
+  return (seats ? t('ui.warSeats', { seats }) : '') + t('ui.warFx', { a: o.war.approval, f: Math.abs(o.war.fiscalNow), d: o.war.fiscalPerDay });
+};
+
 function renderWar(o: Observation) {
   const btn = $('war') as HTMLButtonElement;
   btn.disabled = !canWar(o);
   btn.textContent = o.war.active ? t('ui.warActive', { days: o.war.daysLeft })
     : o.war.cooldownDays ? t('ui.warCooldown', { days: o.war.cooldownDays })
     : `💥 ${t('ui.war')}${o.tension ? '' : ` — ${t('ui.tension')} ✗`}`;
+  btn.title = canWar(o) ? warFx(o) : '';
 }
 
 function renderLog() {

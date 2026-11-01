@@ -96,7 +96,9 @@ export interface Observation {
     /** left / right = remedies; timeout = ignore (early elections are a move) */
     options: { id: string; dir: string; odds: number | null; label: string; desc: string; available: boolean; preview: Preview[]; why: string }[];
   };
-  war: { active: boolean; daysLeft: number; cooldownDays: number };
+  war: { active: boolean; daysLeft: number; cooldownDays: number; joiners: { party: string; seats: number }[];
+    /** what a war costs and gives: instant approval/treasury, then treasury per day for its length */
+    approval: number; fiscalNow: number; fiscalPerDay: number; days: number };
   /** Iran/Hezbollah tension: enables war, beepers, Fordow */
   tension: boolean;
   /** ICC warrant days left (blocks travel remedies) */
@@ -208,7 +210,7 @@ export function formatOutcome(s: GameState, o: Outcome): OutcomeView {
   return {
     seq: o.seq, day: o.day, kind: o.kind, cause, sat, meters, seats: o.seats, left, joined, risks,
     big: left.length > 0 || joined.length > 0 || o.kind === 'elections' || o.kind === 'newGov',
-    summary: `${cause} → ${parts.join('; ')}`,
+    summary: parts.length ? `${cause} → ${parts.join('; ')}` : cause,
     quip: quipOf(o),
     reaction: reactionOf(s, o),
   };
@@ -317,7 +319,13 @@ export function observe(s: GameState, logTail = 12): Observation {
         why: o.available ? '' : whyText(s, o.id),
       })),
     },
-    war: { active: s.war.active, daysLeft: Math.ceil(s.war.leftDays), cooldownDays: Math.ceil(s.war.cooldownDays) },
+    war: {
+      active: s.war.active, daysLeft: Math.ceil(s.war.leftDays), cooldownDays: Math.ceil(s.war.cooldownDays),
+      // who joins an emergency government if you start one now
+      joiners: s.war.active ? [] : s.parties.filter((p) => !p.inCoalition && p.joinsWartime && p.willSitWithBibi && p.seats > 0)
+        .map((p) => ({ party: p.id, seats: p.seats })),
+      approval: s.config.warApproval, fiscalNow: s.config.warFiscal, fiscalPerDay: s.config.warFiscalPerDay, days: s.config.warDurationDays,
+    },
     tension: hasTension(s),
     iccDays: Math.max(0, Math.ceil(s.iccUntil - s.day)),
     usedOnce: [...s.usedOnce],

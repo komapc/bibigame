@@ -65,10 +65,22 @@ function record(s: GameState, kind: Outcome['kind'], cause: Outcome['cause'], b:
     seats: { from: b.seats, to: seatsOf(s) },
     left: b.coal.filter((id) => !coalNow.includes(id)),
     joined: coalNow.filter((id) => !b.coal.includes(id)),
-    risks: Object.keys(s.pressure).filter((k) => s.pressure[k] - (b.pressure[k] ?? 0) > 0.01),
+    // only cards that could actually come now (no "budget deadline" right after the budget passed)
+    risks: Object.keys(s.pressure).filter((k) => s.pressure[k] - (b.pressure[k] ?? 0) > 0.01)
+      .filter((k) => riskPossible(s, k)),
   };
   s.outcomes.push(o);
   if (s.outcomes.length > 40) s.outcomes.splice(0, s.outcomes.length - 40);
+}
+
+/** a raised risk is worth naming only if its card can still come (no "budget deadline" once it passed) */
+function riskPossible(s: GameState, id: string): boolean {
+  const d = crisisById.get(id);
+  if (!d) return true;
+  if (d.requires?.coalitionTag && !coalition(s).some((p) => matchesTag(p, d.requires!.coalitionTag!))) return false;
+  if (!d.repeats && s.firedCount?.[id]) return false;
+  if (id === 'budget' && s.budgetPassedYear >= budgetDueYear(s)) return false;
+  return true;
 }
 
 /** causes of the outcomes being recorded (a risky remedy marks its cause as failed) */
@@ -158,7 +170,7 @@ export function createState(base: KnessetData, seed: number, config: Partial<Con
     event: null,
     nextEventInDays: 0,
     pressure: {},
-    war: { active: false, leftDays: 0, cooldownDays: 0 },
+    war: { active: false, leftDays: 0, cooldownDays: cfg.warFirstDays },
     cooldowns: { ministry: 0, law: 0, invite: 0 },
     budgetPassedYear: 0,
     lastBudgetNag: -999,
@@ -340,6 +352,8 @@ export function crisisWeight(s: GameState, c: CrisisDef): number {
   if (req?.recess && !s.recess) return 0;
   if (req?.subjectMoodBelow !== undefined && c.subjectTag
     && !coalition(s).some((p) => matchesTag(p, c.subjectTag!) && p.satisfaction < req.subjectMoodBelow!)) return 0;
+  if (req?.subjectRightOfGov !== undefined && c.subjectTag
+    && !coalition(s).some((p) => matchesTag(p, c.subjectTag!) && p.position - s.govPosition >= req.subjectRightOfGov!)) return 0;
   // most cards are a one-time story; the rest come back, but not within crisisCooldownDays (good news: a year)
   if (!c.repeats && s.firedCount?.[c.id]) return 0;
   // no card twice within crisisCooldownDays (good news: within a year)
@@ -894,8 +908,8 @@ function endWar(s: GameState) {
   for (const p of s.parties) {
     if (p.wartime) {
       p.wartime = false;
-      // a happy emergency partner stays on as a regular one
-      if (p.satisfaction >= s.config.wartimeStayMood) log(s, 'log.wartimeStays', { party: p.id }, 'good');
+      // a happy emergency partner, or one still waiting on your word, stays on as a regular one
+      if (p.satisfaction >= s.config.wartimeStayMood || p.trust.state === 'believing') log(s, 'log.wartimeStays', { party: p.id }, 'good');
       else leave(s, p, 'log.wartimeLeave');
     }
   }

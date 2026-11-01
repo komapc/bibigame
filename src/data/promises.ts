@@ -4,7 +4,7 @@ import type { PromiseDef } from '../engine/types.ts';
 export const PROMISES: PromiseDef[] = [
   { id: 'exemption', to: ['haredi'], deliveredBy: 'exempt' },
   { id: 'settlement', to: ['farright'], deliveredBy: 'settle', alsoBy: ['settlelaw'] },
-  { id: 'lebanon', to: ['farright'], deliveredBy: 'lebanon' },
+  { id: 'lebanon', to: ['farright'], deliveredBy: 'lebanon', alsoBy: ['war'] },
   { id: 'saudi', to: ['centrist'], deliveredBy: 'saudi' },
   { id: 'reform', to: ['farright', 'pm'], deliveredBy: 'reform' },
   { id: 'constitution', to: ['secular', 'centrist'], deliveredBy: 'constitution' },

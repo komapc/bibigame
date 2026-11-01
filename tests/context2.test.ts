@@ -57,6 +57,7 @@ describe('refusals say why', () => {
   });
   it('an unavailable action says why', () => {
     const g = createGame({ seed: 1 });
+    g.state.war.cooldownDays = 0;
     g.act({ type: 'startWar' });
     const r = g.act({ type: 'startWar' });
     expect(r.ok).toBe(false);
@@ -79,6 +80,7 @@ describe('ministries and partners', () => {
   it('a happy wartime partner stays after the war', () => {
     const g = createGame({ seed: 1 });
     const s = g.state;
+    g.state.war.cooldownDays = 0;
     g.act({ type: 'startWar' });
     const w = s.parties.find((p) => p.wartime);
     if (!w) return; // no wartime party in this Knesset
@@ -89,6 +91,7 @@ describe('ministries and partners', () => {
   });
   it('the ceasefire preview includes the end-of-war approval dip', () => {
     const g = createGame({ seed: 1 });
+    g.state.war.cooldownDays = 0;
     g.act({ type: 'startWar' });
     g.state.event = { id: 'deal', subject: null, firedAt: g.state.day, leftDays: 10 };
     const cf = g.observe().event!.options.find((o) => o.id === 'ceasefire')!;

@@ -61,7 +61,8 @@ export function renderText(o: Observation): string {
   if (o.startConditions.length && o.day < 60) L.push(`Start: ${o.startConditions.map((x) => x.label).join('; ')}`);
   L.push(`Approval ${m.approval} (drifting toward ${Math.round(o.approvalTarget)}${o.approvalTarget < o.panicBelow ? `; partners panic below ${o.panicBelow}` : ''}) | street calm ${m.street} | US ${m.us} (Trump ${o.trump.face} ${o.trump.mood}) | budget health ${m.fiscal} | trial ${m.trial}${o.trialPausedDays ? ` (PAUSED ${o.trialPausedDays}d: no new charges)` : ''} | open cases ${o.openCases}`);
   L.push(`Budget ${o.budget.dueYear}: ${o.budget.passed ? 'passed' : 'NOT passed (due 31 March)'}`);
-  L.push(`War: ${o.war.active ? `ACTIVE ${o.war.daysLeft}d left` : o.war.cooldownDays ? `cooldown ${o.war.cooldownDays}d` : o.tension ? 'ready' : 'needs tension with Iran/Hezbollah'} | cooldowns: ministry ${o.cooldowns.ministry}d, law ${o.cooldowns.law}d, invite ${o.cooldowns.invite}d`);
+  const warFx = `if started: ${o.war.joiners.map((j) => `${j.party} joins +${j.seats} seats, `).join('')}approval +${o.war.approval}, treasury ${o.war.fiscalNow} now and −${o.war.fiscalPerDay}/day for ${o.war.days}d; the rally fades`;
+  L.push(`War: ${o.war.active ? `ACTIVE ${o.war.daysLeft}d left (treasury −${o.war.fiscalPerDay}/day)` : o.war.cooldownDays ? `cooldown ${o.war.cooldownDays}d` : o.tension ? `ready (${warFx})` : 'needs tension with Iran/Hezbollah'} | cooldowns: ministry ${o.cooldowns.ministry}d, law ${o.cooldowns.law}d, invite ${o.cooldowns.invite}d`);
   L.push('PARTIES (id seats pos sat trust ministries trend):');
   const parties = [...o.parties].filter((p) => p.seats > 0).sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || b.seats - a.seats);
   for (const p of parties) {
@@ -84,7 +85,8 @@ export function renderText(o: Observation): string {
     L.push(`CRISIS: ${o.event.title} — ${o.event.text}${o.event.subject ? ` (subject: ${o.event.subject})` : ''} [${g_timeoutNote(o)}]`);
     const n: Record<string, number> = { left: 1, right: 2, up: 3, down: 4, ignore: 0 };
     for (const op of o.event.options) {
-      const fx = op.preview.map((p) => `${p.label}${(p.up ? '+' : '-').repeat(p.size ?? 1)}`).join(', ');
+      // signs are the raw direction, as in RESULT (trial: down is good)
+      const fx = op.preview.map((p) => `${p.label}${((p.meter === 'trial' ? !p.up : p.up) ? '+' : '-').repeat(p.size ?? 1)}`).join(', ');
       L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.odds !== null ? ` [${op.odds}% odds]` : ''}${op.available ? '' : ` [unavailable: ${op.why}]`}${fx ? ` -> ${fx}` : ''}`);
     }
   } else if (o.phase === 'governing' || o.phase === 'opposition') L.push('No crisis right now.');
@@ -223,7 +225,7 @@ export function runText(g: Game, line: string): { reply: string; ok: boolean } {
     for (const x of (g.state.outcomes ?? []).filter((y) => y.seq > seq0)) for (const d of x.sat) shown[d.party] = (shown[d.party] ?? 0) + d.delta;
     const drift = o.parties.filter((p) => p.inCoalition && p.seats > 0)
       .map((p) => ({ p, d: Math.round(p.satisfaction - sat0[p.id] - (shown[p.id] ?? 0)) })).filter((x) => x.d !== 0);
-    if (drift.length) lines.push(`DRIFT: ${drift.map(({ p, d }) => `${p.id} ${d > 0 ? '+' : ''}${d} (${p.trend.reason})`).join('; ')}`);
+    if (drift.length) lines.push(`DRIFT: ${drift.map(({ p, d }) => `${p.id} ${d > 0 ? '+' : ''}${d}${p.trend.reason ? ` (${p.trend.reason})` : ''}`).join('; ')}`);
   }
   const adv = advice(g.state)[0];
   if (adv) lines.push(`ADVISOR: ${t(adv.key, adv.params)}`);
