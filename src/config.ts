@@ -199,6 +199,11 @@ export interface Config {
   warRallyMinShare: number;
   /** the bill arrives later: budget health lost per day of war */
   warFiscalPerDay: number;
+  /** no war with a treasury under this; the odds it goes wrong; what a failed war costs (and no rally) */
+  warMinFiscal: number;
+  warFailChance: number;
+  warFailApproval: number;
+  warFailUs: number;
   /** empty treasury: below this budget health the approval target drops and partners sour daily */
   fiscalCrisisBelow: number;
   fiscalCrisisApproval: number;
@@ -228,6 +233,10 @@ export interface Config {
   rotationBoost: number;
   rotationBrokenPenalty: number;
   rotationDistrustDays: number;
+  /** a party this big gets the full rotation boost; smaller ones get a share (no +30 for 7 seats) */
+  rotationFullSeats: number;
+  /** days between new promises (any party) */
+  promiseCooldownDays: number;
   /** at most this many invented ministries */
   newMinistryMax: number;
   /** campaign tricks: seats in the election roll / lower loss chance */
@@ -373,6 +382,10 @@ export const DEFAULT_CONFIG: Config = {
   warApprovalBonusTarget: 10,
   warRallyMinShare: 0.3,
   warFiscalPerDay: 0.12,
+  warMinFiscal: 10,
+  warFailChance: 0.25,
+  warFailApproval: 6,
+  warFailUs: 8,
   fiscalCrisisBelow: 5,
   fiscalCrisisApproval: 4,
   fiscalCrisisMoodPerDay: 0.07,
@@ -391,6 +404,8 @@ export const DEFAULT_CONFIG: Config = {
   rotationBoost: 30,
   rotationBrokenPenalty: 40,
   rotationDistrustDays: 730,
+  rotationFullSeats: 15,
+  promiseCooldownDays: 30,
   newMinistryMax: 4,
   mergerSeats: 2,
   gevaltSeats: 3,

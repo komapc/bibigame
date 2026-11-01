@@ -403,7 +403,7 @@ function newsHtml(o: Observation, enter: string): string {
     t('news.poll', { approval: Math.round(o.meters.approval), seats: o.seats }),
   ].filter(Boolean).filter((x) => x !== headline(o));
   const gov = o.phase === 'governing';
-  const warOk = gov && !o.war.active && o.war.cooldownDays === 0 && o.tension;
+  const warOk = gov && canWar(o);
   return `<div class="news ${enter}">
     <div class="mast">${t('news.masthead')}</div>
     <h2>${esc(headline(o))}</h2>
@@ -545,13 +545,13 @@ function renderParties(o: Observation) {
   const list = o.parties.filter((p) => p.seats > 0)
     .sort((a, b) => Number(b.inCoalition) - Number(a.inCoalition) || b.seats - a.seats);
   const key = list.map((p) => [p.id, p.seats, p.inCoalition, p.wartime, p.threatening, p.mayLeave, p.trust.state, p.trust.waiting, p.ministries.length, p.trait?.id, p.lastChange?.day, Math.round(p.trend.perMonth), p.trend.reason, p.inviteOdds].join(':')).join('|')
-    + `|${o.cooldowns.invite > 0}|${o.cooldowns.law > 0}|${o.phase}|${pendingPromise ? pendingPromise.party + pendingPromise.promise + Math.floor(o.day) : ''}`;
+    + `|${o.cooldowns.invite > 0}|${o.cooldowns.law > 0}|${o.cooldowns.promise > 0}|${o.phase}|${pendingPromise ? pendingPromise.party + pendingPromise.promise + Math.floor(o.day) : ''}`;
   region('parties', key, () => list.map((p) => {
     const promises = promisesFor(game.state, p.id);
     const canAct = o.phase === 'governing';
     const pending = pendingPromise && pendingPromise.party === p.id && canAct && p.trust.state === 'neutral' ? promiseConfirm(o, p, pendingPromise.promise) : '';
     const promiseSel = pending ? pending : p.trust.state === 'neutral' && canAct
-      ? `<select data-promise="${p.id}" aria-label="${t('ui.promise')}"><option value="">${t('ui.promise')}</option>${promises.map((id) => `<option value="${id}">${esc(t(`promise.${id}`))}</option>`).join('')}</select>` : '';
+      ? `<select data-promise="${p.id}" aria-label="${t('ui.promise')}" ${o.cooldowns.promise > 0 ? `disabled title="${esc(t('err.cooldown.promise', { days: o.cooldowns.promise }))}"` : ''}><option value="">${t('ui.promise')}</option>${promises.map((id) => `<option value="${id}">${esc(t(`promise.${id}`))}</option>`).join('')}</select>` : '';
     const deliver = (p.trust.state === 'believing' || p.trust.state === 'distrust') && p.trust.promiseId && canAct
       ? `<button data-deliver="${p.id}" data-pid="${p.trust.promiseId}" ${o.cooldowns.law > 0 ? 'disabled' : ''}>${t('ui.deliver')}: ${esc(t(`promise.${p.trust.promiseId}`))}</button>` : '';
     const invite = !p.inCoalition && canAct
@@ -590,7 +590,7 @@ function promiseConfirm(o: Observation, p: Observation['parties'][number], id: s
   const c = game.state.config;
   const rotation = id === 'rotation';
   const days = Math.round((rotation ? c.rotationBelieveDays : def.believeDays ?? c.promiseBelieveDays) * (p.trait?.id === 'patient' ? 1.5 : 1));
-  const boost = rotation ? c.rotationBoost : def.boost ?? c.promiseBoost;
+  const boost = rotation ? c.rotationBoost * Math.min(1, p.seats / c.rotationFullSeats) : def.boost ?? c.promiseBoost;
   const due = new Date(Date.parse(o.date) + days * 864e5).toISOString().slice(0, 10);
   const how = def.deliveredBy === 'ministry' ? t('fx.ministry') : t(`remedy.${def.deliveredBy}`);
   return `<div class="pconfirm" role="group">
@@ -631,12 +631,13 @@ function renderMoves(o: Observation) {
 }
 
 /** war can start now: shown under the crisis card and enabled in the moves panel */
-const canWar = (o: Observation) => o.phase === 'governing' && !o.war.active && o.war.cooldownDays === 0 && o.tension;
+const canWar = (o: Observation) => o.phase === 'governing' && !o.war.active && o.war.cooldownDays === 0 && o.tension && !o.war.broke;
 
 /** what starting a war now gives and costs ("+12 seats · Approval +5 · Treasury −8, then −0.12 a day") */
 const warFx = (o: Observation) => {
   const seats = o.war.joiners.reduce((n, j) => n + j.seats, 0);
-  return (seats ? t('ui.warSeats', { seats }) : '') + t('ui.warFx', { a: o.war.approval, f: Math.abs(o.war.fiscalNow), d: o.war.fiscalPerDay });
+  return (seats ? t('ui.warSeats', { seats }) : '') + t('ui.warFx', { a: o.war.approval, f: Math.abs(o.war.fiscalNow), d: o.war.fiscalPerDay })
+    + t('ui.warFail', { p: o.war.failChance, a: o.war.failApproval });
 };
 
 function renderWar(o: Observation) {
@@ -644,7 +645,7 @@ function renderWar(o: Observation) {
   btn.disabled = !canWar(o);
   btn.textContent = o.war.active ? t('ui.warActive', { days: o.war.daysLeft })
     : o.war.cooldownDays ? t('ui.warCooldown', { days: o.war.cooldownDays })
-    : `💥 ${t('ui.war')}${o.tension ? '' : ` — ${t('ui.tension')} ✗`}`;
+    : `💥 ${t('ui.war')}${!o.tension ? ` — ${t('ui.tension')} ✗` : o.war.broke ? ` — ${t('fx.fiscal')} ✗` : ''}`;
   btn.title = canWar(o) ? warFx(o) : '';
 }
 

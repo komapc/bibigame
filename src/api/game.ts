@@ -98,13 +98,15 @@ export interface Observation {
   };
   war: { active: boolean; daysLeft: number; cooldownDays: number; joiners: { party: string; seats: number }[];
     /** what a war costs and gives: instant approval/treasury, then treasury per day for its length */
-    approval: number; fiscalNow: number; fiscalPerDay: number; days: number };
+    approval: number; fiscalNow: number; fiscalPerDay: number; days: number;
+    /** the odds it goes wrong (%) and what that costs instead of the rally; no war with a treasury under minFiscal */
+    failChance: number; failApproval: number; failUs: number; minFiscal: number; broke: boolean; failed: boolean };
   /** Iran/Hezbollah tension: enables war, beepers, Fordow */
   tension: boolean;
   /** ICC warrant days left (blocks travel remedies) */
   iccDays: number;
   usedOnce: string[];
-  cooldowns: { ministry: number; law: number; invite: number };
+  cooldowns: { ministry: number; law: number; invite: number; promise: number };
   laws: { id: string; label: string }[];
   /** drawer moves for the current phase (src/data/moves.ts); `ending` ones end the game */
   moves: { id: string; label: string; desc: string; available: boolean; cooldown: number; ending: boolean; preview: Preview[]; why: string }[];
@@ -325,6 +327,8 @@ export function observe(s: GameState, logTail = 12): Observation {
       joiners: s.war.active ? [] : s.parties.filter((p) => !p.inCoalition && p.joinsWartime && p.willSitWithBibi && p.seats > 0)
         .map((p) => ({ party: p.id, seats: p.seats })),
       approval: s.config.warApproval, fiscalNow: s.config.warFiscal, fiscalPerDay: s.config.warFiscalPerDay, days: s.config.warDurationDays,
+      failChance: Math.round(s.config.warFailChance * 100), failApproval: s.config.warFailApproval, failUs: s.config.warFailUs,
+      minFiscal: s.config.warMinFiscal, broke: s.fiscal < s.config.warMinFiscal, failed: !!(s.war.active && s.war.failed),
     },
     tension: hasTension(s),
     iccDays: Math.max(0, Math.ceil(s.iccUntil - s.day)),
@@ -332,7 +336,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     trump: { mood: Math.round((s.trumpMood ?? 0) * 10) / 10, face: trumpFace(s) },
     startConditions: (s.startConditions ?? []).map((id) => ({ id, label: t(`start.${id}`) })),
     cooldowns: {
-      ministry: Math.ceil(s.cooldowns.ministry), law: Math.ceil(s.cooldowns.law), invite: Math.ceil(s.cooldowns.invite),
+      ministry: Math.ceil(s.cooldowns.ministry), law: Math.ceil(s.cooldowns.law), invite: Math.ceil(s.cooldowns.invite), promise: Math.ceil(s.cooldowns.promise ?? 0),
     },
     laws: LAWS.map((id) => ({ id, label: t(`remedy.${id}`) })),
     moves: MOVES.filter((m) => m.phases.includes(s.phase)).map((m) => ({
