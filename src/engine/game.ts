@@ -322,6 +322,7 @@ export function loseFactors(s: GameState): { id: string; delta: number }[] {
     { id: 'gevalt', delta: fx?.gevalt ? -c.gevaltLose : 0 },
     { id: 'spoiler', delta: fx?.spoiler ? -c.spoilerLose : 0 },
     { id: 'groundgame', delta: s.termFx?.groundGame ? -c.groundGameLose : 0 },
+    { id: 'early', delta: fx?.early ? c.loseEarlyElection : 0 },
   ];
   return out.filter((x) => x.id === 'base' || Math.abs(x.delta) > 1e-9);
 }
@@ -519,7 +520,12 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
   const street0 = s.street, trial0 = s.trial;
   if (e.street && !(s.war.active && e.street < 0 && !e.streetInWar)) s.street = clamp(s.street + e.street, 0, 100);
   if (e.us) s.us = clamp(s.us + e.us, 0, 100);
-  if (e.fiscal) s.fiscal = clamp(s.fiscal + e.fiscal, 0, 100);
+  if (e.fiscal) {
+    // spending money the treasury doesn't have is borrowed in public: the shortfall comes out of approval
+    const short = Math.max(0, -(s.fiscal + e.fiscal));
+    if (short > 0) s.approval = clamp(s.approval - short * s.config.deficitApprovalPerPoint, 0, 100);
+    s.fiscal = clamp(s.fiscal + e.fiscal, 0, 100);
+  }
   if (e.trial) {
     // a paused trial is frozen: new charges wait too (the pause itself can still lower it)
     if (e.trial > 0 && s.day < s.trialPausedUntil) log(s, 'log.trialFrozen', { days: Math.ceil(s.trialPausedUntil - s.day) }, 'good');
@@ -789,11 +795,13 @@ function makePromise(s: GameState, promiseId: string) {
 }
 
 /** a promise nobody would believe: it is already law, or there is nothing to deliver it on (a ceasefire without a war) */
-export function promiseMoot(s: GameState, promiseId: string): 'already' | 'noWar' | null {
+export function promiseMoot(s: GameState, promiseId: string): 'already' | 'noWar' | 'noMoney' | null {
   const def = promiseById.get(promiseId);
   const r = def && remedyById.get(def.deliveredBy);
   if (r?.permanent && s.lawsPassed.includes(r.id)) return 'already';
   if (promiseId === 'ceasefire' && !s.war.active) return 'noWar';
+  // a money promise you couldn't keep today (coalition funds are off while the treasury is this low)
+  if (def?.deliveredBy === 'funds' && s.fiscal < s.config.fundsMinFiscal) return 'noMoney';
   return null;
 }
 
@@ -804,9 +812,11 @@ function deliverPromises(s: GameState, moveId: string, recipient: string | null)
     if (!def || (def.deliveredBy !== moveId && !def.alsoBy?.includes(moveId))) continue;
     if (moveId === 'ministry' && recipient !== p.id) continue;
     const wasBelieving = p.trust.state === 'believing';
-    // promise today, deliver today = a plain deal, not a kept word: the thanks grow with the wait
-    const ripe = p.trust.since === undefined ? 1 : clamp((s.day - p.trust.since) / s.config.promiseRipenDays, 0.25, 1);
-    p.satisfaction = clamp(p.satisfaction + s.config.promiseDeliverBonus * (wasBelieving ? ripe : 0.5), 0, 100);
+    // promise today, deliver today = a plain deal, not a kept word: the thanks grow with the wait,
+    // and the up-front boost of a promise kept at once was only an advance on the deal (taken back)
+    const ripe = p.trust.since === undefined ? 1 : clamp((s.day - p.trust.since) / s.config.promiseRipenDays, 0, 1);
+    const advance = wasBelieving ? (def.boost ?? s.config.promiseBoost) * (1 - ripe) : 0;
+    p.satisfaction = clamp(p.satisfaction + s.config.promiseDeliverBonus * (wasBelieving ? ripe : 0.5) - advance, 0, 100);
     p.trust = { state: 'neutral', promiseId: null, until: 0 };
     // their angry reminder is answered: take the card off the table
     if (s.event?.id === 'angry' && s.event.subject === p.id) { s.event = null; s.nextEventInDays = scheduleNext(s); }
@@ -940,11 +950,14 @@ function callElections(s: GameState, reason: string) {
   if (s.war.active) endWar(s);
   s.fromOpposition = s.phase === 'opposition';
   s.rival = null;
-  s.campaignFx = { merger: false, spoiler: false, gevalt: false };
+  // elections you called yourself, with a working majority: the voters notice
+  s.campaignFx = { merger: false, spoiler: false, gevalt: false, early: reason === 'early' };
   s.usedThisTerm = [];
-  // elections void a rotation agreement (the classic way out)
+  // elections void a rotation agreement (the classic way out): legally clean, personally a broken promise
   for (const p of s.parties) if (p.trust.promiseId === 'rotation' && (p.trust.state === 'believing' || p.trust.state === 'angry')) {
-    p.trust = { state: 'neutral', promiseId: null, until: 0 };
+    p.trust = { state: 'distrust', promiseId: 'rotation', until: s.day + s.config.rotationDistrustDays };
+    p.satisfaction = clamp(p.satisfaction - s.config.rotationBrokenPenalty, 0, 100);
+    s.stats.brokenPromises++;
     log(s, 'log.rotationVoided', { party: p.id }, 'bad');
   }
   s.phase = 'campaign';
@@ -1187,9 +1200,12 @@ function checkCoalition(s: GameState, dt = 0) {
   for (const p of coalition(s)) {
     if (p.id === s.base.pmParty) continue;
     if (p.satisfaction <= 0) { leave(s, p); continue; }
-    if (dt && p.satisfaction < c.leaveBelow + (p.leaveOffset ?? 0) && rngOf(s).next() < c.leaveChancePerDay * (p.trait === 'loyal' ? 0.5 : 1) * dt) { leave(s, p); continue; }
+    // no walkout out of the blue: a party threatens first and gives you threatGraceDays to fix it
+    const warned = p.threatening && s.day - (p.threatSince ?? -Infinity) >= c.threatGraceDays;
+    if (dt && warned && p.satisfaction < c.leaveBelow + (p.leaveOffset ?? 0) && rngOf(s).next() < c.leaveChancePerDay * (p.trait === 'loyal' ? 0.5 : 1) * dt) { leave(s, p); continue; }
     if (!p.threatening && p.satisfaction < c.threatenBelow) {
       p.threatening = true;
+      p.threatSince = s.day;
       log(s, 'log.threat', { party: p.id }, 'bad');
     } else if (p.threatening && p.satisfaction > c.threatenResetAbove) p.threatening = false;
   }
@@ -1534,6 +1550,8 @@ function actInner(s: GameState, a: Action): ActionResult {
       const p = partyById(s, a.partyId);
       if (!p || p.seats === 0) return { ok: false, error: 'err.unknown' };
       if (p.inCoalition) return { ok: false, error: 'err.alreadyIn' };
+      // a boycott is not a negotiation: no point burning the invitation on it
+      if (!p.willSitWithBibi) return { ok: false, error: 'err.boycott' };
       s.cooldowns.invite = c.inviteCooldownDays;
       const coal = coalition(s);
       const chance = inviteChance(s, p);
@@ -1547,6 +1565,8 @@ function actInner(s: GameState, a: Action): ActionResult {
         log(s, 'log.joined', { party: p.id }, 'good');
         checkCoalition(s);
       } else {
+        // a no is quicker than a yes: the next try comes sooner
+        s.cooldowns.invite = c.inviteFailCooldownDays;
         if (!s.refusedBy.includes(p.id)) s.refusedBy.push(p.id);
         const opp = s.parties.filter((x) => !x.inCoalition && x.seats > 0);
         if (opp.length && opp.every((x) => s.refusedBy.includes(x.id))) s.stats.refusedByAll = 1;
@@ -1582,8 +1602,11 @@ function actInner(s: GameState, a: Action): ActionResult {
       const def = promiseById.get(a.promiseId);
       if (!p || !def) return { ok: false, error: 'err.unknown' };
       if (def.cardOnly) return { ok: false, error: 'err.cardOnly' };
-      if (s.cooldowns.law > 0) return cooldown('law', s.cooldowns.law);
+      // the Knesset's law queue only holds up laws; a ministry waits for the next reshuffle; the rest is a deed
+      const isLaw = !!remedyById.get(def.deliveredBy)?.law;
+      if (isLaw && s.cooldowns.law > 0) return cooldown('law', s.cooldowns.law);
       if (def.deliveredBy === 'ministry') {
+        if (s.cooldowns.ministry > 0) return cooldown('ministry', s.cooldowns.ministry);
         if (!p.inCoalition) return { ok: false, error: 'err.notInCoalition' };
         const counts = ministryCounts(s.ministries);
         const from = coalition(s).filter((x) => x.id !== p.id && (counts[x.id] ?? 0) > 0)
@@ -1594,10 +1617,11 @@ function actInner(s: GameState, a: Action): ActionResult {
       } else {
         if (s.recess && remedyById.get(def.deliveredBy)?.law) return { ok: false, error: 'err.recess' };
         if (!remedyAvailable(s, def.deliveredBy)) return unavailable(s, def.deliveredBy);
-        log(s, 'log.law', { law: def.deliveredBy }, 'info');
+        if (isLaw) log(s, 'log.law', { law: def.deliveredBy }, 'info');
         applyMove(s, def.deliveredBy, p.id);
       }
-      s.cooldowns.law = c.lawCooldownDays;
+      if (isLaw) s.cooldowns.law = c.lawCooldownDays;
+      else if (def.deliveredBy === 'ministry') s.cooldowns.ministry = c.ministryCooldownDays;
       checkCoalition(s);
       return { ok: true };
     }

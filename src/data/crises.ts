@@ -302,7 +302,9 @@ export const CRISES: CrisisDef[] = [
     ignore: { approval: -1, us: -3, sat: [{ target: 'subject', delta: -4 }] } },
   { id: 'president', weight: 0.6,
     onFire: { us: -6 },
-    remedies: ['dc', 'congress'],
+    // under an ICC warrant there are no trips: the backups work from home
+    remedies: ['dc', 'congress', 'nobel', 'ch14'],
+    extra: { ch14: { us: 8 } },
     ignore: { us: -8, approval: -1 } },
   // ---- good news (no card: a flash + headline; absurd, rare)
   { id: 'gasfield', weight: 0.25, goodNews: true, remedies: [], ignore: {},
