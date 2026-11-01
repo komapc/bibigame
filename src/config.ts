@@ -374,8 +374,8 @@ export const DEFAULT_CONFIG: Config = {
   warRallyMinShare: 0.3,
   warFiscalPerDay: 0.12,
   fiscalCrisisBelow: 5,
-  fiscalCrisisApproval: 6,
-  fiscalCrisisMoodPerDay: 0.1,
+  fiscalCrisisApproval: 4,
+  fiscalCrisisMoodPerDay: 0.07,
   deficitApprovalPerPoint: 0.3,
 
   budgetNagFromMonth: 1,
