@@ -92,7 +92,7 @@ export function renderText(o: Observation): string {
   } else if (o.phase === 'governing' || o.phase === 'opposition') L.push('No crisis right now.');
   // laws and promises are a governing thing: in opposition they only clutter the screen
   if (!o.opposition) L.push(`LAWS: ${o.laws.map((l) => l.id).join(', ')}`);
-  if (o.moves.length) L.push(`MOVES: ${o.moves.map((m) => `${m.id}${m.available ? '' : m.cooldown ? ` (${m.cooldown}d)` : ` (n/a: ${m.why})`}${m.ending ? ' [ENDS GAME]' : ''}`).join(', ')}`);
+  if (o.moves.length) L.push(`MOVES: ${o.moves.map((m) => `${m.id}${m.available ? '' : m.cooldown ? ` (${m.cooldown}d)` : ` (n/a: ${m.why})`}${m.ending ? ' [ENDS GAME]' : ''}${m.desperate ? ' [DESPERATE GAMBLE]' : ''}`).join(', ')}`);
   if (!o.opposition) L.push(`PROMISES: ${o.promises.map((p) => `${p.id}->${p.to.join('/')}`).join(', ')}`);
   L.push(`TITLES: ${o.titles.length ? o.titles.map((x) => `${x.name} (${x.gloss})`).join('; ') : 'none yet'}`);
   if (o.log.length) {

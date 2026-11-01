@@ -289,6 +289,16 @@ export const cardOnlyHudAware = cardOnly('card-only-hud-aware', (g, c) => {
   return v;
 });
 
+/** hud-aware plus the desperate measures: plays one as soon as it opens (a player who reads the news line) */
+export const hudDesperate: Strategy = {
+  name: 'hud-desperate',
+  decide(g, o) {
+    const acts = cardOnlyHudAware.decide(g, o);
+    const m = o.phase === 'governing' && o.moves.find((x) => x.desperate && x.available);
+    return m ? [...acts, { type: 'move', moveId: m.id }] : acts;
+  },
+};
+
 export const STRATEGIES: Record<string, (seed: number) => Strategy> = {
   'never-act': () => neverAct,
   random: (seed) => randomBot(seed),
@@ -298,6 +308,7 @@ export const STRATEGIES: Record<string, (seed: number) => Strategy> = {
   'promise-spammer': () => promiseSpammer,
   'card-only-trial-aware': () => cardOnlyTrialAware,
   'card-only-hud-aware': () => cardOnlyHudAware,
+  'hud-desperate': () => hudDesperate,
   greedy: () => greedy(0, 'greedy'),
   lookahead: () => greedy(30, 'lookahead', 2),
 };
