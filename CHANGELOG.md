@@ -195,3 +195,11 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - War: the instant rally is smaller (`warApproval` 8 → 5, `warFiscal` −15 → −8), but every day of war costs budget health (`warFiscalPerDay` 0.12, ~11 over a full war), and the rally's pull on approval fades to `warRallyMinShare` (30%) by the end of the war. The "rally is fading" message names what is actually lost.
 - Empty treasury (budget health under `fiscalCrisisBelow` 5): the approval target drops by `fiscalCrisisApproval` (6) and coalition partners sour by `fiscalCrisisMoodPerDay` (0.1/day, shown as a mood driver). Entering and leaving the state is logged.
 - Balance (60 games, 12y), old → new: greedy 33% → 43%, lookahead 57% → 57%, card-only-hud-aware 43% → 40%; random 3% · always-right 5%. A threshold of 10 instead of 5 made the game ~10 points harder for every bot (the bots sit under 10 often), so the penalty is kept for a truly empty treasury.
+
+## #39 Honest texts, war as a decision (fourth blind playtest)
+- Results: no dangling "→" when nothing visible changed; no empty "()" in DRIFT lines; a card's on-arrival effect reads "News: …" instead of "… hits" (some are good news).
+- The rogue-MK card is a threat ("unless you calm him down, you are left with N seats"), not a done deal. The premium bill says "about" (outcomes have noise).
+- Risks are listed only for cards that can still come (no "budget deadline" right after the budget passed, no centrist threat without centrists).
+- "The far right calls you a leftist" only when a far-right partner sits at least 1.5 right of the government's line.
+- The budget meter is "Treasury" in effects (it was "Budget", next to "Budget passes"). Text-mode previews show the raw direction for the trial (as in RESULT). The elections-window refusal says when it opens. The far-right merger says it adds bloc seats, not your odds.
+- War: none in the first `warFirstDays` (60) of the game; the war button and the text status show who joins (+seats) and what it costs (approval, treasury now and per day); a wartime partner still waiting on your promise stays after the war; starting a war keeps a "push into Lebanon" promise.
