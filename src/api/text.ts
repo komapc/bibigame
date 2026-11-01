@@ -23,7 +23,7 @@ export const HELP = `Commands (one per line):
   ignore | 0                   ignore the crisis (it escalates; not on urgent cards — there it means refuse)
   choose <option>              choose an option by id (e.g. choose settle)
   promise <party> <promise>    make a promise (e.g. promise liberman constitution)
-  deliver <party> <promise>    actually do it (uses the law cooldown)
+  deliver <party> <promise>    actually do it (a law uses the law cooldown, a post the ministry one)
   ministry <party> from <party>   give one of <from>'s ministries to <party>
   ministry <party> <ministry>  give a specific ministry (e.g. ministry shas finance)
   invite <party>               try to bring a party into the coalition
@@ -80,18 +80,27 @@ export function renderText(o: Observation): string {
   for (const m of tl.upcoming) if (m.kind !== 'goal') strip[at(m.day)] = m.kind === 'election' ? 'E' : m.kind === 'budget' ? 'B' : m.kind === 'promise' || m.kind === 'distrust' ? 'p' : strip[at(m.day)];
   strip[at(tl.nowDay)] = '|';
   L.push(`TIMELINE: start [${strip.join('')}] goal ${tl.goalDay > tl.nowDay ? `in ${tl.goalDay - tl.nowDay}d` : 'reached'}${tl.nextTitle ? ` | next title: ${tl.nextTitle.name} in ${tl.nextTitle.inDays}d` : ''}`);
-  if (tl.upcoming.length) L.push(`UPCOMING: ${tl.upcoming.slice(0, 6).map((m) => `${m.date} ${m.label} (${m.day - tl.nowDay}d)`).join('; ')}`);
+  // the next six, plus the elections even when they are further out (e.g. postponed)
+  const shownUp = tl.upcoming.slice(0, 6);
+  const el = tl.upcoming.find((m) => m.kind === 'election');
+  if (el && !shownUp.includes(el)) shownUp.push(el);
+  if (shownUp.length) L.push(`UPCOMING: ${shownUp.map((m) => `${m.date} ${m.label} (${m.day - tl.nowDay}d)`).join('; ')}`);
+  // signs are the raw direction, as in RESULT (trial: down is good)
+  const fxText = (pv: { label: string; up: boolean; meter?: string; size?: number }[]) =>
+    pv.map((p) => `${p.label}${((p.meter === 'trial' ? !p.up : p.up) ? '+' : '-').repeat(p.size ?? 1)}`).join(', ');
   if (o.event) {
     L.push(`CRISIS: ${o.event.title} — ${o.event.text}${o.event.subject ? ` (subject: ${o.event.subject})` : ''} [${g_timeoutNote(o)}]`);
     const n: Record<string, number> = { left: 1, right: 2, up: 3, down: 4, ignore: 0 };
     for (const op of o.event.options) {
-      // signs are the raw direction, as in RESULT (trial: down is good)
-      const fx = op.preview.map((p) => `${p.label}${((p.meter === 'trial' ? !p.up : p.up) ? '+' : '-').repeat(p.size ?? 1)}`).join(', ');
+      const fx = fxText(op.preview);
       L.push(`  ${n[op.dir]}. ${op.dir.toUpperCase().padEnd(5)} ${op.label} (${op.id})${op.odds !== null ? ` [${op.odds}% odds]` : ''}${op.available ? '' : ` [unavailable: ${op.why}]`}${fx ? ` -> ${fx}` : ''}`);
     }
   } else if (o.phase === 'governing' || o.phase === 'opposition') L.push('No crisis right now.');
   // laws and promises are a governing thing: in opposition they only clutter the screen
-  if (!o.opposition) L.push(`LAWS: ${o.laws.map((l) => l.id).join(', ')}`);
+  if (!o.opposition) {
+    L.push('LAWS:');
+    for (const l of o.laws) L.push(`  ${l.id}${l.available ? '' : ` [n/a: ${l.why}]`}${l.available && l.preview.length ? ` -> ${fxText(l.preview)}` : ''}`);
+  }
   if (o.moves.length) L.push(`MOVES: ${o.moves.map((m) => `${m.id}${m.available ? '' : m.cooldown ? ` (${m.cooldown}d)` : ` (n/a: ${m.why})`}${m.ending ? ' [ENDS GAME]' : ''}`).join(', ')}`);
   if (!o.opposition) L.push(`PROMISES: ${o.promises.map((p) => `${p.id}->${p.to.join('/')}`).join(', ')}`);
   L.push(`TITLES: ${o.titles.length ? o.titles.map((x) => `${x.name} (${x.gloss})`).join('; ') : 'none yet'}`);

@@ -129,6 +129,8 @@ export interface Config {
   kaplanStreetMaxMult: number;
   /** the same card never fires twice within this many days */
   crisisCooldownDays: number;
+  /** a card with requires.quietAfter stays away this long after one of those moves */
+  quietAfterDays: number;
   /** each earlier firing of the same card this game multiplies its weight by this */
   crisisRepeatDecay: number;
   goodNewsCooldownDays: number;
@@ -325,6 +327,7 @@ export const DEFAULT_CONFIG: Config = {
   trumpUsPull: 4,
   kaplanStreetMaxMult: 2,
   crisisCooldownDays: 60,
+  quietAfterDays: 45,
   crisisRepeatDecay: 0.75,
   goodNewsCooldownDays: 365,
   recentWarDays: 90,
