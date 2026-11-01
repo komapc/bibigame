@@ -90,7 +90,7 @@ export interface Effect {
   /** opposition only: the rival government's stability */
   rival?: number;
   /** special mechanics */
-  special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'refuse' | 'passBudget' | 'defector' | 'groundGame'
+  special?: 'war' | 'endWar' | 'ministryToSubject' | 'fireFarRight' | 'fireDefence' | 'elections' | 'deliverPromise' | 'refuse' | 'passBudget' | 'defector' | 'groundGame' | 'unity'
     | 'poach' | 'newMinistry' | 'merger' | 'spoiler' | 'gevalt' | 'exileRival' | 'primetime' | 'postponeElections'
     | 'plea' | 'miami' | 'handover' | 'breakRotation' | 'noConfidence' | 'oppPoach' | 'pivot' | 'securityDetail';
 }
@@ -205,7 +205,9 @@ export interface MoveDef {
   cooldownDays?: number;
   /** once per Knesset term / election (reset when a new government forms or you lose) */
   oncePerTerm?: boolean;
-  requires?: { war?: boolean; minTrial?: number; electionsWithinDays?: number; oppositionDonor?: boolean };
+  requires?: { war?: boolean; minTrial?: number; electionsWithinDays?: number; oppositionDonor?: boolean;
+    /** a desperate measure: only while this is going badly (desperateApproval/Fiscal/Trial in config) */
+    desperate?: 'approval' | 'fiscal' | 'trial' };
   /** ends the game (special ending) */
   ending?: boolean;
 }
@@ -301,6 +303,8 @@ export interface GameState {
   /** crisis id -> extra weight multiplier from backfires/ignores */
   pressure: Record<string, number>;
   war: { active: boolean; leftDays: number; cooldownDays: number };
+  /** desperate measures already announced this term (a log line when one opens up) */
+  desperateSeen?: string[];
   cooldowns: { ministry: number; law: number; invite: number };
   /** last year whose budget was passed */
   budgetPassedYear: number;

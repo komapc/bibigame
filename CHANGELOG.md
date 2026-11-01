@@ -214,3 +214,12 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - "The President hasn't called" has home backups under an ICC warrant (Nobel, Channel 14).
 - No walkout out of the blue: a party threatens first and gets `threatGraceDays` (14) before a random walkout; text-mode `wait` stops on a threat, a walkout or a new phase.
 - Balance (60 games, 12y): random 0% · always-right 8% · greedy 27% · lookahead 68% · card-only-hud-aware 45%. Runs this size still swing ±10 points with small changes; without the softening hud-aware was 28%.
+
+## #43 Desperate measures: weakness opens bold gambles
+- Five drawer moves that open only when things go badly, once per term, each a gamble with a big swing both ways:
+  - approval under `desperateApproval` (25): national unity government (45%: the biggest party outside that would sit with you joins), surprise peace summit (45%: US +20, approval +10, far right −10), the rival's dossier (50%: approval +8, opposition −10; a miss feeds your own trial);
+  - treasury under `desperateFiscal` (10): emergency aid package (60%: treasury +25, US −6);
+  - trial at `desperateTrial` (70) or more: immunity law overnight (40%: trial −25, street −15, centrists −12).
+- When one opens, the log says so once a term; the Moves drawer lists them under "Desperate measures" (highlighted when ready, otherwise with the condition); text mode marks them `[DESPERATE GAMBLE]`.
+- New bot `hud-desperate`: hud-aware that plays a desperate measure as soon as it opens.
+- Balance (60 games, 12y): random 2% · always-right 8% · greedy 33% · lookahead 67% · card-only-hud-aware 45% · hud-desperate 47%.

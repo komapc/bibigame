@@ -129,6 +129,10 @@ export interface Config {
   kaplanStreetMaxMult: number;
   /** the same card never fires twice within this many days */
   crisisCooldownDays: number;
+  /** desperate measures open when approval is under / the treasury under / the trial at or over these */
+  desperateApproval: number;
+  desperateFiscal: number;
+  desperateTrial: number;
   /** each earlier firing of the same card this game multiplies its weight by this */
   crisisRepeatDecay: number;
   goodNewsCooldownDays: number;
@@ -325,6 +329,9 @@ export const DEFAULT_CONFIG: Config = {
   trumpUsPull: 4,
   kaplanStreetMaxMult: 2,
   crisisCooldownDays: 60,
+  desperateApproval: 25,
+  desperateFiscal: 10,
+  desperateTrial: 70,
   crisisRepeatDecay: 0.75,
   goodNewsCooldownDays: 365,
   recentWarDays: 90,
