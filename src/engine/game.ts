@@ -171,7 +171,7 @@ export function createState(base: KnessetData, seed: number, config: Partial<Con
     nextEventInDays: 0,
     pressure: {},
     war: { active: false, leftDays: 0, cooldownDays: cfg.warFirstDays },
-    cooldowns: { ministry: 0, law: 0, invite: 0 },
+    cooldowns: { ministry: 0, law: 0, invite: 0, promise: 0 },
     budgetPassedYear: 0,
     lastBudgetNag: -999,
     queue: [],
@@ -406,7 +406,7 @@ export function remedyAvailable(s: GameState, id: string): boolean {
   if (r.once && s.usedOnce.includes(id)) return false;
   if (r.permanent && s.lawsPassed.includes(id)) return false;
   if (r.travel && s.day < s.iccUntil) return false;
-  if (id === 'war') return !s.war.active && s.war.cooldownDays <= 0;
+  if (id === 'war') return !s.war.active && s.war.cooldownDays <= 0 && s.fiscal >= s.config.warMinFiscal;
   if (id === 'ceasefire') return s.war.active;
   if ((id === 'funds' || id === 'deliverpremium') && s.fiscal < s.config.fundsMinFiscal) return false;
   if (id === 'fire') return coalition(s).some((p) => p.tags.includes('farright') && ministryCounts(s.ministries)[p.id]);
@@ -451,6 +451,7 @@ export function unavailableReason(s: GameState, id: string): { key: string; para
   if (!r) return { key: 'why.na' };
   if (id === 'war' && s.war.active) return { key: 'why.atWar' };
   if (id === 'war' && s.war.cooldownDays > 0) return { key: 'why.cooldown', params: { days: Math.ceil(s.war.cooldownDays) } };
+  if (id === 'war' && s.fiscal < s.config.warMinFiscal) return { key: 'why.fiscal', params: { n: s.config.warMinFiscal } };
   if (id === 'ceasefire') return { key: 'why.noWar' };
   if (r.context === 'tension' && !hasTension(s)) return { key: 'why.tension' };
   if (r.once && s.usedOnce.includes(id)) return { key: 'why.once' };
@@ -893,8 +894,11 @@ function transferMinistry(s: GameState, ministryId: string, toId: string, gainSc
 function startWar(s: GameState) {
   if (s.war.active) return;
   const c = s.config;
-  s.war = { active: true, leftDays: c.warDurationDays, cooldownDays: c.warCooldownDays };
-  s.approval = clamp(s.approval + c.warApproval, 0, 100);
+  // not every war goes to plan: a failed one costs approval and Washington, and nobody rallies
+  const failed = rngOf(s).next() < c.warFailChance;
+  s.war = { active: true, leftDays: c.warDurationDays, cooldownDays: c.warCooldownDays, failed };
+  s.approval = clamp(s.approval + (failed ? -c.warFailApproval : c.warApproval), 0, 100);
+  if (failed) s.us = clamp(s.us - c.warFailUs, 0, 100);
   s.fiscal = clamp(s.fiscal + c.warFiscal, 0, 100);
   for (const p of s.parties) {
     if (p.tags.includes('farright')) p.satisfaction = clamp(p.satisfaction + 5, 0, 100);
@@ -905,12 +909,13 @@ function startWar(s: GameState) {
       log(s, 'log.wartimeJoin', { party: p.id, n: s.config.wartimeStayMood }, 'good');
     }
   }
-  log(s, 'log.war', {}, 'event');
+  log(s, failed ? 'log.warFailed' : 'log.war', {}, failed ? 'bad' : 'event');
 }
 
 function endWar(s: GameState) {
   const rally = Math.round(warRally(s));
   s.war.active = false;
+  s.war.failed = false;
   s.war.leftDays = 0;
   s.stats.warsEnded++;
   s.lastWarEnd = s.day;
@@ -1228,7 +1233,7 @@ function trumpTick(s: GameState, dt: number) {
 /** the war's pull on approval: full at the start, fading to warRallyMinShare by the end */
 export function warRally(s: GameState): number {
   const c = s.config;
-  if (!s.war.active) return 0;
+  if (!s.war.active || s.war.failed) return 0;
   const left = clamp(s.war.leftDays / c.warDurationDays, 0, 1);
   return c.warApprovalBonusTarget * (c.warRallyMinShare + (1 - c.warRallyMinShare) * left);
 }
@@ -1320,6 +1325,7 @@ function tickDay(s: GameState, dt: number) {
   s.cooldowns.ministry = Math.max(0, s.cooldowns.ministry - dt);
   s.cooldowns.law = Math.max(0, s.cooldowns.law - dt);
   s.cooldowns.invite = Math.max(0, s.cooldowns.invite - dt);
+  s.cooldowns.promise = Math.max(0, (s.cooldowns.promise ?? 0) - dt);
   s.war.cooldownDays = Math.max(0, s.war.cooldownDays - dt);
   if (s.war.active) {
     s.war.leftDays -= dt;
@@ -1477,7 +1483,7 @@ function actionCause(a: Action): Outcome['cause'] {
 }
 
 /** a rejection that says which cooldown and for how long */
-const cooldown = (what: 'ministry' | 'law' | 'invite', days: number): ActionResult =>
+const cooldown = (what: 'ministry' | 'law' | 'invite' | 'promise', days: number): ActionResult =>
   ({ ok: false, error: `err.cooldown.${what}`, params: { days: Math.ceil(days) } });
 
 /** a rejection that says why the option/move can't be used now */
@@ -1585,6 +1591,7 @@ function actInner(s: GameState, a: Action): ActionResult {
         return { ok: false, error: 'err.distrust' };
       }
       if (p.trust.state === 'believing') return { ok: false, error: 'err.alreadyPromised' };
+      if ((s.cooldowns.promise ?? 0) > 0) return cooldown('promise', s.cooldowns.promise!);
       const moot = promiseMoot(s, def.id);
       if (moot) return { ok: false, error: `err.promiseMoot.${moot}` };
       const rotation = def.id === 'rotation';
@@ -1593,7 +1600,9 @@ function actInner(s: GameState, a: Action): ActionResult {
         if (s.parties.some((x) => x.trust.promiseId === 'rotation' && (x.trust.state === 'believing' || x.trust.state === 'angry'))) return { ok: false, error: 'err.oneRotation' };
       }
       p.trust = { state: 'believing', promiseId: def.id, since: s.day, until: s.day + (rotation ? c.rotationBelieveDays : def.believeDays ?? c.promiseBelieveDays) * (p.trait === 'patient' ? 1.5 : 1) };
-      p.satisfaction = clamp(p.satisfaction + (rotation ? c.rotationBoost : def.boost ?? c.promiseBoost), 0, 100);
+      const boost = rotation ? c.rotationBoost * Math.min(1, p.seats / c.rotationFullSeats) : def.boost ?? c.promiseBoost;
+      p.satisfaction = clamp(p.satisfaction + boost, 0, 100);
+      s.cooldowns.promise = c.promiseCooldownDays;
       log(s, 'log.promised', { party: p.id, promise: def.id }, 'info');
       return { ok: true };
     }

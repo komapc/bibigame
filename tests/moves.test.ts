@@ -60,6 +60,7 @@ describe('rotation', () => {
     expect(g.act({ type: 'promise', partyId: partner.id, promiseId: 'rotation' }).ok).toBe(true);
     expect(partner.satisfaction).toBeGreaterThan(sat0 + 20);
     const other = g.state.parties.find((p) => p.inCoalition && p.id !== partner.id && p.id !== g.state.base.pmParty && p.seats >= 4)!;
+    g.state.cooldowns.promise = 0;
     expect(g.act({ type: 'promise', partyId: other.id, promiseId: 'rotation' }).error).toBe('err.oneRotation');
     expect(g.act({ type: 'deliver', partyId: partner.id, promiseId: 'rotation' }).ok).toBe(false);
     partner.trust.until = g.state.day + 1;

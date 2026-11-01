@@ -39,6 +39,7 @@ export const en: Record<string, string> = {
   'ui.war': 'Start a war',
   'ui.warSeats': '+{seatsText} · ',
   'ui.warFx': 'Approval +{a} · Treasury −{f}, then −{d} a day; the rally fades',
+  'ui.warFail': ' · {p}% it goes wrong (approval −{a}, no rally)',
   'ui.warActive': 'At war: {daysText} left',
   'ui.warCooldown': 'War ready in {daysText}',
   'ui.pause': 'Pause',
@@ -325,6 +326,7 @@ export const en: Record<string, string> = {
   'log.ministry': '{ministry}: {from} → {to}',
   'log.fired': '{party} loses {ministry}. You keep it yourself.',
   'log.war': 'War! The nation rallies (for now).',
+  'log.warFailed': 'War! It goes wrong from day one: no rally, Washington is furious.',
   'log.warEnd': 'The war winds down.',
   'log.wartimeJoin': '{party} joins an emergency government. When the war ends it leaves, unless its mood is {n}+ or it is counting on a promise of yours.',
   'log.wartimeLeave': '{party} leaves the emergency government.',
@@ -371,6 +373,7 @@ export const en: Record<string, string> = {
   'err.cooldown.ministry': 'You just reshuffled: the next ministry change in {daysText}.',
   'err.cooldown.law': 'The Knesset is still busy with your last law: the next one in {daysText}.',
   'err.cooldown.invite': 'You just invited someone: the next invitation in {daysText}.',
+  'err.cooldown.promise': 'You just promised something: the next promise in {daysText}.',
   'err.cardOnly': 'This promise can only be kept when they come to collect (on its card).',
   'err.noMinistryToGive': 'No partner has a spare ministry to give up.',
   // ---- cause → result (outcomes)
