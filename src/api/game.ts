@@ -428,6 +428,10 @@ export function preview(s: GameState, optionId: string): Preview[] {
   const k = optionId === 'ignore' ? 1 : fatigueOf(s, optionId);
   if (k < 1) out.push({ label: t('fx.tired'), up: false });
   const shown = effects.map((e) => (k < 1 ? dampen(e, k) : e));
+  // money the treasury doesn't have comes out of approval (as the engine does)
+  const spend = shown.reduce((a, e) => a + Math.min(0, e.fiscal ?? 0), 0);
+  const short = Math.max(0, -(s.fiscal + spend));
+  if (short > 0) shown.push({ approval: -short * s.config.deficitApprovalPerPoint });
   // meters: one arrow per meter, summed over all parts (so +2 and −4 show as one −)
   for (const m of ['approval', 'street', 'us', 'fiscal', 'trial'] as const) {
     const v = shown.reduce((a, e) => a + (e[m] ?? 0), 0);

@@ -55,6 +55,8 @@ export interface Party extends PartyDef {
   guardedUntil?: number;
   /** has publicly threatened to quit (hysteresis flag) */
   threatening: boolean;
+  /** the day it started threatening (a random walkout waits config.threatGraceDays after it) */
+  threatSince?: number;
   trust: Trust;
 }
 
@@ -352,7 +354,7 @@ export interface GameState {
   lowApprovalDays?: number;
   lowApprovalWarned?: boolean;
   /** campaign tricks in effect for the next election roll */
-  campaignFx: { merger: boolean; spoiler: boolean; gevalt: boolean };
+  campaignFx: { merger: boolean; spoiler: boolean; gevalt: boolean; early?: boolean };
   /** move id → game day it is usable again */
   moveReadyAt: Record<string, number>;
   /** once-per-term moves already used this term */

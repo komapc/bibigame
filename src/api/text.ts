@@ -199,9 +199,13 @@ export function runText(g: Game, line: string): { reply: string; ok: boolean } {
       }
       const start = g.state.day;
       const hadEvent = !!g.state.event;
+      // stop on anything a player would want to react to: a card, a threat, a walkout, a new phase
+      const politics = () => `${g.state.phase}|${g.state.parties.map((p) => `${p.id}${p.inCoalition ? 'C' : ''}${p.threatening ? '!' : ''}`).join(',')}`;
+      const p0 = politics();
       while (!g.over && g.state.day - start < cmd.days) {
         g.advanceDays(1);
         if (cmd.untilEvent && !hadEvent && g.state.event) break;
+        if (cmd.untilEvent && politics() !== p0) break;
       }
       head = `Waited ${Math.round(g.state.day - start)}d.`;
       break;

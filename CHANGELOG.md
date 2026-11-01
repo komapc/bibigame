@@ -203,3 +203,14 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - "The far right calls you a leftist" only when a far-right partner sits at least 1.5 right of the government's line.
 - The budget meter is "Treasury" in effects (it was "Budget", next to "Budget passes"). Text-mode previews show the raw direction for the trial (as in RESULT). The elections-window refusal says when it opens. The far-right merger says it adds bloc seats, not your odds.
 - War: none in the first `warFirstDays` (60) of the game; the war button and the text status show who joins (+seats) and what it costs (approval, treasury now and per day); a wartime partner still waiting on your promise stays after the war; starting a war keeps a "push into Lebanon" promise.
+
+## #40 Promises, invites, elections and the treasury without dead ends (fourth blind playtest)
+- A promise kept on the spot is just the deal: the delivery bonus ramps from 0 (was 25%) and the promise's up-front boost is taken back by the same share.
+- `deliver` waits only for the matching queue: laws for the law cooldown, ministries for the ministry cooldown, other deeds for nothing.
+- No money promise while coalition funds are off (treasury under `fundsMinFiscal`): it could not be kept.
+- Invites: a boycotting party refuses up front without burning the invitation; after a refusal the next try comes in `inviteFailCooldownDays` (30) instead of 90.
+- Elections: early elections you call yourself add `loseEarlyElection` (10%) to the voters' odds; elections still void a rotation agreement, but that partner counts it as a broken promise.
+- Treasury: spending money you don't have comes out of approval (`deficitApprovalPerPoint` 0.3 per point), in the preview too. The empty-treasury penalty from #38 is softened to −4 approval target and −0.07 mood/day.
+- "The President hasn't called" has home backups under an ICC warrant (Nobel, Channel 14).
+- No walkout out of the blue: a party threatens first and gets `threatGraceDays` (14) before a random walkout; text-mode `wait` stops on a threat, a walkout or a new phase.
+- Balance (60 games, 12y): random 0% · always-right 8% · greedy 27% · lookahead 68% · card-only-hud-aware 45%. Runs this size still swing ±10 points with small changes; without the softening hud-aware was 28%.

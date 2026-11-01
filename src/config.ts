@@ -47,6 +47,8 @@ export interface Config {
   ministryCooldownDays: number;
   lawCooldownDays: number;
   inviteCooldownDays: number;
+  /** after a refused invitation the next try comes sooner */
+  inviteFailCooldownDays: number;
   campaignDays: number;
   /** a Knesset term: scheduled elections this many days after the last ones */
   knessetTermDays: number;
@@ -64,6 +66,8 @@ export interface Config {
   losePerApprovalPoint: number;
   losePerOpenCase: number;
   losePerRecentElection: number;
+  /** you called these elections yourself (not a collapse, not the calendar): the voters' patience is shorter */
+  loseEarlyElection: number;
   electionFatigueDays: number;
   loseMax: number;
   /** the roll also falls per approval point ABOVE approvalNeutral (popular PMs are safer) */
@@ -102,6 +106,8 @@ export interface Config {
   threatenBelow: number;
   /** below this satisfaction a threatening partner may walk out any day (chance per day) */
   leaveBelow: number;
+  /** days between a party's threat and a possible random walkout */
+  threatGraceDays: number;
   /** partners get nervous when your approval is below this: −(line − approval) × pollPanicPerPoint sat/day */
   pollPanicBelow: number;
   pollPanicPerPoint: number;
@@ -169,7 +175,7 @@ export interface Config {
   promiseBoost: number;
   promiseBrokenPenalty: number;
   promiseDeliverBonus: number;
-  /** a promise kept right after it was made is just a deal: the delivery bonus ramps from 25% to 100% over this many days */
+  /** a promise kept right after it was made is just a deal: the delivery bonus ramps from 0 to 100% over this many days, and the promise's up-front boost is taken back by the same share */
   promiseRipenDays: number;
   believeDriftPerDay: number;
   /** security detail move: daily mood bonus for the guarded partner, and for how long */
@@ -197,6 +203,8 @@ export interface Config {
   fiscalCrisisBelow: number;
   fiscalCrisisApproval: number;
   fiscalCrisisMoodPerDay: number;
+  /** spending below an empty treasury: approval lost per budget point you didn't have */
+  deficitApprovalPerPoint: number;
 
   /** budget must pass by 31 March each year; crisis starts nagging from this month (0=Jan) */
   budgetNagFromMonth: number;
@@ -267,6 +275,7 @@ export const DEFAULT_CONFIG: Config = {
   ministryCooldownDays: 60,
   lawCooldownDays: 90,
   inviteCooldownDays: 90,
+  inviteFailCooldownDays: 30,
   campaignDays: 60,
   knessetTermDays: 1461,
   appetitePerDay: 0.04,
@@ -278,6 +287,7 @@ export const DEFAULT_CONFIG: Config = {
   losePerApprovalPoint: 0.015,
   losePerOpenCase: 0.05,
   losePerRecentElection: 0.1,
+  loseEarlyElection: 0.1,
   electionFatigueDays: 1461,
   loseMax: 0.85,
   loseGainPerApprovalPoint: 0.005,
@@ -301,6 +311,7 @@ export const DEFAULT_CONFIG: Config = {
   satBaseline: 50,
   threatenBelow: 25,
   leaveBelow: 15,
+  threatGraceDays: 14,
   pollPanicBelow: 32,
   pollPanicPerPoint: 0.015,
   pollPanicMaxPerDay: 0.13,
@@ -363,8 +374,9 @@ export const DEFAULT_CONFIG: Config = {
   warRallyMinShare: 0.3,
   warFiscalPerDay: 0.12,
   fiscalCrisisBelow: 5,
-  fiscalCrisisApproval: 6,
-  fiscalCrisisMoodPerDay: 0.1,
+  fiscalCrisisApproval: 4,
+  fiscalCrisisMoodPerDay: 0.07,
+  deficitApprovalPerPoint: 0.3,
 
   budgetNagFromMonth: 1,
 
