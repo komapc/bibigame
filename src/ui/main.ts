@@ -419,6 +419,9 @@ function newsHtml(o: Observation, enter: string): string {
   </div>`;
 }
 
+/** a gamble's success chance as a small badge (nothing for a sure thing) */
+const odds = (n: number | null) => (n !== null ? ` <b class="odds" title="${esc(t('ui.odds'))}">${n}%</b>` : '');
+
 /** opposition has no cards to swipe: say what to do and put the opposition moves right here */
 function oppositionHelp(o: Observation): string {
   // the opposition's own moves (attack, poach, no-confidence) first, then whatever else is ready
@@ -426,7 +429,7 @@ function oppositionHelp(o: Observation): string {
   const moves = o.moves.filter((m) => !m.ending)
     .sort((a, b) => own(a.id) - own(b.id) || Number(b.available) - Number(a.available)).slice(0, 4);
   return `<p class="whatnow"><b>${esc(t('ui.whatNow'))}</b> ${esc(t('ui.whatNowOpp'))}</p>
-    <div class="quick">${moves.map((m) => `<button data-move="${m.id}" ${m.available ? '' : 'disabled'} title="${esc(m.desc)}">${esc(m.label)}${m.cooldown ? ` <small>${esc(t('ui.cooldown', { days: m.cooldown }))}</small>` : ''}</button>`).join('')}</div>`;
+    <div class="quick">${moves.map((m) => `<button data-move="${m.id}" ${m.available ? '' : 'disabled'} title="${esc(m.desc)}">${esc(m.label)}${odds(m.odds)}${m.cooldown ? ` <small>${esc(t('ui.cooldown', { days: m.cooldown }))}</small>` : ''}</button>`).join('')}</div>`;
 }
 
 // ------------------------------------------------------------------ result line (cause → result)
@@ -623,7 +626,7 @@ function renderLaws(o: Observation) {
 
 function renderMoves(o: Observation) {
   region('moves', o.phase + o.moves.map((m) => `${m.id}${m.available}${m.cooldown}`).join(), () => {
-    const btn = (m: Observation['moves'][number]) => `<button data-move="${m.id}" class="${m.ending ? 'exit' : m.desperate && m.available ? 'desperate' : ''}" ${m.available ? '' : 'disabled'} title="${esc(m.desc)}">${esc(m.label)}${m.cooldown ? ` <small>${esc(t('ui.cooldown', { days: m.cooldown }))}</small>` : !m.available && m.why ? ` <small>${esc(m.why)}</small>` : ''}<small class="mdesc">${esc(m.desc)}</small></button>`;
+    const btn = (m: Observation['moves'][number]) => `<button data-move="${m.id}" class="${m.ending ? 'exit' : m.desperate && m.available ? 'desperate' : ''}" ${m.available ? '' : 'disabled'} title="${esc(m.desc)}"><span>${esc(m.label)}${odds(m.odds)}</span>${m.cooldown ? ` <small>${esc(t('ui.cooldown', { days: m.cooldown }))}</small>` : !m.available && m.why ? ` <small>${esc(m.why)}</small>` : ''}<small class="mdesc">${esc(m.desc)}</small></button>`;
     const main = o.moves.filter((m) => !m.ending && !m.desperate), exits = o.moves.filter((m) => m.ending);
     const bold = o.moves.filter((m) => m.desperate);
     return (o.opposition ? `<p class="sub">${esc(t('ui.rival', { n: o.opposition.stability }))}</p>` : '')

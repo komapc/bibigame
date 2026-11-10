@@ -843,6 +843,7 @@ export const he: Record<string, string> = {
   'why.desperate.approval': "רק כשהתמיכה מתחת ל־{n}",
   'why.desperate.fiscal': "רק כשבריאות התקציב מתחת ל־{n}",
   'why.desperate.trial': "רק כשהמשפט ברמה {n} ומעלה",
+  'why.noUnityPartner': "רק כשיש בחוץ מישהו שעוד יישב איתך",
   'log.desperate': "זמנים נואשים: \"{remedy}\" עכשיו על השולחן (מהלכים).",
   'log.unityJoin': "{party} מצטרפת לממשלת אחדות לאומית.",
   'log.unityNobody': "לא נשאר בחוץ אף אחד שישב איתך: הצעת האחדות לא מגיעה לשום מקום.",

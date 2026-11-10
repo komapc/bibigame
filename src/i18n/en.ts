@@ -926,6 +926,7 @@ export const en: Record<string, string> = {
   'why.desperate.approval': "only when approval is under {n}",
   'why.desperate.fiscal': "only when budget health is under {n}",
   'why.desperate.trial': "only when the trial meter is {n}+",
+  'why.noUnityPartner': "only when someone outside would still sit with you",
   'log.desperate': "Desperate times: \"{remedy}\" is now on the table (Moves).",
   'log.unityJoin': "{party} joins a national unity government.",
   'log.unityNobody': "Nobody left outside would sit with you: the unity offer goes nowhere.",

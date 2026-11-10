@@ -20,7 +20,7 @@ export const MOVES: MoveDef[] = [
   { id: 'groundgame', phases: ['governing'], oncePerTerm: true, requires: { electionsWithinDays: 180 } },
   { id: 'primetime', phases: ['governing', 'campaign', 'opposition'], cooldownDays: 60 },
   // desperate measures: weakness opens bold gambles (once per term, big swing both ways)
-  { id: 'unitygov', phases: ['governing'], oncePerTerm: true, requires: { desperate: 'approval' } },
+  { id: 'unitygov', phases: ['governing'], oncePerTerm: true, requires: { desperate: 'approval', unityPartner: true } },
   { id: 'summit', phases: ['governing'], oncePerTerm: true, requires: { desperate: 'approval' } },
   { id: 'dossier', phases: ['governing'], oncePerTerm: true, requires: { desperate: 'approval' } },
   { id: 'bailout', phases: ['governing'], oncePerTerm: true, requires: { desperate: 'fiscal' } },

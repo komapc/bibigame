@@ -846,6 +846,7 @@ export const ru: Record<string, string> = {
   'why.desperate.approval': "только когда рейтинг ниже {n}",
   'why.desperate.fiscal': "только когда бюджет ниже {n}",
   'why.desperate.trial': "только когда суд не ниже {n}",
+  'why.noUnityPartner': "только когда снаружи есть кто-то, кто ещё сел бы с тобой",
   'log.desperate': "Отчаянные времена: «{remedy}» теперь на столе (Ходы).",
   'log.unityJoin': "{party} входит в правительство национального единства.",
   'log.unityNobody': "Снаружи не осталось никого, кто сел бы с тобой: предложение единства уходит в пустоту.",

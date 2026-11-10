@@ -207,7 +207,9 @@ export interface MoveDef {
   oncePerTerm?: boolean;
   requires?: { war?: boolean; minTrial?: number; electionsWithinDays?: number; oppositionDonor?: boolean;
     /** a desperate measure: only while this is going badly (desperateApproval/Fiscal/Trial in config) */
-    desperate?: 'approval' | 'fiscal' | 'trial' };
+    desperate?: 'approval' | 'fiscal' | 'trial';
+    /** someone outside would take a unity offer (see unityCandidate) */
+    unityPartner?: boolean };
   /** ends the game (special ending) */
   ending?: boolean;
 }
