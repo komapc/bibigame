@@ -157,6 +157,8 @@ export interface CrisisDef {
     subjectMoodBelow?: number;
     /** some subject-tag partner sits at least this far right of the government's line */
     subjectRightOfGov?: number;
+    /** not within quietAfterDays of playing one of these moves (no "the government is leftist" right after a settlement) */
+    quietAfter?: string[];
     /** only during the Knesset summer recess */
     recess?: boolean;
     /** an opposition-only card (fires only while you are in the opposition; never otherwise) */
@@ -411,4 +413,6 @@ export interface Outcome {
   joined: string[];
   /** crises that became more likely (backfire / escalation) */
   risks: string[];
+  /** the last log line this outcome produced (shown when nothing visible changed) */
+  note?: { key: string; params?: LogEntry['params'] };
 }
