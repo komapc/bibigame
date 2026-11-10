@@ -163,7 +163,7 @@ export const CRISES: CrisisDef[] = [
     remedies: ['handover', 'breakrotation'],
     ignore: {} },
   // --- coalition
-  { id: 'leftist', weight: 3, repeats: true, requires: { coalitionTag: 'farright', subjectMoodBelow: 60, subjectRightOfGov: 1.5 }, subjectTag: 'farright',
+  { id: 'leftist', weight: 3, repeats: true, requires: { coalitionTag: 'farright', subjectMoodBelow: 60, subjectRightOfGov: 1.5, quietAfter: ['settle', 'promsettle', 'settlelaw'] }, subjectTag: 'farright',
     remedies: ['settle', 'deepstate'],
     ignore: { sat: [{ target: 'subject', delta: -15 }, { target: 'farright', delta: -5 }] } },
   { id: 'draft', weight: 2, repeats: true, requires: { coalitionTag: 'haredi', notPassed: 'exempt' }, subjectTag: 'haredi',
@@ -175,7 +175,7 @@ export const CRISES: CrisisDef[] = [
   { id: 'gallant', weight: 0.8, requires: { lawOrPromise: 'reform' }, subjectMinistry: 'defense',
     remedies: ['firedefence', 'ministry'],
     ignore: { approval: -3, street: -5, sat: [{ target: 'pm', delta: -5 }] } },
-  { id: 'centre', weight: 2, repeats: true, requires: { coalitionTag: 'centrist' }, subjectTag: 'centrist',
+  { id: 'centre', weight: 2, repeats: true, requires: { coalitionTag: 'centrist', subjectMoodBelow: 65 }, subjectTag: 'centrist',
     remedies: ['ministry', 'fire'],
     ignore: { sat: [{ target: 'subject', delta: -20 }] } },
   { id: 'rebel', weight: 1, repeats: true, subjectTag: 'pm',
