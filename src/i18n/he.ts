@@ -34,6 +34,7 @@ export const he: Record<string, string> = {
   'ui.war': 'לצאת למלחמה',
   'ui.warSeats': '+{seatsText} · ',
   'ui.warFx': 'תמיכה +{a} · קופה −{f}, ואז −{d} ביום; ההתלכדות דועכת',
+  'ui.warFail': ' · {p}% שזה ישתבש (תמיכה −{a}, בלי התלכדות)',
   'ui.warActive': 'מלחמה: עוד {daysText}',
   'ui.warCooldown': 'מלחמה בעוד {daysText}',
   'ui.pause': 'השהיה',
@@ -321,6 +322,7 @@ export const he: Record<string, string> = {
   'log.ministry': '{ministry}: מידי {from} לידי {to}',
   'log.fired': '{party} מאבדים תיק: {ministry}. אתה שומר אותו לעצמך.',
   'log.war': 'מלחמה! העם מתאחד (בינתיים).',
+  'log.warFailed': 'מלחמה! הכול משתבש מהיום הראשון: אין התלכדות, וושינגטון רותחת.',
   'log.warEnd': 'המלחמה דועכת.',
   'log.wartimeJoin': '{party} מצטרפים לממשלת חירום. כשהמלחמה תיגמר הם יעזבו, אלא אם מצב הרוח שלהם {n} ומעלה או שהם מחכים להבטחה שלך.',
   'log.wartimeLeave': '{party} עוזבים את ממשלת החירום.',
@@ -369,6 +371,7 @@ export const he: Record<string, string> = {
   'err.cooldown.ministry': 'רק עכשיו חילקת משרדים: החילוף הבא בעוד {daysText}.',
   'err.cooldown.law': 'הכנסת עוד עסוקה בחוק הקודם שלך: הבא בעוד {daysText}.',
   'err.cooldown.invite': 'רק עכשיו הזמנת מישהו: ההזמנה הבאה בעוד {daysText}.',
+  'err.cooldown.promise': 'רק עכשיו הבטחת משהו: ההבטחה הבאה בעוד {daysText}.',
   'err.cardOnly': 'את ההבטחה הזאת אפשר לקיים רק כשבאים לגבות אותה (בכרטיס שלה).',
   'err.noMinistryToGive': 'לאף שותף אין משרד מיותר לוותר עליו.',
   // ---- cause → result (outcomes)

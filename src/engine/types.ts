@@ -302,8 +302,9 @@ export interface GameState {
   nextEventInDays: number;
   /** crisis id -> extra weight multiplier from backfires/ignores */
   pressure: Record<string, number>;
-  war: { active: boolean; leftDays: number; cooldownDays: number };
-  cooldowns: { ministry: number; law: number; invite: number };
+  /** failed: this war went wrong (no rally) */
+  war: { active: boolean; leftDays: number; cooldownDays: number; failed?: boolean };
+  cooldowns: { ministry: number; law: number; invite: number; promise?: number };
   /** last year whose budget was passed */
   budgetPassedYear: number;
   lastBudgetNag: number;

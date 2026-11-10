@@ -33,6 +33,7 @@ export const ru: Record<string, string> = {
   'ui.war': 'Начать войну',
   'ui.warSeats': '+{seatsText} · ',
   'ui.warFx': 'Рейтинг +{a} · Казна −{f}, потом −{d} в день; сплочение выдыхается',
+  'ui.warFail': ' · {p}% что всё пойдёт не так (рейтинг −{a}, без сплочения)',
   'ui.warActive': 'Война: ещё {daysText}',
   'ui.warCooldown': 'Война — через {daysText}',
   'ui.pause': 'Пауза',
@@ -324,6 +325,7 @@ export const ru: Record<string, string> = {
   'log.ministry': '{ministry}: {from} → {to}',
   'log.fired': '{party} лишается портфеля ({ministry}). Ты оставляешь его себе.',
   'log.war': 'Война! Нация сплачивается (пока).',
+  'log.warFailed': 'Война! Всё идёт не так с первого дня: сплочения нет, Вашингтон в ярости.',
   'log.warEnd': 'Война затихает.',
   'log.wartimeJoin': '{party} входит в чрезвычайное правительство. После войны уйдёт, если настроение ниже {n} и твоих обещаний он не ждёт.',
   'log.wartimeLeave': '{party} выходит из чрезвычайного правительства.',
@@ -372,6 +374,7 @@ export const ru: Record<string, string> = {
   'err.cooldown.ministry': 'Ты только что раздавал министерства: следующая перестановка через {daysText}.',
   'err.cooldown.law': 'Кнессет ещё занят твоим прошлым законом: следующий через {daysText}.',
   'err.cooldown.invite': 'Ты только что кого-то звал: следующее приглашение через {daysText}.',
+  'err.cooldown.promise': 'Ты только что что-то пообещал: следующее обещание через {daysText}.',
   'err.cardOnly': 'Это обещание можно выполнить, только когда за ним придут (на его карточке).',
   'err.noMinistryToGive': 'Ни у одного партнёра нет лишнего министерства.',
   // ---- cause → result (outcomes)

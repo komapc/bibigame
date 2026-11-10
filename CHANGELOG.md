@@ -229,3 +229,10 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - No "the government is leftist" card within 45 days (`quietAfterDays`) of a settlement move.
 - Help: deliver uses the law cooldown for laws and the ministry cooldown for posts.
 - Balance (60 games, 12y): random 0% · always-right 18% · greedy 32% · lookahead 58% · card-only-hud-aware 42%. Not changed: an answer that backfires onto its own card (cartoonbomb/beepers/Fordow → Iran, reform → court) still calls it back; blocking that generically cost hud-aware 17 points.
+
+## #42 War and promises have a price (fifth playtest, B)
+- War is a gamble: `warFailChance` (25%) it goes wrong from day one: approval −`warFailApproval` (6) instead of +5, US −`warFailUs` (8), and no rally for the whole war. Emergency partners still join. The button, the text status and the observation show the odds.
+- No war with a treasury under `warMinFiscal` (10).
+- Promises are rationed: one new promise every `promiseCooldownDays` (30), across all parties; the UI greys the promise picker, text mode shows the cooldown.
+- The rotation boost scales with the partner's size: full `rotationBoost` (30) at `rotationFullSeats` (15) seats, a 7-seat party gets 14.
+- Balance (60 games, 12y): random 2% · always-right 8% · greedy 40% · lookahead 62% · card-only-hud-aware 45% (main: 0/8/27/68/45).
