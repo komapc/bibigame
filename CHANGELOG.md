@@ -215,6 +215,28 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - No walkout out of the blue: a party threatens first and gets `threatGraceDays` (14) before a random walkout; text-mode `wait` stops on a threat, a walkout or a new phase.
 - Balance (60 games, 12y): random 0% · always-right 8% · greedy 27% · lookahead 68% · card-only-hud-aware 45%. Runs this size still swing ±10 points with small changes; without the softening hud-aware was 28%.
 
+## #41 Fifth playtest: bugs and honesty
+- A result with no visible numbers (a won no-confidence vote, a spoiler list) shows its log line instead of "Nothing visible changed".
+- A promise delivered on the spot logs "delivered at once" (the promise boost is refunded, as designed in #40).
+- A government sworn in during budget season is not punished for the previous government's missing budget.
+- Premium delivery works on credit; only coalition funds need money in the treasury.
+- A promise of a one-time move already used (Saudi) is moot.
+- The premium bill counts only costs; previews skip changes under 1.
+- Ending a war previews which wartime partners leave.
+- `laws` in the observation and text mode: availability, reason and preview, one per line.
+- Collapse is offered only below the approval threshold; recess only while governing; UPCOMING always shows the election.
+- The centrist "threatens to quit" card needs an unhappy centrist (mood below 65).
+- No "the government is leftist" card within 45 days (`quietAfterDays`) of a settlement move.
+- Help: deliver uses the law cooldown for laws and the ministry cooldown for posts.
+- Balance (60 games, 12y): random 0% · always-right 18% · greedy 32% · lookahead 58% · card-only-hud-aware 42%. Not changed: an answer that backfires onto its own card (cartoonbomb/beepers/Fordow → Iran, reform → court) still calls it back; blocking that generically cost hud-aware 17 points.
+
+## #42 War and promises have a price (fifth playtest, B)
+- War is a gamble: `warFailChance` (25%) it goes wrong from day one: approval −`warFailApproval` (6) instead of +5, US −`warFailUs` (8), and no rally for the whole war. Emergency partners still join. The button, the text status and the observation show the odds.
+- No war with a treasury under `warMinFiscal` (10).
+- Promises are rationed: one new promise every `promiseCooldownDays` (30), across all parties; the UI greys the promise picker, text mode shows the cooldown.
+- The rotation boost scales with the partner's size: full `rotationBoost` (30) at `rotationFullSeats` (15) seats, a 7-seat party gets 14.
+- Balance (60 games, 12y): random 2% · always-right 8% · greedy 40% · lookahead 62% · card-only-hud-aware 45% (main: 0/8/27/68/45).
+
 ## #43 Desperate measures: weakness opens bold gambles
 - Five drawer moves that open only when things go badly, once per term, each a gamble with a big swing both ways:
   - approval under `desperateApproval` (25): national unity government (45%: the biggest party outside that would sit with you joins), surprise peace summit (45%: US +20, approval +10, far right −10), the rival's dossier (50%: approval +8, opposition −10; a miss feeds your own trial);

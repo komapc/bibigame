@@ -3,7 +3,7 @@
 import knesset from '../data/knesset.json' with { type: 'json' };
 import type { Action, ActionResult, Config, Effect, GameState, KnessetData, Outcome } from '../engine/types.ts';
 import {
-  act, approvalTarget, dampen, inviteChance, fatigueOf, ministryTarget, budgetDueYear, partyById, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, moveCooldown, reshuffleOffers, satDrivers, seatsOf, step,
+  act, approvalTarget, dampen, inviteChance, fatigueOf, ministryTarget, budgetDueYear, partyById, recessWindow, trumpFace, unavailableReason, loseChance, loseFactors, scaleCosts, hasTension, createState, dateOf, eventOptions, moveAvailable, remedyAvailable, moveCooldown, reshuffleOffers, satDrivers, seatsOf, step,
 } from '../engine/game.ts';
 import { MOVES } from '../data/moves.ts';
 import { LAWS, crisisById, remedyById } from '../data/crises.ts';
@@ -98,14 +98,16 @@ export interface Observation {
   };
   war: { active: boolean; daysLeft: number; cooldownDays: number; joiners: { party: string; seats: number }[];
     /** what a war costs and gives: instant approval/treasury, then treasury per day for its length */
-    approval: number; fiscalNow: number; fiscalPerDay: number; days: number };
+    approval: number; fiscalNow: number; fiscalPerDay: number; days: number;
+    /** the odds it goes wrong (%) and what that costs instead of the rally; no war with a treasury under minFiscal */
+    failChance: number; failApproval: number; failUs: number; minFiscal: number; broke: boolean; failed: boolean };
   /** Iran/Hezbollah tension: enables war, beepers, Fordow */
   tension: boolean;
   /** ICC warrant days left (blocks travel remedies) */
   iccDays: number;
   usedOnce: string[];
-  cooldowns: { ministry: number; law: number; invite: number };
-  laws: { id: string; label: string }[];
+  cooldowns: { ministry: number; law: number; invite: number; promise: number };
+  laws: { id: string; label: string; available: boolean; why: string; preview: Preview[] }[];
   /** drawer moves for the current phase (src/data/moves.ts); `ending` ones end the game */
   /** desperate: a gamble that opens only when things go badly (approval, treasury or trial) */
   moves: { id: string; label: string; desc: string; available: boolean; cooldown: number; ending: boolean; desperate: boolean; odds: number | null; preview: Preview[]; why: string }[];
@@ -207,6 +209,7 @@ export function formatOutcome(s: GameState, o: Outcome): OutcomeView {
   if (fx.length) parts.push(fx.join(', '));
   if (risks.length) parts.push(`${t('out.risk')}: ${risks.join(', ')}`);
   // an election or the end of the game speaks for itself
+  if (!parts.length && o.note) parts.push(formatLog({ t: o.day, key: o.note.key, params: o.note.params }, nameOf));
   if (!parts.length && o.kind !== 'elections' && o.kind !== 'newGov' && s.status === 'playing') parts.push(t('out.nothing'));
   return {
     seq: o.seq, day: o.day, kind: o.kind, cause, sat, meters, seats: o.seats, left, joined, risks,
@@ -271,7 +274,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     termDays: s.config.termDays,
     termProgress: Math.min(1, s.pmDays / s.config.termDays),
     termReached: s.termReached,
-    recess: !!s.recess,
+    recess: !!s.recess && s.phase === 'governing',
     status: s.status,
     lostReason: s.lostReason ?? null,
     electionRisk: Math.round(loseChance(s) * 100) / 100,
@@ -279,7 +282,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     electionFactors: loseFactors(s).map((x) => ({ id: x.id, label: t(`odds.${x.id}`), delta: Math.round(x.delta * 100) })),
     electionSoon: s.phase === 'campaign' || (s.phase === 'governing' && s.termEndsDay - s.day <= s.config.electionOddsDays),
     trialPausedDays: Math.max(0, Math.ceil(s.trialPausedUntil - s.day)),
-    collapse: s.phase === 'governing' && (s.lowApprovalDays ?? 0) > 0
+    collapse: s.phase === 'governing' && (s.lowApprovalDays ?? 0) > 0 && s.approval < s.config.collapseBelow
       ? { days: Math.floor(s.lowApprovalDays ?? 0), limit: s.config.collapseDays, below: s.config.collapseBelow } : null,
     approvalTarget: r1(approvalTarget(s)),
     panicBelow: s.config.pollPanicBelow,
@@ -326,6 +329,8 @@ export function observe(s: GameState, logTail = 12): Observation {
       joiners: s.war.active ? [] : s.parties.filter((p) => !p.inCoalition && p.joinsWartime && p.willSitWithBibi && p.seats > 0)
         .map((p) => ({ party: p.id, seats: p.seats })),
       approval: s.config.warApproval, fiscalNow: s.config.warFiscal, fiscalPerDay: s.config.warFiscalPerDay, days: s.config.warDurationDays,
+      failChance: Math.round(s.config.warFailChance * 100), failApproval: s.config.warFailApproval, failUs: s.config.warFailUs,
+      minFiscal: s.config.warMinFiscal, broke: s.fiscal < s.config.warMinFiscal, failed: !!(s.war.active && s.war.failed),
     },
     tension: hasTension(s),
     iccDays: Math.max(0, Math.ceil(s.iccUntil - s.day)),
@@ -333,9 +338,9 @@ export function observe(s: GameState, logTail = 12): Observation {
     trump: { mood: Math.round((s.trumpMood ?? 0) * 10) / 10, face: trumpFace(s) },
     startConditions: (s.startConditions ?? []).map((id) => ({ id, label: t(`start.${id}`) })),
     cooldowns: {
-      ministry: Math.ceil(s.cooldowns.ministry), law: Math.ceil(s.cooldowns.law), invite: Math.ceil(s.cooldowns.invite),
+      ministry: Math.ceil(s.cooldowns.ministry), law: Math.ceil(s.cooldowns.law), invite: Math.ceil(s.cooldowns.invite), promise: Math.ceil(s.cooldowns.promise ?? 0),
     },
-    laws: LAWS.map((id) => ({ id, label: t(`remedy.${id}`) })),
+    laws: LAWS.map((id) => ({ id, label: t(`remedy.${id}`), available: remedyAvailable(s, id), why: remedyAvailable(s, id) ? '' : whyText(s, id), preview: preview(s, id) })),
     moves: MOVES.filter((m) => m.phases.includes(s.phase)).map((m) => ({
       id: m.id, label: t(`remedy.${m.id}`), desc: t(`remedy.${m.id}.desc`), available: moveAvailable(s, m.id), why: moveAvailable(s, m.id) ? '' : whyText(s, m.id),
       cooldown: moveCooldown(s, m.id), ending: !!m.ending, desperate: !!m.requires?.desperate, odds: oddsOf(m.id), preview: preview(s, m.id),
@@ -424,7 +429,13 @@ export function preview(s: GameState, optionId: string): Preview[] {
   // a war starting or ending moves the meters too: show it in the same arrows
   const sp0 = effects.map((e) => e.special);
   if (sp0.includes('war') && !s.war.active) effects.push({ approval: s.config.warApproval, fiscal: s.config.warFiscal });
-  if (sp0.includes('endWar') && s.war.active) effects.push({ approval: s.config.warEndApproval });
+  if (sp0.includes('endWar') && s.war.active) {
+    effects.push({ approval: s.config.warEndApproval });
+    // the emergency partners who will not stay
+    for (const p of s.parties) if (p.wartime && p.satisfaction < s.config.wartimeStayMood && p.trust.state !== 'believing') {
+      out.push({ label: t('fx.leaves', { party: pname(s, p.id) }), up: false });
+    }
+  }
   // a recently used trick works less (the same factor the engine applies)
   const k = optionId === 'ignore' ? 1 : fatigueOf(s, optionId);
   if (k < 1) out.push({ label: t('fx.tired'), up: false });
@@ -436,7 +447,8 @@ export function preview(s: GameState, optionId: string): Preview[] {
   // meters: one arrow per meter, summed over all parts (so +2 and −4 show as one −)
   for (const m of ['approval', 'street', 'us', 'fiscal', 'trial'] as const) {
     const v = shown.reduce((a, e) => a + (e[m] ?? 0), 0);
-    if (Math.abs(v) < 0.5) continue;
+    // under one point it usually rounds away in the result: don't promise it
+    if (Math.abs(v) < 1) continue;
     out.push(m === 'trial' ? { label: t('fx.trial'), up: v < 0, meter: 'trial', size: sizeOf(v) } : { label: t(`fx.${m}`), up: v > 0, size: sizeOf(v) });
   }
   for (const e of shown) {
@@ -484,7 +496,8 @@ export function premiumBill(s: GameState, subject: string): string {
   const d = r ? scaleCosts(r.effect, s.config.premiumCostScale) : {};
   const parts: string[] = [];
   for (const k of ['fiscal', 'approval', 'street', 'us'] as const) {
-    const n = Math.round((prem[k] ?? 0) + (d[k] ?? 0));
+    // the bill is what you pay: the delivered thing's own gains are not part of it
+    const n = Math.round(Math.min(0, prem[k] ?? 0) + Math.min(0, d[k] ?? 0));
     if (n) parts.push(`${t(`fx.${k}`)} ${n > 0 ? '+' : '−'}${Math.abs(n)}`);
   }
   return parts.join(' · ');
