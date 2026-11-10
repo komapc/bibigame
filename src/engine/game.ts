@@ -10,7 +10,7 @@ import {
 import { runElection } from './elections.ts';
 import { CRISES, DOMESTIC, LAWS, START_CONDITIONS, crisisById, remedyById } from '../data/crises.ts';
 import { promiseById } from '../data/promises.ts';
-import { NEW_MINISTRIES, moveById } from '../data/moves.ts';
+import { MOVES, NEW_MINISTRIES, moveById } from '../data/moves.ts';
 import { TITLES } from '../data/titles.ts';
 import { DEFAULT_CONFIG } from '../config.ts';
 
@@ -447,6 +447,12 @@ export function unavailableReason(s: GameState, id: string): { key: string; para
     if (s.usedThisTerm.includes(id)) return { key: 'why.oncePerTerm' };
     if (m.requires?.war && !s.war.active) return { key: 'why.needWar' };
     if (m.requires?.minTrial !== undefined && s.trial < m.requires.minTrial) return { key: 'why.needTrial', params: { n: m.requires.minTrial } };
+    const d = m.requires?.desperate;
+    if (d && !desperate(s, d)) {
+      const c = s.config;
+      return { key: `why.desperate.${d}`, params: { n: d === 'approval' ? c.desperateApproval : d === 'fiscal' ? c.desperateFiscal : c.desperateTrial } };
+    }
+    if (m.requires?.unityPartner && !unityCandidate(s)) return { key: 'why.noUnityPartner' };
     const within = m.requires?.electionsWithinDays;
     if (within !== undefined && s.termEndsDay - s.day > within) {
       return within >= 365 ? { key: 'why.tooEarly' } : { key: 'why.electionsFar', params: { days: within, left: Math.ceil(s.termEndsDay - s.day - within) } };
@@ -491,6 +497,28 @@ export function poachDonor(s: GameState): Party | undefined {
   return s.parties.filter((p) => !p.inCoalition && p.id !== s.base.pmParty && p.seats >= 2).sort((a, b) => b.seats - a.seats)[0];
 }
 
+/** is this going badly enough for a desperate measure? */
+export function desperate(s: GameState, what: 'approval' | 'fiscal' | 'trial'): boolean {
+  const c = s.config;
+  return what === 'approval' ? s.approval < c.desperateApproval : what === 'fiscal' ? s.fiscal < c.desperateFiscal : s.trial >= c.desperateTrial;
+}
+
+/** the party a national-unity offer goes to: the biggest one outside that would sit with you */
+export function unityCandidate(s: GameState): Party | undefined {
+  return s.parties.filter((p) => !p.inCoalition && p.willSitWithBibi && p.seats > 0 && p.id !== s.base.pmParty).sort((a, b) => b.seats - a.seats)[0];
+}
+
+/** a party joins the government mid-term (an accepted invitation or a unity offer) */
+function joinCoalition(s: GameState, p: Party) {
+  const coal = coalition(s);
+  // the government's line moves toward the newcomer, by its share of the seats
+  const seats0 = coal.reduce((n, x) => n + x.seats, 0);
+  s.govPosition = Math.round(((s.govPosition * seats0 + p.position * p.seats) / (seats0 + p.seats)) * 10) / 10;
+  p.inCoalition = true;
+  p.satisfaction = 55;
+  for (const x of coal) if (hateCount(x, [p]) > 0) x.satisfaction = clamp(x.satisfaction - 20, 0, 100);
+}
+
 /** can this drawer move be used right now? */
 export function moveAvailable(s: GameState, id: string): boolean {
   const m = moveById.get(id);
@@ -503,6 +531,8 @@ export function moveAvailable(s: GameState, id: string): boolean {
   if (r?.minTrial !== undefined && s.trial < r.minTrial) return false;
   if (r?.electionsWithinDays !== undefined && s.termEndsDay - s.day > r.electionsWithinDays) return false;
   if (r?.oppositionDonor && !poachDonor(s)) return false;
+  if (r?.desperate && !desperate(s, r.desperate)) return false;
+  if (r?.unityPartner && !unityCandidate(s)) return false;
   return true;
 }
 
@@ -640,6 +670,16 @@ function applyEffect(s: GameState, e: Effect, subject: string | null) {
       s.defectors++;
       log(s, 'log.defector', { n: s.defectors }, 'bad');
       break;
+    case 'unity': {
+      const p = unityCandidate(s);
+      if (!p) { log(s, 'log.unityNobody', {}, 'bad'); break; }
+      joinCoalition(s, p);
+      log(s, 'log.unityJoin', { party: p.id }, 'good');
+      // the "ministry with a long name": a seat at the table comes with a portfolio
+      const m = ministryFor(s, p);
+      if (m) transferMinistry(s, m.id, p.id, moveFatigue);
+      break;
+    }
     case 'poach': {
       const donor = poachDonor(s);
       if (!donor) break;
@@ -969,6 +1009,7 @@ function callElections(s: GameState, reason: string) {
   // elections you called yourself, with a working majority: the voters notice
   s.campaignFx = { merger: false, spoiler: false, gevalt: false, early: reason === 'early' };
   s.usedThisTerm = [];
+  s.desperateSeen = [];
   // elections void a rotation agreement (the classic way out): legally clean, personally a broken promise
   for (const p of s.parties) if (p.trust.promiseId === 'rotation' && (p.trust.state === 'believing' || p.trust.state === 'angry')) {
     p.trust = { state: 'distrust', promiseId: 'rotation', until: s.day + s.config.rotationDistrustDays };
@@ -1080,6 +1121,7 @@ function resolveElectionInner(s: GameState) {
   if (s.fromOpposition) { s.stats.returns++; log(s, 'log.returned', {}, 'good'); }
   s.fromOpposition = false;
   s.usedThisTerm = [];
+  s.desperateSeen = [];
   s.refusedBy = [];
   s.termEndsDay = s.day + c.knessetTermDays;
   s.approval = clamp(s.approval + 5, 0, 100);
@@ -1098,6 +1140,7 @@ function enterOpposition(s: GameState, why: 'voters' | 'deadlock') {
   const c = s.config;
   s.electionLosses = (s.electionLosses ?? 0) + 1;
   s.usedThisTerm = [];
+  s.desperateSeen = [];
   s.fromOpposition = false;
   if (s.electionLosses >= c.maxElectionLosses) {
     lose(s, why);
@@ -1335,6 +1378,11 @@ function tickDay(s: GameState, dt: number) {
 
   checkCoalition(s, dt);
   if (s.phase !== 'governing') return;
+  // a desperate measure opening up is news (once a term): weakness has its own moves
+  for (const m of MOVES) if (m.requires?.desperate && moveAvailable(s, m.id) && !(s.desperateSeen ??= []).includes(m.id)) {
+    s.desperateSeen.push(m.id);
+    log(s, 'log.desperate', { remedy: m.id }, 'event');
+  }
   // cooldowns & war
   s.cooldowns.ministry = Math.max(0, s.cooldowns.ministry - dt);
   s.cooldowns.law = Math.max(0, s.cooldowns.law - dt);
@@ -1573,15 +1621,9 @@ function actInner(s: GameState, a: Action): ActionResult {
       // a boycott is not a negotiation: no point burning the invitation on it
       if (!p.willSitWithBibi) return { ok: false, error: 'err.boycott' };
       s.cooldowns.invite = c.inviteCooldownDays;
-      const coal = coalition(s);
       const chance = inviteChance(s, p);
       if (rngOf(s).next() < chance) {
-        // the government's line moves toward the newcomer, by its share of the seats
-        const seats0 = coal.reduce((n, x) => n + x.seats, 0);
-        s.govPosition = Math.round(((s.govPosition * seats0 + p.position * p.seats) / (seats0 + p.seats)) * 10) / 10;
-        p.inCoalition = true;
-        p.satisfaction = 55;
-        for (const x of coal) if (hateCount(x, [p]) > 0) x.satisfaction = clamp(x.satisfaction - 20, 0, 100);
+        joinCoalition(s, p);
         log(s, 'log.joined', { party: p.id }, 'good');
         checkCoalition(s);
       } else {

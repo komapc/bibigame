@@ -109,7 +109,8 @@ export interface Observation {
   cooldowns: { ministry: number; law: number; invite: number; promise: number };
   laws: { id: string; label: string; available: boolean; why: string; preview: Preview[] }[];
   /** drawer moves for the current phase (src/data/moves.ts); `ending` ones end the game */
-  moves: { id: string; label: string; desc: string; available: boolean; cooldown: number; ending: boolean; preview: Preview[]; why: string }[];
+  /** desperate: a gamble that opens only when things go badly (approval, treasury or trial) */
+  moves: { id: string; label: string; desc: string; available: boolean; cooldown: number; ending: boolean; desperate: boolean; odds: number | null; preview: Preview[]; why: string }[];
   /** in opposition: the rival government's stability (falls at 0) and days until it must call elections */
   opposition: { stability: number; daysLeft: number } | null;
   /** elections lost so far; at maxElectionLosses the game is over */
@@ -342,7 +343,7 @@ export function observe(s: GameState, logTail = 12): Observation {
     laws: LAWS.map((id) => ({ id, label: t(`remedy.${id}`), available: remedyAvailable(s, id), why: remedyAvailable(s, id) ? '' : whyText(s, id), preview: preview(s, id) })),
     moves: MOVES.filter((m) => m.phases.includes(s.phase)).map((m) => ({
       id: m.id, label: t(`remedy.${m.id}`), desc: t(`remedy.${m.id}.desc`), available: moveAvailable(s, m.id), why: moveAvailable(s, m.id) ? '' : whyText(s, m.id),
-      cooldown: moveCooldown(s, m.id), ending: !!m.ending, preview: preview(s, m.id),
+      cooldown: moveCooldown(s, m.id), ending: !!m.ending, desperate: !!m.requires?.desperate, odds: oddsOf(m.id), preview: preview(s, m.id),
     })),
     opposition: s.phase === 'opposition' && s.rival
       ? { stability: Math.round(s.rival.stability), daysLeft: Math.max(0, Math.ceil(s.rival.until - s.day)) } : null,

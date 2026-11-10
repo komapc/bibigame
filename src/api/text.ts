@@ -101,7 +101,7 @@ export function renderText(o: Observation): string {
     L.push('LAWS:');
     for (const l of o.laws) L.push(`  ${l.id}${l.available ? '' : ` [n/a: ${l.why}]`}${l.available && l.preview.length ? ` -> ${fxText(l.preview)}` : ''}`);
   }
-  if (o.moves.length) L.push(`MOVES: ${o.moves.map((m) => `${m.id}${m.available ? '' : m.cooldown ? ` (${m.cooldown}d)` : ` (n/a: ${m.why})`}${m.ending ? ' [ENDS GAME]' : ''}`).join(', ')}`);
+  if (o.moves.length) L.push(`MOVES: ${o.moves.map((m) => `${m.id}${m.available ? '' : m.cooldown ? ` (${m.cooldown}d)` : ` (n/a: ${m.why})`}${m.odds !== null ? ` [${m.odds}% odds]` : ''}${m.ending ? ' [ENDS GAME]' : ''}${m.desperate ? ' [DESPERATE GAMBLE]' : ''}`).join(', ')}`);
   if (!o.opposition) L.push(`PROMISES: ${o.promises.map((p) => `${p.id}->${p.to.join('/')}`).join(', ')}`);
   L.push(`TITLES: ${o.titles.length ? o.titles.map((x) => `${x.name} (${x.gloss})`).join('; ') : 'none yet'}`);
   if (o.log.length) {

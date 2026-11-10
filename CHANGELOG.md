@@ -236,3 +236,14 @@ ru/he follow-ups are listed with the PR whose strings they translate.
 - Promises are rationed: one new promise every `promiseCooldownDays` (30), across all parties; the UI greys the promise picker, text mode shows the cooldown.
 - The rotation boost scales with the partner's size: full `rotationBoost` (30) at `rotationFullSeats` (15) seats, a 7-seat party gets 14.
 - Balance (60 games, 12y): random 2% · always-right 8% · greedy 40% · lookahead 62% · card-only-hud-aware 45% (main: 0/8/27/68/45).
+
+## #43 Desperate measures: weakness opens bold gambles
+- Five drawer moves that open only when things go badly, once per term, each a gamble with a big swing both ways:
+  - approval under `desperateApproval` (25): national unity government (45%: the biggest party outside that would sit with you joins), surprise peace summit (45%: US +20, approval +10, far right −10), the rival's dossier (50%: approval +8, opposition −10; a miss feeds your own trial);
+  - treasury under `desperateFiscal` (10): emergency aid package (60%: treasury +25, US −6);
+  - trial at `desperateTrial` (70) or more: immunity law overnight (40%: trial −25, street −15, centrists −12).
+- A unity partner joins like an invited one (shared `joinCoalition`: the government's line moves toward it, partners who hate it lose 20) and gets a ministry; the offer is shut, with a reason, when nobody outside would sit with you.
+- Drawer moves that are gambles (the five above, `poach`) show their odds: a badge in the drawer, `[N% odds]` in text mode, `odds` in the observation.
+- When one opens, the log says so once a term; the Moves drawer lists them under "Desperate measures" (highlighted when ready, otherwise with the condition); text mode marks them `[DESPERATE GAMBLE]`.
+- New bot `hud-desperate`: hud-aware that plays a desperate measure as soon as it opens.
+- Balance (60 games, 12y): random 2% · always-right 8% · greedy 33% · lookahead 67% · card-only-hud-aware 45% · hud-desperate 47%. Measured before the unity/odds fixes; hud-desperate vs hud-aware is within run-to-run noise.
